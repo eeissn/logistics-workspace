@@ -1,12 +1,16 @@
 """Run a release smoke test against the built frontend and a disposable API."""
 
 from contextlib import closing
+from html import escape
+from io import BytesIO
 from pathlib import Path
+import re
 import socket
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
 from time import monotonic, sleep
+from zipfile import ZIP_DEFLATED, ZipFile
 
 import httpx
 from fastapi.staticfiles import StaticFiles
@@ -48,7 +52,77 @@ def create_order(page, number):
     expect(page.locator("#table")).to_contain_text(number)
 
 
-def smoke(browser_type, origin, device=None):
+def import_fixtures(chromium, number):
+    with closing(chromium.launch()) as browser:
+        page = browser.new_page()
+        pdfs = []
+        for index, (customer, carrier, amount) in enumerate(
+            [("Заказчик Тест", "Экспедитор Тест", 90000), ("Экспедитор Тест", "Перевозчик Тест", 70000)]
+        ):
+            text = (
+                f"Заявка № {number} от 09.11.2026\nЗаказчик: {customer}\n"
+                f"Исполнитель: {carrier}\nПОГРУЗКА: Тестовый склад\nОПЛАТА: {amount} руб без НДС"
+            )
+            page.set_content(f'<meta charset="utf-8"><pre>{escape(text)}</pre>')
+            pdfs.append({"name": f"order-{index}.pdf", "mimeType": "application/pdf", "buffer": page.pdf()})
+
+    headers = ("Дата", "Номер заявки", "Заказчик", "Перевозчик", "Направление",
+               "Ставка с Заказчиком", "Ставка с Перевозчиком", "Маржа", "Загрузка",
+               "Выгрузка", "Заказ-заявка", "ЭТРН")
+    rows = [headers, ("2026-11-09", f"EXCEL-{number}", "Тестовый заказчик", "", "", "", "", "5000")]
+    xml_rows = []
+    for index, row in enumerate(rows, 1):
+        cells = "".join(f'<c r="{chr(65 + col)}{index}" t="inlineStr"><is><t>{escape(value)}</t></is></c>'
+                        for col, value in enumerate(row))
+        xml_rows.append(f'<row r="{index}">{cells}</row>')
+    main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    package_rel = "http://schemas.openxmlformats.org/package/2006/relationships"
+    data = BytesIO()
+    with ZipFile(data, "w", ZIP_DEFLATED) as xlsx:
+        xlsx.writestr("[Content_Types].xml", '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>')
+        xlsx.writestr("_rels/.rels", f'<Relationships xmlns="{package_rel}"><Relationship Id="rId1" Type="{rel}/officeDocument" Target="xl/workbook.xml"/></Relationships>')
+        xlsx.writestr("xl/workbook.xml", f'<workbook xmlns="{main}" xmlns:r="{rel}"><sheets><sheet name="Ноябрь" sheetId="1" r:id="rId1"/></sheets></workbook>')
+        xlsx.writestr("xl/_rels/workbook.xml.rels", f'<Relationships xmlns="{package_rel}"><Relationship Id="rId1" Type="{rel}/worksheet" Target="worksheets/sheet1.xml"/></Relationships>')
+        xlsx.writestr("xl/worksheets/sheet1.xml", f'<worksheet xmlns="{main}"><sheetData>{"".join(xml_rows)}</sheetData></worksheet>')
+    return pdfs, {"name": "orders.xlsx", "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "buffer": data.getvalue()}
+
+
+def order_lifecycle(page, chromium, number, report_total):
+    pdfs, workbook = import_fixtures(chromium, number)
+    page.locator("#import").click()
+    page.locator("#customer-pdf").set_input_files(pdfs[0])
+    page.locator("#carrier-pdf").set_input_files(pdfs[1])
+    page.locator('#import-form [type="submit"]').click()
+    expect(page.locator("#review-dialog")).to_be_visible()
+    expect(page.locator("#review-title")).to_contain_text(str(number))
+    page.locator("#review-save").click()
+    expect(page.locator("#review-dialog")).to_be_hidden()
+
+    page.locator("#ledger").click()
+    page.locator("#ledger-file").set_input_files(workbook)
+    page.locator('#ledger-form [type="submit"]').click()
+    expect(page.locator("#ledger-dialog")).to_be_hidden()
+    expect(page.locator("#table")).to_contain_text(f"EXCEL-{number}")
+
+    row = page.locator("#table .order").filter(has=page.get_by_role("button", name=f"№ {number}", exact=True))
+    row.locator(".etrn-link").click()
+    page.locator('#etrn-form [name="manualComplete"]').check()
+    page.locator("#etrn-save").click()
+    expect(page.locator("#etrn-dialog")).to_be_hidden()
+    expect(row.locator(".etrn-link")).to_have_text("Закрыта вручную")
+    row.locator(".trip-status").select_option("unloaded")
+    expect(page.locator("#archive")).to_be_visible()
+    page.locator("#archive-title").click()
+    expect(page.locator("#archive-table")).to_contain_text(str(number))
+
+    page.locator("#report").click()
+    page.locator("#report-month").fill("2026-11")
+    expect(page.locator("#report-preview h3")).to_have_text(re.compile(report_total))
+    page.locator("#report-dialog [data-close]").click()
+
+
+def smoke(browser_type, origin, chromium, number, report_total, device=None):
     order_a = f"A-{browser_type.name}"
     order_b = f"B-{browser_type.name}"
     with closing(browser_type.launch()) as browser:
@@ -62,6 +136,7 @@ def smoke(browser_type, origin, device=None):
         peer = first.new_page()
         peer.goto(origin)
         expect(peer.locator("#table")).to_contain_text(order_a)
+        order_lifecycle(a, chromium, number, report_total)
         a.get_by_role("button", name=f"№ {order_a}", exact=True).click()
         expect(a.locator("#editor")).to_be_visible()
 
@@ -81,7 +156,7 @@ def smoke(browser_type, origin, device=None):
         expect(peer.locator("#table")).not_to_contain_text(order_a)
         expect(a.locator("#workspace")).to_be_hidden()
         expect(b.locator("#table")).to_contain_text(order_b)
-    print(f"{browser_type.name}: registry, shared-tab logout and account isolation passed", flush=True)
+    print(f"{browser_type.name}: PDF, Excel, ETRN, archive, margin and account isolation passed", flush=True)
 
 
 def main():
@@ -111,8 +186,8 @@ def main():
                         raise RuntimeError("The disposable HTTPS server did not start.")
                     sleep(0.2)
             with sync_playwright() as playwright:
-                smoke(playwright.chromium, origin)
-                smoke(playwright.webkit, origin, playwright.devices["iPhone 13"])
+                smoke(playwright.chromium, origin, playwright.chromium, 41001, r"22\s*000")
+                smoke(playwright.webkit, origin, playwright.chromium, 41002, r"44\s*000", playwright.devices["iPhone 13"])
         finally:
             server.terminate()
             server.wait(timeout=10)
