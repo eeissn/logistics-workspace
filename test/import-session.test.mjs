@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import test from 'node:test';
+import { zipSync } from 'fflate';
 import { blankOrder } from '../src/domain.mjs';
 import { auth, sessionChangeKey, store } from '../src/storage.mjs';
 
@@ -134,10 +135,13 @@ const ledgerHeader = ['Дата','Номер заявки','Заказчик','�
 
 function submitExcel(app, number, read = rows => rows) {
   app.get('ledger').fire('click');
-  app.get('ledger-file').files = [{size:100, read(sheet) {
+  const bytes = zipSync({'xl/workbook.xml': new TextEncoder().encode('<workbook/>')});
+  const archive = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  archive.read = sheet => {
     assert.equal(sheet, 'Ноябрь');
     return read([ledgerHeader, ['2026-11-09', number, 'Заказчик']]);
-  }}];
+  };
+  app.get('ledger-file').files = [{size:bytes.byteLength, arrayBuffer:async () => archive}];
   return app.get('ledger-form').fire('submit', app.get('excel-button'));
 }
 
