@@ -2,7 +2,7 @@ import './style.css';
 import { archived, blankOrder, etrnProgress, etrnStatus, margin, mergeImport, monthReport, orderMargin, scheduledToday, tripStatus, tripStatuses, upsert } from './domain.mjs';
 import { importPair, phones } from './import.mjs';
 import { addLedgerOrders, parseLedger } from './ledger.mjs';
-import { auth, demo, localOrders, store } from './storage.mjs';
+import { auth, demo, localOrders, sessionChangeKey, store } from './storage.mjs';
 import { driverMessage } from './driver.mjs';
 import { demoOrder } from './demo.mjs';
 
@@ -30,6 +30,7 @@ let reviewStamp;
 let editorStamp;
 let etrnStamp;
 let signedIn = false;
+let signingIn = false;
 let refreshing;
 let accountGeneration = 0;
 const pendingImports = new Map();
@@ -510,7 +511,7 @@ async function refresh() {
     $('sync-status').textContent = '';
   } catch (error) {
     if (generation !== accountGeneration) return;
-    if (signedIn && error.status === 401) {
+    if (signedIn && (error.status === 401 || error.status === 403)) {
       if (!$('sign-out').disabled) signInScreen('Сеанс закончился. Войдите снова.');
     }
     else if (signedIn) $('sync-status').textContent = error.message;
@@ -538,8 +539,9 @@ $('sign-in-form').addEventListener('submit', async event => {
   event.preventDefault();
   const login = event.currentTarget;
   const button = event.submitter;
-  if (signedIn || button.disabled) return;
+  if (signedIn || signingIn) return;
   const generation = ++accountGeneration;
+  signingIn = true;
   button.disabled = true;
   $('sign-in-error').textContent = '';
   try {
@@ -551,6 +553,7 @@ $('sign-in-form').addEventListener('submit', async event => {
   } catch (error) {
     if (generation === accountGeneration) $('sign-in-error').textContent = error.message;
   } finally {
+    signingIn = false;
     if (generation === accountGeneration) button.disabled = false;
   }
 });
@@ -565,7 +568,7 @@ $('sign-out').addEventListener('click', async event => {
     if (generation === accountGeneration) signInScreen();
   } catch (error) {
     if (generation !== accountGeneration) return;
-    if (error.status === 401) signInScreen();
+    if (error.status === 401 || error.status === 403) signInScreen();
     else $('sync-status').textContent = error.message;
   } finally {
     if (generation === accountGeneration) button.disabled = false;
@@ -605,6 +608,11 @@ if (demo) {
     render();
   }).catch(error => { $('notice').textContent = error.message; });
 } else {
+  window.addEventListener('storage', event => {
+    if (event.key === sessionChangeKey && event.newValue && !signingIn) {
+      signInScreen('Сеанс изменился в другой вкладке. Войдите снова.');
+    }
+  });
   const generation = accountGeneration;
   auth.restore().then(account => {
     if (generation === accountGeneration) return showAccount(account);
@@ -613,6 +621,7 @@ if (demo) {
   });
   window.addEventListener('online', refresh);
   window.addEventListener('focus', refresh);
+  window.addEventListener('pageshow', refresh);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
   setInterval(() => { if (!document.hidden) refresh(); }, 15000);
 }
