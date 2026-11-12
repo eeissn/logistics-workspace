@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import test from 'node:test';
 import { blankOrder } from '../src/domain.mjs';
-import { auth, store } from '../src/storage.mjs';
+import { auth, sessionChangeKey, store } from '../src/storage.mjs';
 
 function deferred() {
   return Promise.withResolvers();
@@ -65,6 +65,7 @@ async function workspace(t, restore = deferred()) {
   });
   t.after(() => { hooks.deregister(); auth.clear(); });
   const elements = new Map();
+  const windowEvents = new EventTarget();
   const get = id => {
     if (!elements.has(id)) elements.set(id, new Element());
     return elements.get(id);
@@ -86,7 +87,7 @@ async function workspace(t, restore = deferred()) {
         : [],
       addEventListener() {},
     },
-    window: {addEventListener() {}},
+    window: windowEvents,
   })) {
     const original = Object.getOwnPropertyDescriptor(globalThis, name);
     Object.defineProperty(globalThis, name, {configurable:true, value});
@@ -111,7 +112,7 @@ async function workspace(t, restore = deferred()) {
     return form.fire('submit', get('login-button'));
   };
   return {
-    get, login, writes, restore,
+    get, login, writes, restore, windowEvents,
     signOut: () => get('sign-out').fire('click'),
     setList: handler => { list = handler; },
     setSave: handler => { save = handler; },
@@ -139,6 +140,43 @@ function submitExcel(app, number, read = rows => rows) {
   }}];
   return app.get('ledger-form').fire('submit', app.get('excel-button'));
 }
+
+test('a peer tab change clears the previous registry and discards pending PDF review', async t => {
+  const app = await workspace(t);
+  app.setList(() => [order('101')]);
+  await app.login('a');
+  assert.match(app.get('table').text, /101/);
+  const late = pause();
+  const pending = submitPdf(app, '101', late.wait);
+  await late.entered;
+
+  app.windowEvents.dispatchEvent(Object.assign(new Event('storage'), {
+    key: sessionChangeKey, newValue: 'opaque-notification',
+  }));
+  assert.equal(app.get('workspace').hidden, true);
+  assert.equal(app.get('account-email').textContent, '');
+  assert.doesNotMatch(app.get('table').text, /101/);
+  assert.match(app.get('sign-in-error').textContent, /другой вкладке/);
+
+  app.setList(() => [order('202')]);
+  await app.login('b');
+  late.resolve(pdf('101', 'Заказчик', 'Экспедитор'));
+  await pending;
+  assert.match(app.get('table').text, /202/);
+  assert.equal(app.get('review-dialog').open, false);
+  assert.equal(app.writes.length, 0);
+});
+
+test('a server session mismatch clears the registry without a tab notification', async t => {
+  const app = await workspace(t);
+  app.setList(() => [order('101')]);
+  await app.login('a');
+  app.setList(() => { throw Object.assign(new Error('wrong session'), {status: 403}); });
+  await app.get('sync-refresh').fire('click');
+  assert.equal(app.get('workspace').hidden, true);
+  assert.doesNotMatch(app.get('table').text, /101/);
+  assert.match(app.get('sign-in-error').textContent, /Войдите снова/);
+});
 
 for (const boundary of ['reader', 'list', 'review list', 'review save']) {
   test('PDF drops account A at ' + boundary, async t => {
