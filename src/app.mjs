@@ -521,7 +521,7 @@ $('local-import').addEventListener('click', async event => {
   button.disabled = true;
   try {
     const local = localOrders();
-    if (!window.confirm(`Перенести ${local.length} заявок в общий реестр? Оба аккаунта увидят их. Совпадающие номера будут пропущены.`)) return;
+    if (!window.confirm(`Перенести ${local.length} заявок в реестр аккаунта ${$('account-email').textContent}? Совпадающие номера будут пропущены.`)) return;
     const current = await store.list();
     const unique = [...new Map(local.map(order => [order.number, order])).values()];
     const saved = addLedgerOrders(current, unique);

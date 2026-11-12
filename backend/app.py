@@ -25,11 +25,17 @@ SCHEMA = (
     """CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, email TEXT NOT NULL
        REFERENCES users(email) ON DELETE CASCADE, csrf TEXT NOT NULL, expires INTEGER NOT NULL)""",
     "CREATE TABLE IF NOT EXISTS login_attempts (ip TEXT PRIMARY KEY, attempts INTEGER NOT NULL, expires INTEGER NOT NULL)",
-    "CREATE TABLE IF NOT EXISTS registry (id INTEGER PRIMARY KEY CHECK (id=1), revision INTEGER NOT NULL)",
-    """CREATE TABLE IF NOT EXISTS orders (number TEXT PRIMARY KEY, position INTEGER NOT NULL,
-       payload TEXT NOT NULL, updated_at TEXT NOT NULL)""",
-    "INSERT OR IGNORE INTO registry VALUES (1, 0)",
 )
+OWNER_SCHEMA = (
+    """CREATE TABLE registry (
+       owner TEXT PRIMARY KEY NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+       revision INTEGER NOT NULL)""",
+    """CREATE TABLE orders (
+       owner TEXT NOT NULL REFERENCES registry(owner) ON DELETE CASCADE,
+       number TEXT NOT NULL, position INTEGER NOT NULL, payload TEXT NOT NULL,
+       updated_at TEXT NOT NULL, PRIMARY KEY (owner, number))""",
+)
+SCHEMA_VERSION = 2
 
 
 def connect(path):
@@ -61,12 +67,20 @@ def initialize(path):
         db.execute("PRAGMA journal_mode=WAL")
         db.execute("BEGIN IMMEDIATE")
         version = db.execute("PRAGMA user_version").fetchone()[0]
-        if version > 1:
+        if version > SCHEMA_VERSION:
             raise RuntimeError("Unsupported SQLite schema")
         if version == 0:
             for statement in SCHEMA:
                 db.execute(statement)
-            db.execute("PRAGMA user_version=1")
+        if version == 1:
+            db.execute("ALTER TABLE registry RENAME TO legacy_shared_registry")
+            db.execute("ALTER TABLE orders RENAME TO legacy_shared_orders")
+            db.execute("DELETE FROM sessions")
+        if version < SCHEMA_VERSION:
+            for statement in OWNER_SCHEMA:
+                db.execute(statement)
+            db.execute("INSERT INTO registry SELECT email, 0 FROM users")
+            db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
 
 
 def password_hash(password, salt):
@@ -85,6 +99,7 @@ def add_user(path, email, password):
         if db.execute("SELECT COUNT(*) FROM users").fetchone()[0] >= 2:
             raise ValueError("The two accounts are already provisioned")
         db.execute("INSERT INTO users VALUES (?, ?, ?)", (email, salt, digest))
+        db.execute("INSERT INTO registry VALUES (?, 0)", (email,))
 
 
 def valid_email(email):
@@ -167,17 +182,19 @@ def validate_orders(orders):
         order.pop("updatedAt", None)
 
 
-def snapshot(db):
-    revision = db.execute("SELECT revision FROM registry").fetchone()[0]
+def snapshot(db, owner):
+    registry = db.execute("SELECT revision FROM registry WHERE owner=?", (owner,)).fetchone()
+    if registry is None:
+        raise HTTPException(401, "Sign in required")
     orders = [
         {**json.loads(row["payload"]), "updatedAt": row["updated_at"]}
-        for row in db.execute("SELECT payload, updated_at FROM orders ORDER BY position")
+        for row in db.execute("SELECT payload, updated_at FROM orders WHERE owner=? ORDER BY position", (owner,))
     ]
-    return {"revision": revision, "orders": orders}
+    return {"revision": registry["revision"], "orders": orders}
 
 
-def replace_orders(db, revision, orders):
-    current = snapshot(db)
+def replace_orders(db, owner, revision, orders):
+    current = snapshot(db, owner)
     if current["revision"] != revision:
         raise HTTPException(409, "Registry changed")
     existing = {order["number"]: order for order in current["orders"]}
@@ -191,16 +208,16 @@ def replace_orders(db, revision, orders):
             previous_stamp = previous.pop("updatedAt")
             if previous == order:
                 updated = previous_stamp
-        rows.append((order["number"], position, payload, updated))
-    db.executemany("DELETE FROM orders WHERE number=?", [(number,) for number in existing])
+        rows.append((owner, order["number"], position, payload, updated))
+    db.executemany("DELETE FROM orders WHERE owner=? AND number=?", [(owner, number) for number in existing])
     db.executemany(
-        """INSERT INTO orders VALUES (?, ?, ?, ?) ON CONFLICT(number) DO UPDATE SET
+        """INSERT INTO orders VALUES (?, ?, ?, ?, ?) ON CONFLICT(owner, number) DO UPDATE SET
         position=excluded.position, payload=excluded.payload, updated_at=excluded.updated_at
         WHERE position<>excluded.position OR payload<>excluded.payload""",
         rows,
     )
-    db.execute("UPDATE registry SET revision=revision+1")
-    return snapshot(db)
+    db.execute("UPDATE registry SET revision=revision+1 WHERE owner=?", (owner,))
+    return snapshot(db, owner)
 
 
 def create_app(path, origin):
@@ -225,7 +242,7 @@ def create_app(path, origin):
         if request.headers.get("origin") != origin:
             raise HTTPException(403, "Origin rejected")
 
-    def session(request, *, mutate=False):
+    def session(request, *, mutate=False, bind=False):
         token = request.cookies.get(COOKIE, "")
         if len(token) != 43 or not token.isascii():
             raise HTTPException(401, "Sign in required")
@@ -235,9 +252,10 @@ def create_app(path, origin):
             raise HTTPException(401, "Sign in required")
         if mutate:
             check_origin(request)
+        if mutate or bind:
             csrf = request.headers.get("x-csrf-token", "")
             if not csrf.isascii() or not secrets.compare_digest(csrf, row["csrf"]):
-                raise HTTPException(403, "CSRF check failed")
+                raise HTTPException(403 if mutate else 401, "Session token rejected")
         return row
 
     def authenticate(email, password, ip):
@@ -298,14 +316,14 @@ def create_app(path, origin):
 
     @app.get("/api/records")
     def get_records(request: Request):
-        session(request)
+        owner = session(request, bind=True)["email"]
         with database(path) as db:
             db.execute("BEGIN")
-            return snapshot(db)
+            return snapshot(db, owner)
 
     @app.put("/api/records")
     async def put_records(request: Request):
-        session(request, mutate=True)
+        owner = session(request, mutate=True)["email"]
         data = await read_json(request, MAX_BODY)
         revision, orders = data.get("revision"), data.get("orders")
         if type(revision) is not int or not 0 <= revision < 2**63 - 1:
@@ -314,7 +332,7 @@ def create_app(path, origin):
         def save():
             validate_orders(orders)
             with database(path, write=True) as db:
-                return replace_orders(db, revision, orders)
+                return replace_orders(db, owner, revision, orders)
 
         return await run_in_threadpool(save)
 

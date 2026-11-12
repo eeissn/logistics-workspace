@@ -9,7 +9,10 @@ test('cloud storage uses the revision of the supplied snapshot and refuses offli
   t.mock.method(globalThis, 'fetch', async (url, options) => {
     if (offline) throw new TypeError('offline');
     if (url === '/api/login') return Response.json({email:'first@example.test', csrf:'session-token'});
-    if (options.method === 'GET') return Response.json({revision, orders:[{number:String(revision)}]});
+    if (options.method === 'GET') {
+      assert.equal(options.headers['X-CSRF-Token'], 'session-token');
+      return Response.json({revision, orders:[{number:String(revision)}]});
+    }
     const body = JSON.parse(options.body);
     writes.push(body);
     assert.equal(options.headers['X-CSRF-Token'], 'session-token');

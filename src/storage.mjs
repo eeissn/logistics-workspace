@@ -82,7 +82,7 @@ export const auth = {
 export const store = demo ? offlineStore : {
   async list() {
     const session = account;
-    return accept(await request('records'), session);
+    return accept(await request('records', 'GET', undefined, session?.csrf), session);
   },
   async save(orders, base) {
     const revision = revisions.get(base);
