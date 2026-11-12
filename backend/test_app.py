@@ -88,6 +88,21 @@ class WorkspaceTests(unittest.TestCase):
             first, second = db.execute("SELECT password FROM users").fetchall()
         self.assertNotEqual(first[0], second[0])
 
+    def test_old_tab_cannot_use_the_replacement_cookie_with_its_old_csrf(self):
+        old_tab = self.writer(self.first)
+        self.assertEqual(self.put(self.first, old_tab, 0, [order("A")]).status_code, 200)
+
+        # Both tabs share one cookie jar. The new login replaces its cookie,
+        # while the older tab still holds the previous CSRF token in memory.
+        new_tab = self.writer(self.first, "second")
+        self.assertEqual(self.put(self.first, new_tab, 0, [order("B")]).status_code, 200)
+        self.assertEqual(self.first.get("/api/records", headers=old_tab).status_code, 403)
+        self.assertEqual(self.put(self.first, old_tab, 1, [order("A-stale")]).status_code, 403)
+        self.assertEqual(self.first.post("/api/logout", headers=old_tab).status_code, 403)
+        current = self.first.get("/api/records", headers=new_tab).json()
+        self.assertEqual([item["number"] for item in current["orders"]], ["B"])
+        self.assertEqual(current["revision"], 1)
+
     def test_crud_and_sync_with_two_sessions(self):
         first = self.writer(self.first)
         second = self.writer(self.second)
