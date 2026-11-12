@@ -52,6 +52,10 @@ textarea { resize: vertical; }
 .etrn-link[data-state=pending] { color: #614a22; background: #f7f1e5; border-color: #efe6d4; }
 .row-contacts { position: relative; margin: 0; padding: 0; border: 0; }
 .row-contacts > summary { display: inline-flex; align-items: center; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; font-weight: 560; margin: 0; }
+.contact-actions { min-width: 0; }
+.driver-link { min-height: 0; padding: .1rem .48rem; border: 0; background: transparent; text-align: left; font-size: .75rem; text-decoration: underline; text-underline-offset: 3px; }
+#driver-message { display: block; width: 100%; margin-top: .4rem; resize: vertical; }
+.demo-note { padding: .55rem .75rem; background: var(--surface); border-radius: 8px; color: var(--muted); font-size: .83rem; }
 .contact-panel { position: absolute; z-index: 2; right: 0; top: calc(100% + 3px); width: min(258px,75vw); background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: .75rem; box-shadow: 0 8px 28px #0002; }
 .contact-panel p { margin: .1rem; color: var(--muted); }
 .contact-entry + .contact-entry { border-top: 1px solid var(--line); margin-top: .45rem; padding-top: .45rem; }
@@ -125,7 +129,7 @@ dialog details[open] summary { margin-bottom: .55rem; }
   .destination { grid-row: 3; grid-column: 1/-1; }
   .trip-status { grid-row: 1; grid-column: 2; }
   .etrn-link { grid-row: 4; grid-column: 1; }
-  .row-contacts { grid-row: 4; grid-column: 2; }
+  .contact-actions { grid-row: 4; grid-column: 2; }
   .etrn-link::before { content: 'ЭТРН · '; }
   .filters select { flex: 1; }
   .nav-tools { margin-left: 0; }

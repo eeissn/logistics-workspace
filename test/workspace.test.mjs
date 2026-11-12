@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { margin, etrnSteps, etrnStatus, etrnProgress, markTrip, mergeImport, upsert, archived, monthReport, scheduledToday } from '../src/domain.mjs';
 import { parseLedger, addLedgerOrders } from '../src/ledger.mjs';
+import { driverMessage } from '../src/driver.mjs';
 import { importPair, phones } from '../src/import.mjs';
 import { linesFromItems } from '../src/pdf-lines.mjs';
 
@@ -48,6 +49,19 @@ test('пара PDF распознаётся в обоих порядках, ра
   assert.equal(order.points[1].scheduleSource, 'Перевозчик');
   assert.equal(order.differences.length, 1);
   assert.equal(order.differences[0].customer, '11.11.2026-12.11.2026 c 01:00 до 23:00');
+});
+
+test('сообщение водителя берёт его паспорт, транспорт и телефон из заявки перевозчика', () => {
+  const changed = carrier.replace('ФИО: Водитель Тестовый    Марка тягача: КАМАЗ',
+    'ФИО: Другой Водитель    Марка тягача: КАМАЗ\nПаспорт: 0000 000000 Учебный пример    Номер тягача: А000АА 000')
+    .replace('89000000005','89000000008');
+  const order = importPair(client, changed);
+  assert.equal(driverMessage(order), [
+    'Данные на водителя:', 'ФИО: Другой Водитель', 'Паспорт: 0000 000000 Учебный пример',
+    'Транспорт: КАМАЗ А000АА 000', 'Номер телефона: +7900-000-00-08',
+  ].join('\n'));
+  assert.equal(mergeImport({...order, passport:''}, order).passport, order.passport);
+  assert.equal(mergeImport({...order, passport:'', driver:'Новый Водитель'}, order).passport, '');
 });
 
 test('импортирует телефоны участников и точек без внутреннего номера', () => {

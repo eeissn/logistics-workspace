@@ -24,6 +24,7 @@
     <h1 id="view-title">Заявки</h1>
     <div class="actions"><button id="new" type="button">Новая заявка</button><button id="import" class="primary" type="button"><span aria-hidden="true">+</span> Загрузить два PDF</button></div>
   </header>
+  <p id="demo-note" class="demo-note" hidden>Демоверсия · заявка и контакты вымышлены. Для проверки используй тестовые документы.</p>
   <section class="registry" aria-label="Реестр заявок">
     <div class="filters"><input id="search" type="search" aria-label="Поиск по заявкам" placeholder="Номер, заказчик, перевозчик, маршрут"><select id="filter" aria-label="Фильтр ЭТРН"><option value="">Все статусы ЭТРН</option><option value="pending">ЭТРН требуют внимания</option><option value="Подписана">ЭТРН подписана</option><option value="Закрыта вручную">ЭТРН закрыта вручную</option><option value="Не требуется">ЭТРН не требуется</option></select></div>
     <div id="table"></div>
@@ -55,6 +56,7 @@
       <label>Перевозчик<input name="carrier"></label>
       <label>Водитель<input name="driver"></label>
       <label>Транспорт<input name="vehicle"></label>
+      <label class="wide">Паспорт водителя<textarea name="passport" rows="2" autocomplete="off" spellcheck="false"></textarea></label>
       <label class="wide">Направление<input name="route"></label>
       <label class="wide">Груз<input name="cargo"></label>
     </div>
@@ -123,6 +125,15 @@
     <div id="report-preview"></div>
     <footer class="dialog-foot"><button class="primary" type="submit">Печать / сохранить PDF</button></footer>
   </form>
+</dialog>
+<dialog id="driver-dialog" aria-labelledby="driver-title">
+  <div class="dialog-body">
+    <header class="dialog-head"><h2 id="driver-title">Данные водителя</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <label for="driver-message">Текст для заказчика или погрузки</label>
+    <textarea id="driver-message" rows="7" readonly spellcheck="false"></textarea>
+    <p id="driver-copy-status" class="quiet" role="status"></p>
+    <footer class="dialog-foot"><button type="button" id="driver-edit">Изменить данные</button><button type="button" class="primary" id="driver-copy">Копировать текст</button></footer>
+  </div>
 </dialog>
 <section id="print-report" hidden></section>
 <script type="module" src="/src/app.mjs"></script>

@@ -3,11 +3,13 @@ import { archived, blankOrder, etrnProgress, etrnStatus, margin, mergeImport, mo
 import { importPair, phones } from './import.mjs';
 import { addLedgerOrders, parseLedger } from './ledger.mjs';
 import { store } from './storage.mjs';
+import { driverMessage } from './driver.mjs';
+import { demoOrder } from './demo.mjs';
 
 const $ = id => document.getElementById(id);
 const currency = new Intl.NumberFormat('ru', {style:'currency', currency:'RUB', maximumFractionDigits:0});
 const money = value => currency.format(value);
-const fieldNames = ['number','date','customer','carrier','driver','vehicle','route','cargo','customerAmount','carrierAmount','customerTax','carrierTax'];
+const fieldNames = ['number','date','customer','carrier','driver','passport','vehicle','route','cargo','customerAmount','carrierAmount','customerTax','carrierTax'];
 const paymentNames = ['originals','edo','unit','conditions'];
 const contactRoles = ['Заказчик','Перевозчик','Водитель'];
 const etrnKeys = ['required','manualComplete','orderForm','created','allSigned'];
@@ -25,6 +27,7 @@ let etrnOrderNumber;
 let reviewOrder;
 let reviewPrevious;
 let view = 'all';
+let driverOrder;
 const today = () => new Intl.DateTimeFormat('sv-SE', {timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 
 function node(tag, text, className) {
@@ -111,8 +114,36 @@ function contactsCell(order) {
   }
   if (!entries.length) panel.append(node('p', 'В заявке нет телефонов для рейса.'));
   list.append(panel);
-  return list;
+  const cell = node('div', null, 'contact-actions');
+  cell.append(list, action('Данные водителя', () => openDriver(order), 'driver-link'));
+  return cell;
 }
+
+function openDriver(order) {
+  driverOrder = order;
+  $('driver-title').textContent = 'Данные водителя · № ' + order.number;
+  $('driver-message').value = driverMessage(order);
+  $('driver-copy-status').textContent = '';
+  $('driver-dialog').showModal();
+}
+
+$('driver-copy').addEventListener('click', async () => {
+  const field = $('driver-message');
+  let copied = false;
+  try {
+    await navigator.clipboard.writeText(field.value);
+    copied = true;
+  } catch {
+    field.focus();
+    field.select();
+    copied = document.execCommand?.('copy') === true;
+  }
+  $('driver-copy-status').textContent = copied ? 'Текст скопирован.' : 'Текст выделен. Скопируй его вручную.';
+});
+$('driver-edit').addEventListener('click', () => {
+  $('driver-dialog').close();
+  openEditor(driverOrder, driverOrder.number);
+});
 
 function renderRows(table, rows) {
   table.replaceChildren();
@@ -371,7 +402,17 @@ $('import-form').addEventListener('submit', async event => {
   }
 });
 
-store.list().then(saved => { orders = saved; render(); }).catch(error => { $('notice').textContent = error.message; });
+store.list().then(async saved => {
+  if (import.meta.env.VITE_DEMO === 'true') {
+    $('demo-note').hidden = false;
+    if (!saved.length) {
+      saved = [demoOrder(today())];
+      await store.save(saved);
+    }
+  }
+  orders = saved;
+  render();
+}).catch(error => { $('notice').textContent = error.message; });
 
 for (const button of document.querySelectorAll('[data-view]')) {
   button.addEventListener('click', () => {

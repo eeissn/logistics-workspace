@@ -43,6 +43,7 @@ export function parseLogistor(text) {
     customer: party(head, 'Заказчик'), performer: party(head, 'Исполнитель'),
     points: pointsFrom(clean),
     driver: trim(clean.match(/^[ \t]*ФИО:[ \t]*(.*?)(?:[ \t]{2,}Марка тягача:|$)/mi)?.[1]),
+    passport: trim(clean.match(/^[ \t]*Паспорт:[ \t]*(.*?)(?:[ \t]+Номер тягача:|$)/mi)?.[1]),
     driverContact: trim(clean.match(/^[ \t]*Контактный телефон:[ \t]*(.*?)(?:[ \t]{2,}Номер прицепа:|$)/mi)?.[1]),
     vehicle: [
       trim(clean.match(/Марка тягача:[ \t]*([^\n]+)/i)?.[1]),
@@ -112,15 +113,18 @@ export function importPair(firstText, secondText) {
     }
   }
   if (customer.date !== carrier.date) differences.push({field: 'Дата заявки', customer: customer.date, carrier: carrier.date});
+  const driver = carrier.driver || customer.driver;
+  const driverDocs = [carrier, customer].filter(doc => driver && fold(doc.driver) === fold(driver));
   const contactGroups = [
     ['Заказчик', customer.customer.name, customer.customer.contact],
     ['Перевозчик', carrier.performer.name, carrier.performer.contact],
-    ['Водитель', carrier.driver || customer.driver, carrier.driverContact, customer.driverContact],
+    ['Водитель', driver, ...driverDocs.map(doc => doc.driverContact)],
   ];
   return {
     ...blankOrder(), number: customer.number, date: carrier.date,
     customer: customer.customer.name, carrier: carrier.performer.name,
-    driver: carrier.driver || customer.driver, vehicle: carrier.vehicle || customer.vehicle,
+    driver, passport: driverDocs.find(doc => doc.passport)?.passport || '',
+    vehicle: carrier.vehicle || customer.vehicle,
     cargo: carrier.cargo || customer.cargo,
     customerAmount: customer.amount, carrierAmount: carrier.amount,
     customerTax: customer.tax, carrierTax: carrier.tax,

@@ -26,8 +26,10 @@ export function markTrip(order, key, checked) {
 
 export function mergeImport(order, current) {
   if (!current) return order;
+  const sameDriver = order.driver && order.driver.toLocaleLowerCase('ru') === current.driver?.toLocaleLowerCase('ru');
   return {
     ...order, trip: current.trip ?? {}, ledgerMargin: current.ledgerMargin,
+    passport: order.passport || (sameDriver ? current.passport : '') || '',
     etrn: {...order.etrn, ...current.etrn, required: current.etrn?.required || order.etrn.required},
   };
 }
@@ -58,7 +60,7 @@ export function etrnStatus(etrn) {
 }
 
 export const blankOrder = () => ({
-  number: '', date: '', route: '', customer: '', carrier: '', driver: '', vehicle: '', cargo: '',
+  number: '', date: '', route: '', customer: '', carrier: '', driver: '', passport: '', vehicle: '', cargo: '',
   customerAmount: null, carrierAmount: null, customerTax: '', carrierTax: '',
   payment: {originals: null, edo: null, unit: '', conditions: ''},
   points: [], contacts: [], differences: [], trip: {},
