@@ -1,4 +1,5 @@
 const KEY = 'logistics-workspace:v1';
+export const sessionChangeKey = 'logistics-workspace:session-change';
 export const demo = import.meta.env?.VITE_DEMO === 'true';
 
 export function localOrders() {
@@ -67,12 +68,25 @@ async function inSession(send, accept) {
   throw new Error('Сеанс завершён.');
 }
 
-// The browser applies Set-Cookie before fetch resolves. Order these requests within this page.
+// The browser applies Set-Cookie before fetch resolves.
 function changeCookie(send, accept) {
   const started = generation;
-  const result = (cookieChange ?? Promise.resolve()).then(() => {
+  const change = () => {
     if (started !== generation) throw new Error('Сеанс завершён.');
-    return inSession(send, accept);
+    return inSession(async () => {
+      const response = await send();
+      try {
+        // Notify peers even if this page has since discarded the response.
+        globalThis.localStorage?.setItem(sessionChangeKey, globalThis.crypto.randomUUID());
+      } catch {
+        // The next registry request still checks the cookie and CSRF token.
+      }
+      return response;
+    }, accept);
+  };
+  const result = (cookieChange ?? Promise.resolve()).then(() => {
+    const locks = globalThis.navigator?.locks;
+    return locks ? locks.request(sessionChangeKey, change) : change();
   });
   const settled = () => {
     if (cookieChange === tail) cookieChange = undefined;
