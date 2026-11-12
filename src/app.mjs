@@ -2,6 +2,7 @@ import './style.css';
 import { archived, blankOrder, etrnProgress, etrnStatus, margin, mergeImport, monthReport, orderMargin, scheduledToday, tripStatus, tripStatuses, upsert } from './domain.mjs';
 import { importPair, phones } from './import.mjs';
 import { addLedgerOrders, parseLedger } from './ledger.mjs';
+import { checkImportFile } from './import-files.mjs';
 import { auth, demo, localOrders, sessionChangeKey, store } from './storage.mjs';
 import { driverMessage } from './driver.mjs';
 import { demoOrder } from './demo.mjs';
@@ -434,6 +435,7 @@ $('import-form').addEventListener('submit', async event => {
   $('import-error').textContent = '';
   try {
     if (files.some(file => !file)) throw new Error('Выбери ровно два PDF.');
+    for (const file of files) checkImportFile(file, 'PDF', 20);
     const { readPdf } = await import('./pdf.mjs');
     if (!operation.active()) return;
     const documents = await Promise.all(files.map(readPdf));
@@ -701,6 +703,7 @@ $('ledger-form').addEventListener('submit', async event => {
   const file = $('ledger-file').files[0];
   $('ledger-error').textContent = '';
   try {
+    checkImportFile(file, 'Excel', 10);
     const {readSheet} = await import('read-excel-file/browser');
     if (!operation.active()) return;
     const rows = await readSheet(file, 'Ноябрь');
