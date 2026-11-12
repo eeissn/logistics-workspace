@@ -2,6 +2,56 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { auth, localOrders, store } from '../src/storage.mjs';
 
+test('two tab instances serialize cookie changes and publish opaque notifications', async t => {
+  const tabA = await import('../src/storage.mjs?tab=a');
+  const tabB = await import('../src/storage.mjs?tab=b');
+  const started = Promise.withResolvers();
+  const late = Promise.withResolvers();
+  const events = [];
+  let tail = Promise.resolve();
+  const navigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  const localStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  Object.defineProperty(globalThis, 'navigator', {configurable:true, value:{locks:{
+    request(name, callback) {
+      assert.equal(name, tabA.sessionChangeKey);
+      const result = tail.then(callback);
+      tail = result.catch(() => {});
+      return result;
+    },
+  }}});
+  Object.defineProperty(globalThis, 'localStorage', {configurable:true, value:{
+    setItem(key, value) { events.push({key, value}); },
+  }});
+  t.after(() => {
+    for (const [key, descriptor] of Object.entries({navigator, localStorage})) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete globalThis[key];
+    }
+  });
+  const requests = mockCookieFetch(t, (url, options, cookie) => {
+    const {email} = JSON.parse(options.body);
+    if (email === 'a@example.test') {
+      started.resolve();
+      return late.promise;
+    }
+    assert.equal(cookie, 'session=a@example.test');
+    return loginResponse(email);
+  });
+  const first = tabA.auth.login('a@example.test', 'synthetic');
+  await started.promise;
+  const second = tabB.auth.login('b@example.test', 'synthetic');
+  await new Promise(setImmediate);
+  assert.deepEqual(requests, ['/api/login']);
+  late.resolve(loginResponse('a@example.test'));
+  await Promise.all([first, second]);
+  assert.equal(events.length, 2);
+  assert.notEqual(events[0].value, events[1].value);
+  for (const {key, value} of events) {
+    assert.equal(key, tabA.sessionChangeKey);
+    assert.match(value, /^[a-f0-9-]{36}$/);
+  }
+});
+
 const staleSession = error => error.message === 'Сеанс завершён.' && error.status === undefined;
 
 test('cloud storage uses the revision of the supplied snapshot and refuses offline writes', async t => {
