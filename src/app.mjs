@@ -394,6 +394,7 @@ form.addEventListener('submit', async event => {
 });
 $('import-form').addEventListener('submit', async event => {
   event.preventDefault();
+  const generation = accountGeneration;
   const files = [$('customer-pdf').files[0], $('carrier-pdf').files[0]];
   const submit = event.submitter;
   $('import-error').textContent = '';
@@ -406,6 +407,7 @@ $('import-form').addEventListener('submit', async event => {
   try {
     const { readPdf } = await import('./pdf.mjs');
     const imported = importPair(...await Promise.all(files.map(readPdf)));
+    if (generation !== accountGeneration) return;
     const current = (await store.list()).find(item => item.number === imported.number);
     importDialog.close();
     openReview(mergeImport(imported, current), current?.number ?? null, current?.updatedAt);
@@ -436,6 +438,10 @@ function signInScreen(message = '') {
   $('notice').textContent = '';
   $('print-report').replaceChildren();
   $('editor-form').reset();
+  $('import-form').reset();
+  $('ledger-form').reset();
+  $('etrn-form').reset();
+  $('report-preview').replaceChildren();
   $('review-card').replaceChildren();
   $('points').replaceChildren();
   $('contacts').replaceChildren();
@@ -612,13 +618,15 @@ $('ledger').addEventListener('click', () => {
 });
 $('ledger-form').addEventListener('submit', async event => {
   event.preventDefault();
+  const generation = accountGeneration;
   const button = event.submitter;
+  const file = $('ledger-file').files[0];
   button.disabled = true;
   $('ledger-error').textContent = '';
   try {
     const {readSheet} = await import('read-excel-file/browser');
-    const file = $('ledger-file').files[0];
     const imported = parseLedger(await readSheet(file, 'Ноябрь'), '2026-11');
+    if (generation !== accountGeneration) return;
     if (!imported.length) throw new Error('В листе нет заявок за ноябрь 2026.');
     const current = await store.list();
     const saved = addLedgerOrders(current, imported);

@@ -34,6 +34,32 @@ test('cloud storage uses the revision of the supplied snapshot and refuses offli
   assert.equal(writes.length, 2);
 });
 
+test('a snapshot and delayed read cannot cross an account switch', async t => {
+  let finishRead;
+  let pauseRead = false;
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (url === '/api/login') {
+      const {email} = JSON.parse(options.body);
+      return Response.json({email, csrf:email});
+    }
+    assert.equal(options.method, 'GET');
+    const orders = [{number:options.headers['X-CSRF-Token']}];
+    if (pauseRead) await new Promise(resolve => { finishRead = resolve; });
+    return Response.json({revision:0, orders});
+  });
+  t.after(() => auth.clear());
+  await auth.login('first@example.test', 'test-password');
+  const old = await store.list();
+  pauseRead = true;
+  const pending = store.list();
+  pauseRead = false;
+  await auth.login('second@example.test', 'test-password');
+  finishRead();
+  await assert.rejects(pending, /Сеанс завершён/);
+  await assert.rejects(store.save(old, old), /Обновите реестр/);
+  assert.deepEqual(await store.list(), [{number:'second@example.test'}]);
+});
+
 test('legacy storage is read explicitly without altering the local copy', t => {
   const value = {version:1, orders:[{number:'legacy'}]};
   const reads = [];

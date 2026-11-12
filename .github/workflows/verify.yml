@@ -1,0 +1,38 @@
+name: Verify Logistics Workspace
+
+on:
+  push:
+    branches: [feature/two-user-sync, 'feature/two-user-sync-*']
+  pull_request:
+    branches: [feature/two-user-sync]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Test API and SQLite
+        run: |
+          python -m pip install -r backend/requirements-test.txt
+          python -m unittest backend.test_app -v
+      - name: Validate release check
+        run: bash -n deploy/check-release.sh
+      - name: Test and build frontend
+        env:
+          VITE_DEMO: 'false'
+        run: |
+          npm ci
+          npm test
+          npm run build

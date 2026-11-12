@@ -44,7 +44,7 @@ async function request(path, method = 'GET', data, csrf) {
 
 let account;
 let newest;
-const revisions = new WeakMap();
+let revisions = new WeakMap();
 const offlineStore = {
   list: async () => localOrders(),
   async save(orders) {
@@ -62,10 +62,12 @@ function accept(snapshot, session) {
 
 export const auth = {
   async restore() {
+    this.clear();
     account = await request('me');
     return account;
   },
   async login(email, password) {
+    this.clear();
     account = await request('login', 'POST', {email, password});
     return account;
   },
@@ -76,6 +78,7 @@ export const auth = {
   clear() {
     account = undefined;
     newest = undefined;
+    revisions = new WeakMap();
   },
 };
 

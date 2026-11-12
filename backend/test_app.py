@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -197,7 +198,8 @@ class WorkspaceTests(unittest.TestCase):
                 self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0], "ok")
                 self.assertEqual(db.execute("SELECT number FROM orders").fetchone()[0], "7123")
                 self.assertEqual(db.execute("SELECT COUNT(*) FROM users").fetchone()[0], 2)
-            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            if os.name == "posix":
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             with self.assertRaises(FileExistsError):
                 backup(self.path, path)
 
