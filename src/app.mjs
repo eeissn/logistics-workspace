@@ -2,7 +2,7 @@ import './style.css';
 import { archived, blankOrder, etrnProgress, etrnStatus, margin, mergeImport, monthReport, orderMargin, scheduledToday, tripStatus, tripStatuses, upsert } from './domain.mjs';
 import { importPair, phones } from './import.mjs';
 import { addLedgerOrders, parseLedger } from './ledger.mjs';
-import { checkImportFile } from './import-files.mjs';
+import { checkImportFile, readExcelArchive } from './import-files.mjs';
 import { auth, demo, localOrders, sessionChangeKey, store } from './storage.mjs';
 import { driverMessage } from './driver.mjs';
 import { demoOrder } from './demo.mjs';
@@ -703,10 +703,11 @@ $('ledger-form').addEventListener('submit', async event => {
   const file = $('ledger-file').files[0];
   $('ledger-error').textContent = '';
   try {
-    checkImportFile(file, 'Excel', 10);
+    const archive = await readExcelArchive(file);
+    if (!operation.active()) return;
     const {readSheet} = await import('read-excel-file/browser');
     if (!operation.active()) return;
-    const rows = await readSheet(file, 'Ноябрь');
+    const rows = await readSheet(archive, 'Ноябрь');
     if (!operation.active()) return;
     const imported = parseLedger(rows, '2026-11');
     if (!imported.length) throw new Error('В листе нет заявок за ноябрь 2026.');
