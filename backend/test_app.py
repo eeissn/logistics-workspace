@@ -96,7 +96,7 @@ class WorkspaceTests(unittest.TestCase):
         # while the older tab still holds the previous CSRF token in memory.
         new_tab = self.writer(self.first, "second")
         self.assertEqual(self.put(self.first, new_tab, 0, [order("B")]).status_code, 200)
-        self.assertEqual(self.first.get("/api/records", headers=old_tab).status_code, 403)
+        self.assertEqual(self.first.get("/api/records", headers=old_tab).status_code, 401)
         self.assertEqual(self.put(self.first, old_tab, 1, [order("A-stale")]).status_code, 403)
         self.assertEqual(self.first.post("/api/logout", headers=old_tab).status_code, 403)
         current = self.first.get("/api/records", headers=new_tab).json()
