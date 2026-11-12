@@ -125,8 +125,8 @@ const pdf = (number, customer, performer) =>
 
 function submitPdf(app, number, read = text => text) {
   app.get('import').fire('click');
-  app.get('customer-pdf').files = [{read:() => read(pdf(number, 'Заказчик', 'Экспедитор'))}];
-  app.get('carrier-pdf').files = [{read:() => pdf(number, 'Экспедитор', 'Перевозчик')}];
+  app.get('customer-pdf').files = [{size:100, read:() => read(pdf(number, 'Заказчик', 'Экспедитор'))}];
+  app.get('carrier-pdf').files = [{size:100, read:() => pdf(number, 'Экспедитор', 'Перевозчик')}];
   return app.get('import-form').fire('submit', app.get('pdf-button'));
 }
 
@@ -134,12 +134,30 @@ const ledgerHeader = ['Дата','Номер заявки','Заказчик','�
 
 function submitExcel(app, number, read = rows => rows) {
   app.get('ledger').fire('click');
-  app.get('ledger-file').files = [{read(sheet) {
+  app.get('ledger-file').files = [{size:100, read(sheet) {
     assert.equal(sheet, 'Ноябрь');
     return read([ledgerHeader, ['2026-11-09', number, 'Заказчик']]);
   }}];
   return app.get('ledger-form').fire('submit', app.get('excel-button'));
 }
+
+test('oversized PDF and Excel are rejected before reading or saving', async t => {
+  const app = await workspace(t);
+  await app.login('a');
+  const read = t.mock.fn();
+  app.get('customer-pdf').files = [{size:100, read}];
+  app.get('carrier-pdf').files = [{size:20 * 1024 * 1024 + 1, read}];
+  await app.get('import-form').fire('submit', app.get('pdf-button'));
+  assert.match(app.get('import-error').textContent, /20 МиБ/);
+  assert.equal(app.get('pdf-button').disabled, false);
+
+  app.get('ledger-file').files = [{size:10 * 1024 * 1024 + 1, read}];
+  await app.get('ledger-form').fire('submit', app.get('excel-button'));
+  assert.match(app.get('ledger-error').textContent, /10 МиБ/);
+  assert.equal(app.get('excel-button').disabled, false);
+  assert.equal(read.mock.callCount(), 0);
+  assert.equal(app.writes.length, 0);
+});
 
 test('a peer tab change clears the previous registry and discards pending PDF review', async t => {
   const app = await workspace(t);
