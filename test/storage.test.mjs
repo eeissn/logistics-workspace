@@ -79,27 +79,115 @@ test('legacy storage is read explicitly without altering the local copy', t => {
   assert.deepEqual(reads, ['logistics-workspace:v1']);
 });
 
+function mockCookieFetch(t, respond) {
+  let cookie = 'session=';
+  const requests = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    requests.push(url);
+    const response = await respond(url, options, cookie);
+    cookie = response.headers.get('Set-Cookie')?.split(';')[0] ?? cookie;
+    return response;
+  });
+  return requests;
+}
+
+function loginResponse(email) {
+  return Response.json({email, csrf:email}, {headers:{'Set-Cookie':'session=' + email}});
+}
+
 for (const status of [200, 401]) {
-  test('late login (' + status + ') cannot replace a newer login', async t => {
+  test('new login waits for a superseded login (' + status + ')', async t => {
+    const started = Promise.withResolvers();
     const late = Promise.withResolvers();
-    t.mock.method(globalThis, 'fetch', (url, options) => {
+    const requests = mockCookieFetch(t, (url, options, cookie) => {
       if (url === '/api/login') {
         const {email} = JSON.parse(options.body);
-        return email.startsWith('a@') ? late.promise : Response.json({email, csrf:'b-token'});
+        if (email === 'a@example.test') {
+          started.resolve();
+          return late.promise;
+        }
+        assert.equal(cookie, status === 200 ? 'session=a@example.test' : 'session=');
+        return loginResponse(email);
       }
       assert.equal(url, '/api/records');
-      assert.equal(options.headers['X-CSRF-Token'], 'b-token');
+      assert.equal(cookie, 'session=b@example.test');
+      assert.equal(options.headers['X-CSRF-Token'], 'b@example.test');
       return Response.json({revision:0, orders:[{number:'B'}]});
     });
     t.after(() => auth.clear());
     const oldLogin = auth.login('a@example.test', 'synthetic');
     const rejected = assert.rejects(oldLogin, staleSession);
-    await auth.login('b@example.test', 'synthetic');
-    late.resolve(Response.json({email:'a@example.test', csrf:'a-token'}, {status}));
+    await started.promise;
+    const newLogin = auth.login('b@example.test', 'synthetic');
+    await new Promise(setImmediate);
+    assert.deepEqual(requests, ['/api/login']);
+    late.resolve(status === 200 ? loginResponse('a@example.test') : Response.json({}, {status}));
     await rejected;
+    await newLogin;
     assert.deepEqual(await store.list(), [{number:'B'}]);
   });
 }
+
+test('new login waits for logout to clear the previous cookie', async t => {
+  const started = Promise.withResolvers();
+  const late = Promise.withResolvers();
+  const requests = mockCookieFetch(t, (url, options, cookie) => {
+    if (url === '/api/logout') {
+      assert.equal(cookie, 'session=a@example.test');
+      assert.equal(options.headers['X-CSRF-Token'], 'a@example.test');
+      started.resolve();
+      return late.promise;
+    }
+    if (url === '/api/login') {
+      assert.equal(cookie, 'session=');
+      return loginResponse(JSON.parse(options.body).email);
+    }
+    assert.equal(url, '/api/records');
+    assert.equal(cookie, 'session=b@example.test');
+    assert.equal(options.headers['X-CSRF-Token'], 'b@example.test');
+    return Response.json({revision:0, orders:[{number:'B'}]});
+  });
+  t.after(() => auth.clear());
+  await auth.login('a@example.test', 'synthetic');
+  const rejected = assert.rejects(auth.logout(), staleSession);
+  await started.promise;
+  const newLogin = auth.login('b@example.test', 'synthetic');
+  await new Promise(setImmediate);
+  assert.deepEqual(requests, ['/api/login', '/api/logout']);
+  late.resolve(Response.json({}, {headers:{'Set-Cookie':'session=; Max-Age=0'}}));
+  await rejected;
+  await newLogin;
+  assert.deepEqual(await store.list(), [{number:'B'}]);
+});
+
+test('restore cannot adopt a superseded login cookie while pending or after it lands', async t => {
+  const started = Promise.withResolvers();
+  const late = Promise.withResolvers();
+  const requests = mockCookieFetch(t, (url, options, cookie) => {
+    if (url === '/api/me') {
+      const email = cookie.slice('session='.length);
+      return Response.json({email, csrf:email});
+    }
+    assert.equal(url, '/api/login');
+    const {email} = JSON.parse(options.body);
+    if (email === 'a@example.test') {
+      started.resolve();
+      return late.promise;
+    }
+    return loginResponse(email);
+  });
+  t.after(() => auth.clear());
+  const rejected = assert.rejects(auth.login('a@example.test', 'synthetic'), staleSession);
+  await started.promise;
+  auth.clear();
+  await assert.rejects(auth.restore(), staleSession);
+  late.resolve(loginResponse('a@example.test'));
+  await rejected;
+  await assert.rejects(auth.restore(), staleSession);
+  assert.deepEqual(requests, ['/api/login']);
+  await auth.login('b@example.test', 'synthetic');
+  assert.equal((await auth.restore()).email, 'b@example.test');
+});
 
 for (const method of ['GET', 'PUT']) {
   for (const status of [200, 401, 409]) {

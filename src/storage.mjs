@@ -44,6 +44,8 @@ async function request(path, method = 'GET', data, csrf) {
 
 let account;
 let generation = 0;
+let cookieChange;
+let unconfirmedLogin = false;
 let newest;
 let revisions = new WeakMap();
 const offlineStore = {
@@ -65,6 +67,21 @@ async function inSession(send, accept) {
   throw new Error('Сеанс завершён.');
 }
 
+// The browser applies Set-Cookie before fetch resolves. Order these requests within this page.
+function changeCookie(send, accept) {
+  const started = generation;
+  const result = (cookieChange ?? Promise.resolve()).then(() => {
+    if (started !== generation) throw new Error('Сеанс завершён.');
+    return inSession(send, accept);
+  });
+  const settled = () => {
+    if (cookieChange === tail) cookieChange = undefined;
+  };
+  const tail = result.then(settled, settled);
+  cookieChange = tail;
+  return result;
+}
+
 function acceptSnapshot(snapshot) {
   revisions.set(snapshot.orders, snapshot.revision);
   if (!newest || snapshot.revision > newest.revision) newest = snapshot;
@@ -72,16 +89,31 @@ function acceptSnapshot(snapshot) {
 }
 
 export const auth = {
-  restore() {
+  async restore() {
+    if (cookieChange || unconfirmedLogin) throw new Error('Сеанс завершён.');
     this.clear();
     return inSession(() => request('me'), result => account = result);
   },
   login(email, password) {
     this.clear();
-    return inSession(() => request('login', 'POST', {email, password}), result => account = result);
+    return changeCookie(async () => {
+      const previous = unconfirmedLogin;
+      unconfirmedLogin = true;
+      try {
+        return await request('login', 'POST', {email, password});
+      } catch (error) {
+        // An HTTP error from login does not set a session cookie.
+        if (error.status) unconfirmedLogin = previous;
+        throw error;
+      }
+    }, result => {
+      unconfirmedLogin = false;
+      return account = result;
+    });
   },
   logout() {
-    return inSession(() => request('logout', 'POST', undefined, account?.csrf), () => this.clear());
+    const csrf = account?.csrf;
+    return changeCookie(() => request('logout', 'POST', undefined, csrf), () => this.clear());
   },
   clear() {
     generation++;
