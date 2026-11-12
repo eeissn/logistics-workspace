@@ -7,7 +7,16 @@
 <title>Logistics Workspace</title>
 </head>
 <body>
-<aside class="workspace-nav">
+<section id="sign-in" hidden>
+  <form id="sign-in-form">
+    <h1>Logistics Workspace</h1>
+    <label>Почта<input name="email" type="email" autocomplete="username" maxlength="254" required></label>
+    <label>Пароль<input name="password" type="password" autocomplete="current-password" maxlength="256" required></label>
+    <button class="primary" type="submit">Войти</button>
+    <p id="sign-in-error" role="alert"></p>
+  </form>
+</section>
+<aside id="workspace-nav" class="workspace-nav" hidden>
   <a class="brand" href="./">Logistics Workspace</a>
   <nav aria-label="Разделы заявок">
     <button type="button" data-view="all" aria-pressed="true">Все заявки</button>
@@ -19,7 +28,14 @@
     <button type="button" id="report">Отчёт по марже</button>
   </div>
 </aside>
-<main>
+<main id="workspace" hidden>
+  <div id="sync-tools" class="sync-tools" hidden>
+    <span id="account-email"></span>
+    <button id="sync-refresh" type="button">Обновить</button>
+    <button id="local-import" type="button" hidden>Перенести заявки с устройства</button>
+    <button id="sign-out" type="button">Выйти</button>
+    <p id="sync-status" role="status"></p>
+  </div>
   <header class="intro">
     <h1 id="view-title">Заявки</h1>
     <div class="actions"><button id="new" type="button">Новая заявка</button><button id="import" class="primary" type="button"><span aria-hidden="true">+</span> Загрузить два PDF</button></div>

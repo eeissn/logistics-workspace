@@ -2,7 +2,7 @@ import './style.css';
 import { archived, blankOrder, etrnProgress, etrnStatus, margin, mergeImport, monthReport, orderMargin, scheduledToday, tripStatus, tripStatuses, upsert } from './domain.mjs';
 import { importPair, phones } from './import.mjs';
 import { addLedgerOrders, parseLedger } from './ledger.mjs';
-import { store } from './storage.mjs';
+import { auth, demo, localOrders, store } from './storage.mjs';
 import { driverMessage } from './driver.mjs';
 import { demoOrder } from './demo.mjs';
 
@@ -26,6 +26,12 @@ let previousNumber;
 let etrnOrderNumber;
 let reviewOrder;
 let reviewPrevious;
+let reviewStamp;
+let editorStamp;
+let etrnStamp;
+let signedIn = false;
+let refreshing;
+let accountGeneration = 0;
 let view = 'all';
 let driverOrder;
 const today = () => new Intl.DateTimeFormat('sv-SE', {timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
@@ -44,13 +50,20 @@ function action(text, onClick, className) {
   return button;
 }
 
-async function updateOrder(number, update) {
-  const current = await store.list();
+function assertUnchanged(current, number, stamp) {
+  if (number === null) return;
   const order = current.find(item => item.number === number);
-  if (!order) throw new Error('Заявка больше не найдена в реестре.');
+  if (!order || order.updatedAt !== stamp) {
+    throw new Error('Заявка изменилась. Обновите реестр и откройте её заново.');
+  }
+}
+
+async function updateOrder(number, stamp, update) {
+  const current = await store.list();
+  assertUnchanged(current, number, stamp);
+  const order = current.find(item => item.number === number);
   const saved = upsert(current, update(order), number);
-  await store.save(saved);
-  orders = saved;
+  orders = await store.save(saved, current);
 }
 
 function tripControl(order) {
@@ -68,7 +81,7 @@ function tripControl(order) {
     try {
       const stage = select.value;
       const archiveWasOpen = $('archive').open;
-      await updateOrder(order.number, current => ({...current, trip:{...current.trip, stage}}));
+      await updateOrder(order.number, order.updatedAt, current => ({...current, trip:{...current.trip, stage}}));
       render();
       $('archive').open = archiveWasOpen;
       $('notice').textContent = 'Статус рейса сохранён.';
@@ -228,6 +241,7 @@ function openEtrn(number = null) {
   const order = number === null ? draft : orders.find(item => item.number === number);
   if (!order) return;
   etrnOrderNumber = number;
+  etrnStamp = order.updatedAt;
   const etrn = order.etrn ?? {};
   const orderNumber = number ?? (form.elements.number.value.trim() || order.number);
   $('etrn-title').textContent = orderNumber ? 'ЭТРН · заявка № ' + orderNumber : 'ЭТРН';
@@ -284,7 +298,8 @@ function addPoint(point = {kind:'Погрузка'}) {
   $('points').append(panel);
 }
 
-function openEditor(order, original = null) {
+function openEditor(order, original = null, stamp = order.updatedAt) {
+  editorStamp = stamp;
   draft = structuredClone(order);
   if (!draft.route) draft.route = routeText(draft);
   previousNumber = original;
@@ -352,7 +367,7 @@ etrnForm.addEventListener('submit', async event => {
       draft.etrn = etrn;
       editorPreview();
     } else {
-      await updateOrder(etrnOrderNumber, order => ({...order, etrn}));
+      await updateOrder(etrnOrderNumber, etrnStamp, order => ({...order, etrn}));
       render();
       $('notice').textContent = 'Статус ЭТРН сохранён.';
     }
@@ -369,12 +384,12 @@ form.addEventListener('submit', async event => {
   event.preventDefault();
   $('editor-error').textContent = '';
   try {
-    const saved = upsert(await store.list(), readDraft(), previousNumber);
-    await store.save(saved);
-    orders = saved;
+    const current = await store.list();
+    assertUnchanged(current, previousNumber, editorStamp);
+    orders = await store.save(upsert(current, readDraft(), previousNumber), current);
     editor.close();
     render();
-    $('notice').textContent = 'Заявка сохранена на этом устройстве.';
+    $('notice').textContent = 'Заявка сохранена.';
   } catch (error) { $('editor-error').textContent = error.message; }
 });
 $('import-form').addEventListener('submit', async event => {
@@ -393,7 +408,7 @@ $('import-form').addEventListener('submit', async event => {
     const imported = importPair(...await Promise.all(files.map(readPdf)));
     const current = (await store.list()).find(item => item.number === imported.number);
     importDialog.close();
-    openReview(mergeImport(imported, current), current?.number ?? null);
+    openReview(mergeImport(imported, current), current?.number ?? null, current?.updatedAt);
   } catch (error) {
     $('import-error').textContent = error.message || 'Не удалось прочитать PDF.';
   } finally {
@@ -402,17 +417,140 @@ $('import-form').addEventListener('submit', async event => {
   }
 });
 
-store.list().then(async saved => {
-  if (import.meta.env.VITE_DEMO === 'true') {
-    $('demo-note').hidden = false;
-    if (!saved.length) {
-      saved = [demoOrder(today())];
-      await store.save(saved);
-    }
-  }
-  orders = saved;
+function showWorkspace(visible) {
+  $('workspace').hidden = !visible;
+  $('workspace-nav').hidden = !visible;
+  $('sign-in').hidden = visible;
+}
+
+function signInScreen(message = '') {
+  signedIn = false;
+  accountGeneration++;
+  refreshing = undefined;
+  auth.clear();
+  for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
+  orders = [];
+  draft = reviewOrder = driverOrder = null;
+  $('account-email').textContent = '';
+  $('sync-status').textContent = '';
+  $('notice').textContent = '';
+  $('print-report').replaceChildren();
+  $('editor-form').reset();
+  $('review-card').replaceChildren();
+  $('points').replaceChildren();
+  $('contacts').replaceChildren();
+  $('difference-list').replaceChildren();
+  $('driver-message').value = '';
   render();
-}).catch(error => { $('notice').textContent = error.message; });
+  $('sign-in-error').textContent = message;
+  showWorkspace(false);
+}
+
+async function refresh() {
+  if (!signedIn || refreshing !== undefined) return;
+  const generation = accountGeneration;
+  refreshing = generation;
+  try {
+    const saved = await store.list();
+    if (!signedIn || generation !== accountGeneration) return;
+    if (orders !== saved) {
+      const archiveOpen = $('archive').open;
+      orders = saved;
+      render();
+      $('archive').open = archiveOpen;
+    }
+    $('sync-status').textContent = '';
+  } catch (error) {
+    if (generation !== accountGeneration) return;
+    if (signedIn && error.status === 401) signInScreen('Сеанс закончился. Войдите снова.');
+    else if (signedIn) $('sync-status').textContent = error.message;
+  } finally {
+    if (generation === accountGeneration) refreshing = undefined;
+  }
+}
+
+async function showAccount(account) {
+  accountGeneration++;
+  signedIn = true;
+  $('account-email').textContent = account.email;
+  $('sync-tools').hidden = false;
+  try {
+    $('local-import').hidden = localOrders().length === 0;
+  } catch {
+    $('local-import').hidden = true;
+  }
+  $('sync-status').textContent = 'Загружаем заявки…';
+  showWorkspace(true);
+  await refresh();
+}
+
+$('sign-in-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const login = event.currentTarget;
+  const button = event.submitter;
+  button.disabled = true;
+  $('sign-in-error').textContent = '';
+  try {
+    const account = await auth.login(login.elements.email.value.trim(), login.elements.password.value);
+    login.reset();
+    await showAccount(account);
+  } catch (error) {
+    $('sign-in-error').textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$('sign-out').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    await auth.logout();
+    signInScreen();
+  } catch (error) {
+    if (error.status === 401) signInScreen();
+    else $('sync-status').textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$('sync-refresh').addEventListener('click', refresh);
+$('local-import').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const local = localOrders();
+    if (!window.confirm(`Перенести ${local.length} заявок в общий реестр? Оба аккаунта увидят их. Совпадающие номера будут пропущены.`)) return;
+    const current = await store.list();
+    const unique = [...new Map(local.map(order => [order.number, order])).values()];
+    const saved = addLedgerOrders(current, unique);
+    if (saved.length > current.length) {
+      orders = await store.save(saved, current);
+      render();
+    }
+    $('notice').textContent = `Добавлено: ${saved.length - current.length}. Пропущено: ${local.length - saved.length + current.length}.`;
+  } catch (error) {
+    $('notice').textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+if (demo) {
+  $('demo-note').hidden = false;
+  showWorkspace(true);
+  store.list().then(async saved => {
+    orders = saved.length ? saved : await store.save([demoOrder(today())]);
+    render();
+  }).catch(error => { $('notice').textContent = error.message; });
+} else {
+  auth.restore().then(showAccount).catch(error => signInScreen(error.status === 401 ? '' : error.message));
+  window.addEventListener('online', refresh);
+  window.addEventListener('focus', refresh);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+  setInterval(() => { if (!document.hidden) refresh(); }, 15000);
+}
 
 for (const button of document.querySelectorAll('[data-view]')) {
   button.addEventListener('click', () => {
@@ -423,7 +561,8 @@ for (const button of document.querySelectorAll('[data-view]')) {
   });
 }
 
-function openReview(order, previous) {
+function openReview(order, previous, stamp) {
+  reviewStamp = stamp;
   reviewOrder = order;
   reviewPrevious = previous;
   $('review-title').textContent = 'Результат распознавания · № ' + order.number;
@@ -450,15 +589,15 @@ function openReview(order, previous) {
 
 $('review-edit').addEventListener('click', () => {
   $('review-dialog').close();
-  openEditor(reviewOrder, reviewPrevious);
+  openEditor(reviewOrder, reviewPrevious, reviewStamp);
 });
 $('review-save').addEventListener('click', async () => {
   const button = $('review-save');
   button.disabled = true;
   try {
-    const saved = upsert(await store.list(), reviewOrder, reviewPrevious);
-    await store.save(saved);
-    orders = saved;
+    const current = await store.list();
+    assertUnchanged(current, reviewPrevious, reviewStamp);
+    orders = await store.save(upsert(current, reviewOrder, reviewPrevious), current);
     $('review-dialog').close();
     render();
     $('notice').textContent = 'Заявка сохранена.';
@@ -483,8 +622,7 @@ $('ledger-form').addEventListener('submit', async event => {
     if (!imported.length) throw new Error('В листе нет заявок за ноябрь 2026.');
     const current = await store.list();
     const saved = addLedgerOrders(current, imported);
-    await store.save(saved);
-    orders = saved;
+    orders = await store.save(saved, current);
     $('ledger-dialog').close();
     render();
     const added = saved.length - current.length;
