@@ -43,6 +43,7 @@ async function request(path, method = 'GET', data, csrf) {
 }
 
 let account;
+let generation = 0;
 let newest;
 let revisions = new WeakMap();
 const offlineStore = {
@@ -53,29 +54,37 @@ const offlineStore = {
   },
 };
 
-function accept(snapshot, session) {
-  if (!session || account !== session) throw new Error('Сеанс завершён.');
+async function inSession(send, accept) {
+  const started = generation;
+  try {
+    const result = await send();
+    if (started === generation) return accept(result);
+  } catch (error) {
+    if (started === generation) throw error;
+  }
+  throw new Error('Сеанс завершён.');
+}
+
+function acceptSnapshot(snapshot) {
   revisions.set(snapshot.orders, snapshot.revision);
   if (!newest || snapshot.revision > newest.revision) newest = snapshot;
   return newest.orders;
 }
 
 export const auth = {
-  async restore() {
+  restore() {
     this.clear();
-    account = await request('me');
-    return account;
+    return inSession(() => request('me'), result => account = result);
   },
-  async login(email, password) {
+  login(email, password) {
     this.clear();
-    account = await request('login', 'POST', {email, password});
-    return account;
+    return inSession(() => request('login', 'POST', {email, password}), result => account = result);
   },
-  async logout() {
-    await request('logout', 'POST', undefined, account?.csrf);
-    this.clear();
+  logout() {
+    return inSession(() => request('logout', 'POST', undefined, account?.csrf), () => this.clear());
   },
   clear() {
+    generation++;
     account = undefined;
     newest = undefined;
     revisions = new WeakMap();
@@ -84,13 +93,12 @@ export const auth = {
 
 export const store = demo ? offlineStore : {
   async list() {
-    const session = account;
-    return accept(await request('records', 'GET', undefined, session?.csrf), session);
+    if (!account) throw new Error('Сеанс завершён.');
+    return inSession(() => request('records', 'GET', undefined, account.csrf), acceptSnapshot);
   },
   async save(orders, base) {
     const revision = revisions.get(base);
     if (revision === undefined || !account) throw new Error('Обновите реестр перед сохранением.');
-    const session = account;
-    return accept(await request('records', 'PUT', {revision, orders}, session.csrf), session);
+    return inSession(() => request('records', 'PUT', {revision, orders}, account.csrf), acceptSnapshot);
   },
 };

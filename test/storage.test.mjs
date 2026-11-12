@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { auth, localOrders, store } from '../src/storage.mjs';
 
+const staleSession = error => error.message === 'Сеанс завершён.' && error.status === undefined;
+
 test('cloud storage uses the revision of the supplied snapshot and refuses offline writes', async t => {
   let revision = 1;
   let offline = false;
@@ -76,3 +78,65 @@ test('legacy storage is read explicitly without altering the local copy', t => {
   assert.deepEqual(localOrders(), value.orders);
   assert.deepEqual(reads, ['logistics-workspace:v1']);
 });
+
+for (const status of [200, 401]) {
+  test('late login (' + status + ') cannot replace a newer login', async t => {
+    const late = Promise.withResolvers();
+    t.mock.method(globalThis, 'fetch', (url, options) => {
+      if (url === '/api/login') {
+        const {email} = JSON.parse(options.body);
+        return email.startsWith('a@') ? late.promise : Response.json({email, csrf:'b-token'});
+      }
+      assert.equal(url, '/api/records');
+      assert.equal(options.headers['X-CSRF-Token'], 'b-token');
+      return Response.json({revision:0, orders:[{number:'B'}]});
+    });
+    t.after(() => auth.clear());
+    const oldLogin = auth.login('a@example.test', 'synthetic');
+    const rejected = assert.rejects(oldLogin, staleSession);
+    await auth.login('b@example.test', 'synthetic');
+    late.resolve(Response.json({email:'a@example.test', csrf:'a-token'}, {status}));
+    await rejected;
+    assert.deepEqual(await store.list(), [{number:'B'}]);
+  });
+}
+
+for (const method of ['GET', 'PUT']) {
+  for (const status of [200, 401, 409]) {
+    test(`pending ${method} (${status}) is isolated across a session switch`, async t => {
+      const late = Promise.withResolvers();
+      const requests = [];
+      let delay = false;
+      t.mock.method(globalThis, 'fetch', (url, options) => {
+        if (url === '/api/login') {
+          const {email} = JSON.parse(options.body);
+          return Response.json({email, csrf:email});
+        }
+        assert.equal(url, '/api/records');
+        const token = options.headers['X-CSRF-Token'];
+        requests.push({method:options.method, token, body:options.body});
+        if (delay && token === 'a@example.test') return late.promise;
+        const number = token === 'a@example.test' ? 'A' : 'B';
+        return Response.json({revision:0, orders:[{number}]});
+      });
+      t.after(() => auth.clear());
+      await auth.login('a@example.test', 'synthetic');
+      const base = await store.list();
+      delay = true;
+      const pending = method === 'GET' ? store.list() : store.save([{number:'A-edit'}], base);
+      const rejected = assert.rejects(pending, staleSession);
+      assert.equal(requests.at(-1).token, 'a@example.test');
+      if (method === 'PUT') {
+        assert.deepEqual(JSON.parse(requests.at(-1).body), {revision:0, orders:[{number:'A-edit'}]});
+      }
+      await auth.login('b@example.test', 'synthetic');
+      const current = await store.list();
+      late.resolve(Response.json({revision:99, orders:[{number:'A-edit'}]}, {status}));
+      await rejected;
+      assert.deepEqual(await store.list(), [{number:'B'}]);
+      assert.deepEqual(current, [{number:'B'}]);
+      await assert.rejects(store.save([{number:'A-edit'}], base), /Обновите реестр/);
+      assert.equal(requests.filter(request => request.method === 'PUT').length, method === 'PUT' ? 1 : 0);
+    });
+  }
+}

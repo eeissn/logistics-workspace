@@ -32,9 +32,26 @@ let etrnStamp;
 let signedIn = false;
 let refreshing;
 let accountGeneration = 0;
+const pendingImports = new Map();
 let view = 'all';
 let driverOrder;
 const today = () => new Intl.DateTimeFormat('sv-SE', {timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+
+function startImport(button, key = button, label) {
+  if ((!signedIn && !demo) || pendingImports.has(key)) return;
+  const generation = accountGeneration;
+  const originalLabel = button.textContent;
+  const reset = () => {
+    button.disabled = false;
+    if (label) button.textContent = originalLabel;
+    pendingImports.delete(key);
+  };
+  pendingImports.set(key, reset);
+  button.disabled = true;
+  if (label) button.textContent = label;
+  const active = () => generation === accountGeneration;
+  return {active, finish() { if (active()) reset(); }};
+}
 
 function node(tag, text, className) {
   const el = document.createElement(tag);
@@ -58,12 +75,13 @@ function assertUnchanged(current, number, stamp) {
   }
 }
 
-async function updateOrder(number, stamp, update) {
+async function updateOrder(number, stamp, update, generation) {
   const current = await store.list();
+  if (generation !== accountGeneration) return;
   assertUnchanged(current, number, stamp);
   const order = current.find(item => item.number === number);
-  const saved = upsert(current, update(order), number);
-  orders = await store.save(saved, current);
+  const saved = await store.save(upsert(current, update(order), number), current);
+  if (generation === accountGeneration) orders = saved;
 }
 
 function tripControl(order) {
@@ -78,14 +96,17 @@ function tripControl(order) {
   select.value = initial;
   select.dataset.stage = initial;
   select.addEventListener('change', async () => {
+    const generation = accountGeneration;
     try {
       const stage = select.value;
       const archiveWasOpen = $('archive').open;
-      await updateOrder(order.number, order.updatedAt, current => ({...current, trip:{...current.trip, stage}}));
+      await updateOrder(order.number, order.updatedAt, current => ({...current, trip:{...current.trip, stage}}), generation);
+      if (generation !== accountGeneration) return;
       render();
       $('archive').open = archiveWasOpen;
       $('notice').textContent = 'Статус рейса сохранён.';
     } catch (error) {
+      if (generation !== accountGeneration) return;
       select.value = initial;
       $('notice').textContent = error.message;
     }
@@ -141,17 +162,21 @@ function openDriver(order) {
 }
 
 $('driver-copy').addEventListener('click', async () => {
+  const generation = accountGeneration;
   const field = $('driver-message');
   let copied = false;
   try {
     await navigator.clipboard.writeText(field.value);
     copied = true;
   } catch {
+    if (generation !== accountGeneration) return;
     field.focus();
     field.select();
     copied = document.execCommand?.('copy') === true;
   }
-  $('driver-copy-status').textContent = copied ? 'Текст скопирован.' : 'Текст выделен. Скопируй его вручную.';
+  if (generation === accountGeneration) {
+    $('driver-copy-status').textContent = copied ? 'Текст скопирован.' : 'Текст выделен. Скопируй его вручную.';
+  }
 });
 $('driver-edit').addEventListener('click', () => {
   $('driver-dialog').close();
@@ -361,20 +386,23 @@ $('editor-etrn').addEventListener('click', () => openEtrn());
 etrnForm.addEventListener('input', refreshEtrn);
 etrnForm.addEventListener('submit', async event => {
   event.preventDefault();
+  const generation = accountGeneration;
   const etrn = readEtrn();
   try {
     if (etrnOrderNumber === null) {
       draft.etrn = etrn;
       editorPreview();
     } else {
-      await updateOrder(etrnOrderNumber, etrnStamp, order => ({...order, etrn}));
+      await updateOrder(etrnOrderNumber, etrnStamp, order => ({...order, etrn}), generation);
+      if (generation !== accountGeneration) return;
       render();
       $('notice').textContent = 'Статус ЭТРН сохранён.';
     }
     etrnDialog.close();
-  } catch (error) { $('etrn-error').textContent = error.message; }
+  } catch (error) { if (generation === accountGeneration) $('etrn-error').textContent = error.message; }
 });
 $('import').addEventListener('click', () => {
+  if (pendingImports.has($('import-form'))) return;
   $('import-form').reset();
   $('import-error').textContent = '';
   importDialog.showModal();
@@ -382,40 +410,43 @@ $('import').addEventListener('click', () => {
 form.addEventListener('input', editorPreview);
 form.addEventListener('submit', async event => {
   event.preventDefault();
+  const generation = accountGeneration;
   $('editor-error').textContent = '';
   try {
     const current = await store.list();
+    if (generation !== accountGeneration) return;
     assertUnchanged(current, previousNumber, editorStamp);
-    orders = await store.save(upsert(current, readDraft(), previousNumber), current);
+    const saved = await store.save(upsert(current, readDraft(), previousNumber), current);
+    if (generation !== accountGeneration) return;
+    orders = saved;
     editor.close();
     render();
     $('notice').textContent = 'Заявка сохранена.';
-  } catch (error) { $('editor-error').textContent = error.message; }
+  } catch (error) { if (generation === accountGeneration) $('editor-error').textContent = error.message; }
 });
 $('import-form').addEventListener('submit', async event => {
   event.preventDefault();
-  const generation = accountGeneration;
   const files = [$('customer-pdf').files[0], $('carrier-pdf').files[0]];
   const submit = event.submitter;
+  const operation = startImport(submit, event.currentTarget, 'Читаем PDF…');
+  if (!operation) return;
   $('import-error').textContent = '';
-  if (files.some(file => !file)) {
-    $('import-error').textContent = 'Выбери ровно два PDF.';
-    return;
-  }
-  submit.disabled = true;
-  submit.textContent = 'Читаем PDF…';
   try {
+    if (files.some(file => !file)) throw new Error('Выбери ровно два PDF.');
     const { readPdf } = await import('./pdf.mjs');
-    const imported = importPair(...await Promise.all(files.map(readPdf)));
-    if (generation !== accountGeneration) return;
-    const current = (await store.list()).find(item => item.number === imported.number);
+    if (!operation.active()) return;
+    const documents = await Promise.all(files.map(readPdf));
+    if (!operation.active()) return;
+    const imported = importPair(...documents);
+    const saved = await store.list();
+    if (!operation.active()) return;
+    const current = saved.find(item => item.number === imported.number);
     importDialog.close();
     openReview(mergeImport(imported, current), current?.number ?? null, current?.updatedAt);
   } catch (error) {
-    $('import-error').textContent = error.message || 'Не удалось прочитать PDF.';
+    if (operation.active()) $('import-error').textContent = error.message || 'Не удалось прочитать PDF.';
   } finally {
-    submit.disabled = false;
-    submit.textContent = 'Проверить и открыть заявку';
+    operation.finish();
   }
 });
 
@@ -430,9 +461,17 @@ function signInScreen(message = '') {
   accountGeneration++;
   refreshing = undefined;
   auth.clear();
+  $('sign-out').disabled = false;
+  for (const reset of pendingImports.values()) reset();
   for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
   orders = [];
   draft = reviewOrder = driverOrder = null;
+  previousNumber = etrnOrderNumber = reviewPrevious = null;
+  editorStamp = etrnStamp = reviewStamp = undefined;
+  $('review-title').textContent = 'Результат распознавания';
+  for (const id of ['import-error', 'ledger-error', 'review-error', 'editor-error', 'etrn-error', 'driver-copy-status']) {
+    $(id).textContent = '';
+  }
   $('account-email').textContent = '';
   $('sync-status').textContent = '';
   $('notice').textContent = '';
@@ -447,6 +486,9 @@ function signInScreen(message = '') {
   $('contacts').replaceChildren();
   $('difference-list').replaceChildren();
   $('driver-message').value = '';
+  $('driver-title').textContent = 'Данные водителя';
+  $('archive').open = false;
+  $('archive-table').replaceChildren();
   render();
   $('sign-in-error').textContent = message;
   showWorkspace(false);
@@ -468,7 +510,9 @@ async function refresh() {
     $('sync-status').textContent = '';
   } catch (error) {
     if (generation !== accountGeneration) return;
-    if (signedIn && error.status === 401) signInScreen('Сеанс закончился. Войдите снова.');
+    if (signedIn && error.status === 401) {
+      if (!$('sign-out').disabled) signInScreen('Сеанс закончился. Войдите снова.');
+    }
     else if (signedIn) $('sync-status').textContent = error.message;
   } finally {
     if (generation === accountGeneration) refreshing = undefined;
@@ -494,52 +538,62 @@ $('sign-in-form').addEventListener('submit', async event => {
   event.preventDefault();
   const login = event.currentTarget;
   const button = event.submitter;
+  if (signedIn || button.disabled) return;
+  const generation = ++accountGeneration;
   button.disabled = true;
   $('sign-in-error').textContent = '';
   try {
     const account = await auth.login(login.elements.email.value.trim(), login.elements.password.value);
+    if (generation !== accountGeneration) return;
     login.reset();
-    await showAccount(account);
-  } catch (error) {
-    $('sign-in-error').textContent = error.message;
-  } finally {
     button.disabled = false;
+    return showAccount(account);
+  } catch (error) {
+    if (generation === accountGeneration) $('sign-in-error').textContent = error.message;
+  } finally {
+    if (generation === accountGeneration) button.disabled = false;
   }
 });
 
 $('sign-out').addEventListener('click', async event => {
   const button = event.currentTarget;
+  if (!signedIn || button.disabled) return;
+  const generation = accountGeneration;
   button.disabled = true;
   try {
     await auth.logout();
-    signInScreen();
+    if (generation === accountGeneration) signInScreen();
   } catch (error) {
+    if (generation !== accountGeneration) return;
     if (error.status === 401) signInScreen();
     else $('sync-status').textContent = error.message;
   } finally {
-    button.disabled = false;
+    if (generation === accountGeneration) button.disabled = false;
   }
 });
 
 $('sync-refresh').addEventListener('click', refresh);
 $('local-import').addEventListener('click', async event => {
-  const button = event.currentTarget;
-  button.disabled = true;
+  const operation = startImport(event.currentTarget);
+  if (!operation) return;
   try {
     const local = localOrders();
     if (!window.confirm(`Перенести ${local.length} заявок в реестр аккаунта ${$('account-email').textContent}? Совпадающие номера будут пропущены.`)) return;
     const current = await store.list();
+    if (!operation.active()) return;
     const unique = [...new Map(local.map(order => [order.number, order])).values()];
     const saved = addLedgerOrders(current, unique);
     if (saved.length > current.length) {
-      orders = await store.save(saved, current);
+      const result = await store.save(saved, current);
+      if (!operation.active()) return;
+      orders = result;
       render();
     }
     $('notice').textContent = `Добавлено: ${saved.length - current.length}. Пропущено: ${local.length - saved.length + current.length}.`;
   } catch (error) {
-    $('notice').textContent = error.message;
+    if (operation.active()) $('notice').textContent = error.message;
   } finally {
-    button.disabled = false;
+    operation.finish();
   }
 });
 
@@ -551,7 +605,12 @@ if (demo) {
     render();
   }).catch(error => { $('notice').textContent = error.message; });
 } else {
-  auth.restore().then(showAccount).catch(error => signInScreen(error.status === 401 ? '' : error.message));
+  const generation = accountGeneration;
+  auth.restore().then(account => {
+    if (generation === accountGeneration) return showAccount(account);
+  }).catch(error => {
+    if (generation === accountGeneration) signInScreen(error.status === 401 ? '' : error.message);
+  });
   window.addEventListener('online', refresh);
   window.addEventListener('focus', refresh);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
@@ -594,49 +653,63 @@ function openReview(order, previous, stamp) {
 }
 
 $('review-edit').addEventListener('click', () => {
+  if (!reviewOrder || pendingImports.has($('review-save'))) return;
   $('review-dialog').close();
   openEditor(reviewOrder, reviewPrevious, reviewStamp);
 });
 $('review-save').addEventListener('click', async () => {
-  const button = $('review-save');
-  button.disabled = true;
+  if (!reviewOrder) return;
+  const operation = startImport($('review-save'));
+  if (!operation) return;
+  const order = reviewOrder;
+  const previous = reviewPrevious;
+  const stamp = reviewStamp;
+  const active = () => operation.active() && reviewOrder === order;
   try {
     const current = await store.list();
-    assertUnchanged(current, reviewPrevious, reviewStamp);
-    orders = await store.save(upsert(current, reviewOrder, reviewPrevious), current);
+    if (!active()) return;
+    assertUnchanged(current, previous, stamp);
+    const saved = await store.save(upsert(current, order, previous), current);
+    if (!active()) return;
+    orders = saved;
     $('review-dialog').close();
     render();
     $('notice').textContent = 'Заявка сохранена.';
-  } catch (error) { $('review-error').textContent = error.message; }
-  finally { button.disabled = false; }
+  } catch (error) { if (active()) $('review-error').textContent = error.message; }
+  finally { operation.finish(); }
 });
 
 $('ledger').addEventListener('click', () => {
+  if (pendingImports.has($('ledger-form'))) return;
   $('ledger-form').reset();
   $('ledger-error').textContent = '';
   $('ledger-dialog').showModal();
 });
 $('ledger-form').addEventListener('submit', async event => {
   event.preventDefault();
-  const generation = accountGeneration;
-  const button = event.submitter;
+  const operation = startImport(event.submitter, event.currentTarget);
+  if (!operation) return;
   const file = $('ledger-file').files[0];
-  button.disabled = true;
   $('ledger-error').textContent = '';
   try {
     const {readSheet} = await import('read-excel-file/browser');
-    const imported = parseLedger(await readSheet(file, 'Ноябрь'), '2026-11');
-    if (generation !== accountGeneration) return;
+    if (!operation.active()) return;
+    const rows = await readSheet(file, 'Ноябрь');
+    if (!operation.active()) return;
+    const imported = parseLedger(rows, '2026-11');
     if (!imported.length) throw new Error('В листе нет заявок за ноябрь 2026.');
     const current = await store.list();
+    if (!operation.active()) return;
     const saved = addLedgerOrders(current, imported);
-    orders = await store.save(saved, current);
+    const result = await store.save(saved, current);
+    if (!operation.active()) return;
+    orders = result;
     $('ledger-dialog').close();
     render();
     const added = saved.length - current.length;
     $('notice').textContent = `Добавлено: ${added}. Уже в реестре: ${imported.length - added}.`;
-  } catch (error) { $('ledger-error').textContent = error.message; }
-  finally { button.disabled = false; }
+  } catch (error) { if (operation.active()) $('ledger-error').textContent = error.message; }
+  finally { operation.finish(); }
 });
 
 function reportData() {
