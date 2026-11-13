@@ -256,7 +256,7 @@ function renderRows(container, rows) {
   const header = node('div', null, 'row table-head');
   header.setAttribute('role', 'row');
   for (const [column, title] of [['number','№ заявки'], ['date','Дата'], ['customer','Заказчик'], ['carrier','Перевозчик'],
-    ['route','Маршрут'], ['pickup','Загрузка'], ['delivery','Выгрузка'], ['trip','Статус рейса'], ['etrn','ЭТРН'], ['', 'Телефоны']]) {
+    ['route','Маршрут'], ['pickup','Загрузка'], ['delivery','Выгрузка'], ['etrn','ЭТРН'], ['trip','Статус рейса'], ['', 'Водитель / контакты']]) {
     const heading = node('div');
     heading.setAttribute('role', 'columnheader');
     if (column === sort) heading.setAttribute('aria-sort', ascending ? 'ascending' : 'descending');
