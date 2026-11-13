@@ -156,6 +156,9 @@ def registry_views(page, number, order_a, mobile):
         expect(settings.locator("#settings-account")).to_have_text("first@example.test")
         settings.locator("#theme").select_option(value)
         expect(page.locator("html")).to_have_attribute("data-theme", value)
+        if value == "sand":
+            expect(settings.locator("#violet-palette")).to_be_hidden()
+            expect(page.locator("html")).to_have_css("background-color", "rgb(255, 255, 255)")
         settings.locator("[data-close]").click()
 
     expect(page.locator("html")).to_have_attribute("data-theme", "violet")
@@ -174,11 +177,19 @@ def registry_views(page, number, order_a, mobile):
     expect(layout.locator("option")).to_have_count(4)
 
     click_workspace_action(page, "#settings", mobile)
+    palette = settings.locator("#violet-palette")
+    expect(palette.locator("option")).to_have_count(7)
+    root = page.locator("html")
+    original = root.evaluate("(element) => getComputedStyle(element).backgroundColor")
+    palette.select_option("blue")
+    expect(root).to_have_attribute("data-violet-palette", "blue")
+    assert root.evaluate("(element) => getComputedStyle(element).backgroundColor") != original
     settings.locator("#status-color-signed").fill("#ee9911")
     settings.locator("[data-close]").click()
     page.reload()
     expect(registry).to_contain_text(order)
-    assert page.locator("html").evaluate("(root) => root.style.getPropertyValue('--status-signed')") == "#ee9911"
+    expect(root).to_have_attribute("data-violet-palette", "blue")
+    assert root.evaluate("(root) => root.style.getPropertyValue('--status-signed')") == "#ee9911"
 
     page.locator('[data-view="not-unloaded"]').click()
     for appearance in ("violet", "sand"):

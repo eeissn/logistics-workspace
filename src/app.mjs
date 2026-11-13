@@ -6,7 +6,7 @@ import { checkImportFile, readExcelArchive } from './import-files.mjs';
 import { auth, demo, localOrders, sessionChangeKey, store } from './storage.mjs';
 import { driverMessage } from './driver.mjs';
 import { demoOrders } from './demo.mjs';
-import { defaultAccents, displayKey, layoutLabels, matchesTripView, pendingEtrn, readDisplayPreferences, readStatusColors, readThemeLayouts, routeText, selectOrders, statusColors, themeLabels, validAccent } from './registry.mjs';
+import { defaultAccents, displayKey, layoutLabels, matchesTripView, pendingEtrn, readDisplayPreferences, readStatusColors, readThemeLayouts, routeText, selectOrders, statusColors, themeLabels, validAccent, violetPalettes } from './registry.mjs';
 
 const $ = id => document.getElementById(id);
 const currency = new Intl.NumberFormat('ru', {style:'currency', currency:'RUB', maximumFractionDigits:0});
@@ -635,7 +635,13 @@ function readDraft() {
 }
 
 function applyDisplay() {
-  if (document.documentElement) document.documentElement.dataset.theme = display.theme;
+  const root = document.documentElement;
+  if (root) {
+    root.dataset.theme = display.theme;
+    root.dataset.violetPalette = display.violetPalette;
+  }
+  $('violet-palette-setting').hidden = display.theme !== 'violet';
+  $('violet-palette').value = display.violetPalette;
   applyAccent();
   $('theme').value = display.theme;
   $('layout').value = display.layout;
@@ -758,6 +764,17 @@ $('period-reset').addEventListener('click', () => {
   period = {};
   $('period-dialog').close();
   render();
+});
+
+for (const [value, label] of Object.entries(violetPalettes)) {
+  const option = node('option', label);
+  option.value = value;
+  $('violet-palette').append(option);
+}
+$('violet-palette').addEventListener('change', event => {
+  display.violetPalette = event.currentTarget.value;
+  applyDisplay();
+  saveDisplay();
 });
 
 for (const [id, labels] of [['theme', themeLabels], ['layout', layoutLabels], ['settings-layout', layoutLabels]]) {

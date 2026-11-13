@@ -361,8 +361,27 @@ dialog details[open] summary { margin-bottom: .55rem; }
   --hover: #f0ecfa;
   --line: #e4e0ef;
   --nav-active: #eae2fb;
+  --violet-sidebar: #f3effb;
+  --violet-table-head: #f5f2fb;
+  --violet-table-row: #fdfcff;
 }
-[data-theme=violet] .workspace-nav { background: #f3effb; }
+:root[data-theme=violet][data-violet-palette]:not([data-violet-palette=violet]) {
+  --canvas: color-mix(in srgb, var(--palette-tone) 6%, white);
+  --surface: color-mix(in srgb, var(--palette-tone) 10%, white);
+  --hover: color-mix(in srgb, var(--palette-tone) 17%, white);
+  --line: color-mix(in srgb, var(--palette-tone) 23%, white);
+  --nav-active: color-mix(in srgb, var(--palette-tone) 19%, white);
+  --violet-sidebar: color-mix(in srgb, var(--palette-tone) 12%, white);
+  --violet-table-head: color-mix(in srgb, var(--palette-tone) 16%, white);
+  --violet-table-row: color-mix(in srgb, var(--palette-tone) 7%, white);
+}
+[data-violet-palette=gray] { --palette-tone: #9c9a98; }
+[data-violet-palette=graphite] { --palette-tone: #465266; }
+[data-violet-palette=yellow] { --palette-tone: #e4b83d; }
+[data-violet-palette=blue] { --palette-tone: #63a7df; }
+[data-violet-palette=pink] { --palette-tone: #da80ac; }
+[data-violet-palette=red] { --palette-tone: #da7465; }
+[data-theme=violet] .workspace-nav { background: var(--violet-sidebar); }
 [data-theme=violet] .registry-link { box-shadow: inset 3px 0 var(--accent); }
 [data-theme=violet] .intro { padding-bottom: .65rem; border-bottom: 1px solid var(--line); }
 .intro-caption { color: var(--muted); margin: .2rem 0 0; font-size: .84rem; }
@@ -388,8 +407,8 @@ dialog details[open] summary { margin-bottom: .55rem; }
 [data-theme=sand] .split-detail { border-top: 3px solid #dac69a; box-shadow: none; }
 [data-theme=sand] .split-list { border-radius: 5px; box-shadow: none; }
 [data-theme=sand] .table-head { background: #f0f0ee; }
-[data-theme=violet] .table-head { background: #f5f2fb; }
-[data-theme=violet] .order:nth-child(even) { background: #fdfcff; }
+[data-theme=violet] .table-head { background: var(--violet-table-head); }
+[data-theme=violet] .order:nth-child(even) { background: var(--violet-table-row); }
 [data-theme=violet] .order:hover { background: var(--hover); }
 .order-id, .order-date, .customer-cell, .carrier-cell { min-width: 0; }
 .order-date { color: var(--muted); font-variant-numeric: tabular-nums; }

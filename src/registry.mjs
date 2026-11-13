@@ -7,6 +7,15 @@ export const layoutLabels = {
   split: 'Список + детали',
 };
 export const themeLabels = {violet: 'A Violet', sand: 'B Sand'};
+export const violetPalettes = {
+  violet: 'Фиолетовая',
+  gray: 'Серая',
+  graphite: 'Графитовая',
+  yellow: 'Жёлтая',
+  blue: 'Голубая',
+  pink: 'Розовая',
+  red: 'Красная',
+};
 export const defaultAccents = {violet:'#6035c6', sand:'#252525'};
 export const statusColors = {new:'#9695a8', signed:'#e3ad39', loaded:'#7544da', unloaded:'#369658', failed:'#cd575a'};
 export const validAccent = value => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
@@ -18,12 +27,13 @@ export function readDisplayPreferences() {
     return {
       theme: Object.hasOwn(themeLabels, saved?.theme) ? saved.theme : 'violet',
       layout: Object.hasOwn(layoutLabels, saved?.layout) ? saved.layout : saved?.theme === 'sand' ? 'split' : 'table',
+      violetPalette: Object.hasOwn(violetPalettes, saved?.violetPalette) ? saved.violetPalette : 'violet',
       accents: Object.fromEntries(Object.keys(themeLabels)
         .filter(theme => validAccent(saved?.accents?.[theme]))
         .map(theme => [theme, saved.accents[theme]])),
     };
   } catch {
-    return {theme:'violet', layout:'table', accents:{}};
+    return {theme:'violet', layout:'table', violetPalette:'violet', accents:{}};
   }
 }
 

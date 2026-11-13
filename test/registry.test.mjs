@@ -47,17 +47,21 @@ test('display settings validate theme and layout independently and handle unread
     if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor);
     else delete globalThis.localStorage;
   });
-  assert.deepEqual(readDisplayPreferences(), {theme:'violet', layout:'table', accents:{}});
+  assert.deepEqual(readDisplayPreferences(), {theme:'violet', layout:'table', violetPalette:'violet', accents:{}});
   stored = '{"theme":"sand","layout":"kanban"}';
-  assert.deepEqual(readDisplayPreferences(), {theme:'sand', layout:'kanban', accents:{}});
+  assert.deepEqual(readDisplayPreferences(), {theme:'sand', layout:'kanban', violetPalette:'violet', accents:{}});
   stored = '{"theme":"constructor","layout":"split"}';
-  assert.deepEqual(readDisplayPreferences(), {theme:'violet', layout:'split', accents:{}});
+  assert.deepEqual(readDisplayPreferences(), {theme:'violet', layout:'split', violetPalette:'violet', accents:{}});
   stored = '{"theme":"sand","accents":{"violet":"#54a080","sand":"invalid"}}';
-  assert.deepEqual(readDisplayPreferences(), {theme:'sand', layout:'split', accents:{violet:'#54a080'}});
+  assert.deepEqual(readDisplayPreferences(), {theme:'sand', layout:'split', violetPalette:'violet', accents:{violet:'#54a080'}});
   stored = '{"theme":"sand","layout":"timeline"}';
-  assert.deepEqual(readDisplayPreferences(), {theme:'sand', layout:'split', accents:{}});
+  assert.deepEqual(readDisplayPreferences(), {theme:'sand', layout:'split', violetPalette:'violet', accents:{}});
+  stored = '{"theme":"violet","violetPalette":"pink"}';
+  assert.equal(readDisplayPreferences().violetPalette, 'pink');
+  stored = '{"theme":"violet","violetPalette":"constructor"}';
+  assert.equal(readDisplayPreferences().violetPalette, 'violet');
   stored = '{"theme":';
-  assert.deepEqual(readDisplayPreferences(), {theme:'violet', layout:'table', accents:{}});
+  assert.deepEqual(readDisplayPreferences(), {theme:'violet', layout:'table', violetPalette:'violet', accents:{}});
 });
 
 test('pickup and delivery sort by the earliest valid window and put missing dates last in both directions', () => {
