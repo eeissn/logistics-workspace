@@ -6,7 +6,7 @@ import { checkImportFile, readExcelArchive } from './import-files.mjs';
 import { auth, demo, localOrders, sessionChangeKey, store } from './storage.mjs';
 import { driverMessage } from './driver.mjs';
 import { demoOrders } from './demo.mjs';
-import { defaultAccents, displayKey, layoutLabels, pendingEtrn, readDisplayPreferences, routeText, selectOrders, themeLabels, validAccent } from './registry.mjs';
+import { defaultAccents, displayKey, layoutLabels, matchesTripView, pendingEtrn, readDisplayPreferences, readStatusColors, readThemeLayouts, routeText, selectOrders, statusColors, themeLabels, validAccent, windowStart } from './registry.mjs';
 
 const $ = id => document.getElementById(id);
 const currency = new Intl.NumberFormat('ru', {style:'currency', currency:'RUB', maximumFractionDigits:0});
@@ -39,6 +39,11 @@ let view = 'all';
 let sort = 'delivery';
 let ascending = true;
 const display = readDisplayPreferences();
+display.statusColors = readStatusColors();
+display.themeLayouts = readThemeLayouts();
+let period = {};
+let contactPopup;
+const layoutButtons = new Map();
 const selections = new Map();
 const savingTrips = new Set();
 const tripTitles = new Map(tripStatuses);
@@ -148,10 +153,22 @@ function contactsCell(order) {
   const important = ['Перевозчик','Водитель'].map(role => [role,
     order.contacts.filter(contact => contact.role === role).flatMap(contact => contact.values)]);
   for (const point of order.points) important.push([point.kind, point.contacts]);
-  const list = node('details', null, 'row-contacts');
+  const cell = node('div', null, 'contact-actions');
+  if (order.driver) cell.append(node('strong', order.driver, 'contact-driver'));
+  const driver = action('Данные водителя', () => openDriver(order), 'driver-link');
   const entries = important.filter(([,values]) => values.some(value => phones(value).length));
   const count = entries.reduce((sum,[,values]) => sum + new Set(values.flatMap(phones)).size,0);
-  list.append(node('summary', count ? 'Контакты · ' + count : 'Контакты'));
+  if (!count) {
+    cell.append(node('span', 'Нет контактов', 'no-contacts'), driver);
+    return cell;
+  }
+  const list = node('details', null, 'row-contacts');
+  const summary = node('summary', 'Контакты · ' + count);
+  list.append(summary);
+  summary.addEventListener('click', () => {
+    if (contactPopup !== list) closeContacts();
+    contactPopup = list.open ? undefined : list;
+  });
   const panel = node('div', null, 'contact-panel');
   for (const [role, values] of entries) {
     const item = node('div', null, 'contact-entry');
@@ -165,14 +182,22 @@ function contactsCell(order) {
     }
     panel.append(item);
   }
-  if (!entries.length) panel.append(node('p', 'В заявке нет телефонов для рейса.'));
+  panel.append(action('Закрыть', () => {
+    closeContacts();
+    summary.focus();
+  }, 'contact-close'));
   list.append(panel);
-  const cell = node('div', null, 'contact-actions');
-  cell.append(list, action('Данные водителя', () => openDriver(order), 'driver-link'));
+  cell.append(list, driver);
   return cell;
 }
 
+function closeContacts() {
+  if (contactPopup) contactPopup.open = false;
+  contactPopup = undefined;
+}
+
 function openDriver(order) {
+  closeContacts();
   driverOrder = order;
   $('driver-title').textContent = 'Данные водителя · № ' + order.number;
   $('driver-message').value = driverMessage(order);
@@ -230,13 +255,11 @@ function renderRows(container, rows) {
   table.setAttribute('aria-label', container.id === 'table' ? 'Активные заявки' : 'Архивные заявки');
   const header = node('div', null, 'row table-head');
   header.setAttribute('role', 'row');
-  for (const [column, title] of [['number','Заявка'], ['customer','Заказчик / перевозчик'],
+  for (const [column, title] of [['number','№ заявки'], ['date','Дата'], ['customer','Заказчик'], ['carrier','Перевозчик'],
     ['route','Маршрут'], ['pickup','Загрузка'], ['delivery','Выгрузка'], ['trip','Статус рейса'], ['etrn','ЭТРН'], ['', 'Телефоны']]) {
     const heading = node('div');
     heading.setAttribute('role', 'columnheader');
-    if (column === sort || (column === 'number' && sort === 'date')) {
-      heading.setAttribute('aria-sort', ascending ? 'ascending' : 'descending');
-    }
+    if (column === sort) heading.setAttribute('aria-sort', ascending ? 'ascending' : 'descending');
     if (column) {
       const button = action(title, () => {
         setSort(column);
@@ -248,18 +271,6 @@ function renderRows(container, rows) {
         button.textContent += ascending ? ' ↑' : ' ↓';
       }
       heading.append(button);
-      if (column === 'number') {
-        const date = action('Дата', () => {
-          setSort('date');
-          container.querySelector('[data-sort="date"]')?.focus();
-        }, 'sort-column');
-        date.dataset.sort = 'date';
-        if (sort === 'date') {
-          date.setAttribute('aria-current', 'true');
-          date.textContent += ascending ? ' ↑' : ' ↓';
-        }
-        heading.append(date);
-      }
     } else heading.textContent = title;
     header.append(heading);
   }
@@ -269,10 +280,10 @@ function renderRows(container, rows) {
     row.setAttribute('role', 'row');
     row.dataset.stage = tripStatus(order);
     const label = node('div', null, 'order-id');
-    label.append(action('№ ' + order.number, () => openOrder(order.number), 'order-link'),
-      node('small', order.date ? order.date.split('-').reverse().join('.') : 'Дата не указана'));
-    const names = node('div', null, 'names');
-    names.append(node('strong', order.customer || 'Заказчик не указан'), node('small', order.carrier || 'Перевозчик не указан'));
+    label.append(action('№ ' + order.number, () => openOrder(order.number), 'order-link'));
+    const date = node('div', order.date ? order.date.slice(5).split('-').reverse().join('.') : '—', 'order-date');
+    const customer = node('div', order.customer || '—', 'customer-cell');
+    const carrier = node('div', order.carrier || '—', 'carrier-cell');
     const direction = node('div', null, 'destination');
     direction.append(node('strong', routeText(order) || 'Маршрут не указан'));
     const windows = ['Погрузка', 'Выгрузка'].map((kind, index) => {
@@ -292,7 +303,7 @@ function renderRows(container, rows) {
     stage.append(tripControl(order));
     const etrn = node('div', null, 'etrn-cell');
     etrn.append(etrnAction(order));
-    row.append(label, names, direction, ...windows, stage, etrn, contactsCell(order));
+    row.append(label, date, customer, carrier, direction, ...windows, etrn, stage, contactsCell(order));
     for (const cell of row.children) cell.setAttribute('role', 'cell');
     table.append(row);
   }
@@ -433,6 +444,51 @@ function renderSplit(container, rows) {
   container.append(split);
 }
 
+function renderTimeline(container, rows) {
+  const scheduled = rows.map(order => {
+    const pickup = windowStart(order, 'Погрузка');
+    const delivery = windowStart(order, 'Выгрузка');
+    return {order, pickup, delivery};
+  });
+  const days = [...new Set(scheduled.flatMap(({pickup, delivery}) => [pickup, delivery])
+    .filter(Boolean).map(date => date.slice(0, 10)))].sort();
+  const board = node('div', null, 'timeline');
+  if (days.length) {
+    const rail = node('div', null, 'timeline-rail');
+    rail.tabIndex = 0;
+    rail.setAttribute('role', 'region');
+    rail.setAttribute('aria-label', 'Календарь рейсов');
+    const grid = node('div', null, 'timeline-grid');
+    grid.style.gridTemplateColumns = `minmax(8rem, 12rem) repeat(${days.length}, minmax(5rem, 1fr))`;
+    grid.append(node('strong', 'Заявка', 'timeline-heading'));
+    for (const day of days) grid.append(node('strong', day.slice(5).split('-').reverse().join('.'), 'timeline-heading'));
+    let row = 2;
+    for (const {order, pickup, delivery} of scheduled) {
+      if (!(pickup || delivery)) continue;
+      const link = action('№ ' + order.number, () => openOrder(order.number), 'timeline-order');
+      link.style.gridRow = row;
+      const first = days.indexOf((pickup || delivery).slice(0, 10));
+      const last = days.indexOf((delivery || pickup).slice(0, 10));
+      const bar = action(routeText(order) || '№ ' + order.number, () => openOrder(order.number), 'timeline-bar');
+      bar.dataset.stage = tripStatus(order);
+      bar.style.gridRow = row++;
+      bar.style.gridColumn = `${Math.min(first, last) + 2} / ${Math.max(first, last) + 3}`;
+      bar.title = routeDates(order);
+      grid.append(link, bar);
+    }
+    rail.append(grid);
+    board.append(rail);
+  }
+  const undated = scheduled.filter(({pickup, delivery}) => !(pickup || delivery));
+  if (undated.length) {
+    const section = node('section', null, 'timeline-undated');
+    section.append(node('h3', 'Без окна загрузки и выгрузки'));
+    renderCompact(section, undated.map(({order}) => order));
+    board.append(section);
+  }
+  container.append(board);
+}
+
 function renderRegistry(container, rows) {
   const scrollLeft = container.firstElementChild?.scrollLeft ?? 0;
   container.replaceChildren();
@@ -443,15 +499,25 @@ function renderRegistry(container, rows) {
     container.append(empty);
     return;
   }
-  ({table:renderRows, compact:renderCompact, kanban:renderKanban, split:renderSplit})[display.layout](container, rows, scrollLeft);
+  ({table:renderRows, compact:renderCompact, kanban:renderKanban, split:renderSplit, timeline:renderTimeline})[display.layout](container, rows, scrollLeft);
 }
 
 function render() {
+  closeContacts();
+  const day = today();
+  for (const button of document.querySelectorAll('[data-view]')) {
+    const current = button.dataset.view === view;
+    button.setAttribute('aria-pressed', String(current));
+    const badge = button.querySelector('.view-count');
+    if (badge) badge.textContent = orders.filter(order => matchesTripView(order, button.dataset.view, day)).length;
+  }
+  $('filters-open').textContent = $('filter').value ? 'Фильтры · 1' : 'Фильтры';
+  $('period-open').textContent = period.from || period.to ? `Период · ${period.from || '…'} — ${period.to || '…'}` : 'Период';
   $('sort').value = sort;
   $('sort-direction').textContent = ascending ? '↑' : '↓';
   $('sort-direction').setAttribute('aria-pressed', String(ascending));
   const matches = selectOrders(orders, {
-    query:$('search').value, filter:$('filter').value, view, today:today(), sort, ascending,
+    query:$('search').value, filter:$('filter').value, view, today:day, sort, ascending, ...period,
   });
   const active = matches.filter(order => !archived(order));
   const past = matches.filter(archived);
@@ -461,10 +527,11 @@ function render() {
   if (selected && !active.some(order => order.number === selected.number) && past.some(order => order.number === selected.number)) {
     selections.set(archive, selected);
   }
-  renderRegistry(primary, active);
-  $('archive').hidden = !past.length;
+  const archiveView = view === 'completed' || view === 'failed';
+  renderRegistry(primary, archiveView ? matches : active);
+  $('archive').hidden = archiveView || !past.length;
   $('archive-title').textContent = 'Архив · ' + past.length;
-  if (past.length) renderRegistry(archive, past);
+  if (!archiveView && past.length) renderRegistry(archive, past);
   else archive.replaceChildren();
 }
 
@@ -618,6 +685,9 @@ function applyDisplay() {
   $('theme').value = display.theme;
   $('layout').value = display.layout;
   $('settings-layout').value = display.layout;
+  $('status-palette').hidden = display.theme !== 'violet';
+  for (const [layout, button] of layoutButtons) button.setAttribute('aria-pressed', String(layout === display.layout));
+  $('sand-details').setAttribute('aria-pressed', String(display.layout === 'split'));
 }
 
 function applyAccent() {
@@ -667,6 +737,76 @@ $('reset-accent').addEventListener('click', () => {
   saveDisplay();
 });
 
+function setDisplay(key, value) {
+  if (key === 'theme' && value !== display.theme) {
+    display.themeLayouts[display.theme] = display.layout;
+    display.layout = display.themeLayouts[value] ?? (value === 'sand' ? 'split' : 'table');
+  }
+  display[key] = value;
+  applyDisplay();
+  saveDisplay();
+  render();
+}
+
+for (const [layout, icon] of [['table','☷'], ['compact','▦'], ['kanban','▥'], ['timeline','≡'], ['split','◫']]) {
+  const button = action(null, () => setDisplay('layout', layout));
+  const symbol = node('span', icon);
+  symbol.setAttribute('aria-hidden', 'true');
+  button.append(symbol, node('span', layoutLabels[layout]));
+  layoutButtons.set(layout, button);
+  $('layout-tabs').append(button);
+}
+$('sand-details').addEventListener('click', () => setDisplay('layout', 'split'));
+
+const colorInputs = new Map();
+function applyStatusColors() {
+  for (const [stage, input] of colorInputs) {
+    input.value = display.statusColors[stage] ?? statusColors[stage];
+    document.documentElement?.style.setProperty('--status-' + stage, input.value);
+  }
+}
+for (const [stage, title] of tripStatuses) {
+  const label = node('label', stage === 'new' ? 'Заявка создана' : title);
+  const input = node('input');
+  input.type = 'color';
+  input.id = 'status-color-' + stage;
+  label.append(input);
+  $('status-colors').append(label);
+  colorInputs.set(stage, input);
+  input.addEventListener('input', () => {
+    if (!validAccent(input.value)) return;
+    display.statusColors[stage] = input.value;
+    applyStatusColors();
+    saveDisplay();
+  });
+}
+applyStatusColors();
+$('reset-status-colors').addEventListener('click', () => {
+  display.statusColors = {};
+  applyStatusColors();
+  saveDisplay();
+});
+
+$('filters-open').addEventListener('click', () => $('filters-dialog').showModal());
+$('period-open').addEventListener('click', () => {
+  $('period-from').value = period.from ?? '';
+  $('period-to').value = period.to ?? '';
+  $('period-to').min = period.from ?? '';
+  $('period-dialog').showModal();
+});
+$('period-from').addEventListener('input', () => { $('period-to').min = $('period-from').value; });
+$('period-form').addEventListener('submit', event => {
+  event.preventDefault();
+  period = {from:$('period-from').value, to:$('period-to').value};
+  $('period-dialog').close();
+  render();
+});
+$('period-reset').addEventListener('click', () => {
+  period = {};
+  $('period-dialog').close();
+  render();
+});
+
 for (const [id, labels] of [['theme', themeLabels], ['layout', layoutLabels], ['settings-layout', layoutLabels]]) {
   for (const [value, label] of Object.entries(labels)) {
     const option = node('option', label);
@@ -674,10 +814,7 @@ for (const [id, labels] of [['theme', themeLabels], ['layout', layoutLabels], ['
     $(id).append(option);
   }
   $(id).addEventListener('change', event => {
-    display[id === 'theme' ? 'theme' : 'layout'] = event.currentTarget.value;
-    applyDisplay();
-    saveDisplay();
-    if (id !== 'theme' || display.layout === 'split') render();
+    setDisplay(id === 'theme' ? 'theme' : 'layout', event.currentTarget.value);
   });
 }
 applyDisplay();
@@ -707,7 +844,14 @@ for (const id of ['settings-dialog', 'ledger-dialog', 'report-dialog']) {
   });
 }
 
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape' || !contactPopup) return;
+  const summary = contactPopup.querySelector('summary');
+  closeContacts();
+  summary.focus();
+});
 document.addEventListener('pointerdown', event => {
+  if (contactPopup && !contactPopup.contains(event.target)) closeContacts();
   const menu = $('workspace-menu');
   if (mobileNav?.matches && menu.open && !menu.contains(event.target)) menu.open = false;
 });
@@ -808,6 +952,7 @@ function signInScreen(message = '') {
   for (const reset of pendingImports.values()) reset();
   for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
   orders = [];
+  period = {};
   selections.clear();
   savingTrips.clear();
   $('settings-account').textContent = '';
@@ -973,9 +1118,10 @@ if (demo) {
 }
 
 for (const button of document.querySelectorAll('[data-view]')) {
+  button.append(node('span', null, 'view-count'));
   button.addEventListener('click', () => {
     view = button.dataset.view;
-    for (const tab of document.querySelectorAll('[data-view]')) tab.setAttribute('aria-pressed', String(tab === button));
+    if (mobileNav?.matches) $('workspace-menu').open = false;
     render();
   });
 }

@@ -26,6 +26,12 @@
         <button type="button" id="ledger">Импорт Excel</button>
         <button type="button" id="report">Отчёт по марже</button>
       </div>
+      <nav class="favorite-views" aria-label="Избранные фильтры">
+        <strong>☆ Избранное</strong>
+        <button type="button" data-view="pickup" aria-pressed="false">Загрузка сегодня</button>
+        <button type="button" data-view="delivery" aria-pressed="false">Выгрузка сегодня</button>
+        <button type="button" data-view="failed" aria-pressed="false">Проблемные</button>
+      </nav>
       <div class="account-tools">
         <div id="sync-tools" class="sync-tools" hidden>
           <span id="account-email"></span>
@@ -40,27 +46,32 @@
 </aside>
 <main id="workspace" hidden>
   <header class="intro">
-    <h1 id="view-title">Заявки</h1>
-    <div class="actions"><button id="new" type="button"><span aria-hidden="true">+</span> <span class="action-label">Новая заявка</span></button><button id="import" class="primary" type="button"><span aria-hidden="true">↑</span> <span class="action-label">Загрузить два PDF</span></button></div>
+    <div><h1 id="view-title">Заявки</h1><p class="intro-caption">Планирование перевозок и контроль статусов</p></div>
+    <div id="layout-tabs" class="layout-tabs" role="group" aria-label="Виды реестра"></div>
   </header>
+  <div class="registry-command">
+    <label class="registry-search"><span aria-hidden="true">⌕</span><input id="search" type="search" aria-label="Поиск по заявкам" placeholder="Номер, заказчик, перевозчик, маршрут, машина, водитель…"></label>
+    <button id="filters-open" type="button" aria-haspopup="dialog">Фильтры</button>
+    <button id="period-open" type="button" aria-haspopup="dialog">Период</button>
+    <div class="actions"><button id="new" type="button"><span aria-hidden="true">+</span> <span class="action-label">Новая заявка</span></button><button id="import" class="primary" type="button"><span aria-hidden="true">↑</span> <span class="action-label">Загрузить два PDF</span></button></div>
+  </div>
   <p id="sync-status" class="quiet" role="status"></p>
   <p id="demo-note" class="demo-note" hidden>Демоверсия · заявка и контакты вымышлены. Для проверки используй тестовые документы.</p>
   <section class="registry" aria-label="Реестр заявок">
     <nav class="registry-tabs" aria-label="Разделы заявок">
       <button type="button" data-view="all" aria-pressed="true">Все</button>
       <button type="button" data-view="not-unloaded" aria-pressed="false">Не выгружены</button>
-      <button type="button" data-view="pickup" aria-pressed="false">Загрузка сегодня</button>
-      <button type="button" data-view="delivery" aria-pressed="false">Выгрузка сегодня</button>
+      <button type="button" data-view="planned" aria-pressed="false">Планируются</button>
+      <button type="button" data-view="loaded" aria-pressed="false">Загрузились</button>
+      <button type="button" data-view="completed" aria-pressed="false">Выгрузились</button>
+      <button type="button" data-view="failed" aria-pressed="false">Проблемные</button>
+      <button type="button" class="sand-shortcut" id="sand-details">Список + детали</button>
     </nav>
     <div class="registry-toolbar">
-      <div class="filters">
-        <input id="search" type="search" aria-label="Поиск по заявкам" placeholder="Номер, заказчик, маршрут…">
-        <select id="filter" aria-label="Фильтр ЭТРН"><option value="">Все ЭТРН</option><option value="pending">ЭТРН требуют внимания</option><option value="Подписана">ЭТРН подписана</option><option value="Закрыта вручную">ЭТРН закрыта вручную</option><option value="Не требуется">ЭТРН не требуется</option></select>
-      </div>
       <div class="registry-tools">
         <label class="view-picker"><span aria-hidden="true">▤</span> Вид <select id="layout"></select></label>
         <div class="sort-tools">
-          <label>Сортировка <select id="sort"><option value="delivery">Дата выгрузки</option><option value="pickup">Дата загрузки</option><option value="date">Дата заявки</option><option value="number">Номер</option><option value="customer">Заказчик</option><option value="route">Маршрут</option><option value="trip">Статус рейса</option><option value="etrn">ЭТРН</option></select></label>
+          <label>Сортировка <select id="sort"><option value="delivery">Дата выгрузки</option><option value="pickup">Дата загрузки</option><option value="date">Дата заявки</option><option value="number">Номер</option><option value="customer">Заказчик</option><option value="carrier">Перевозчик</option><option value="route">Маршрут</option><option value="trip">Статус рейса</option><option value="etrn">ЭТРН</option></select></label>
           <button type="button" id="sort-direction" aria-label="Изменить порядок сортировки" aria-pressed="false">↑</button>
         </div>
       </div>
@@ -70,6 +81,20 @@
   </section>
   <p id="notice" role="status" aria-live="polite"></p>
 </main>
+
+<dialog id="filters-dialog" class="compact-dialog" aria-labelledby="filters-title">
+  <div class="dialog-body">
+    <header class="dialog-head"><h2 id="filters-title">Фильтры</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <label>ЭТРН<select id="filter" aria-label="Фильтр ЭТРН"><option value="">Все ЭТРН</option><option value="pending">ЭТРН требуют внимания</option><option value="Подписана">ЭТРН подписана</option><option value="Закрыта вручную">ЭТРН закрыта вручную</option><option value="Не требуется">ЭТРН не требуется</option></select></label>
+  </div>
+</dialog>
+<dialog id="period-dialog" class="compact-dialog" aria-labelledby="period-title">
+  <form id="period-form">
+    <header class="dialog-head"><h2 id="period-title">Период по дате заявки</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <div class="fields"><label>С<input id="period-from" type="date"></label><label>По<input id="period-to" type="date"></label></div>
+    <footer class="dialog-foot"><button type="button" id="period-reset">Сбросить</button><button class="primary" type="submit">Применить</button></footer>
+  </form>
+</dialog>
 
 <dialog id="settings-dialog" class="compact-dialog" aria-labelledby="settings-title">
   <div class="dialog-body">
@@ -81,6 +106,10 @@
         <input id="accent-color" type="color" value="#6035c6">
         <button type="button" id="reset-accent">Цвет темы</button>
       </div>
+      <fieldset id="status-palette" hidden><legend>Индикаторы статусов Violet</legend>
+        <div id="status-colors"></div>
+        <button type="button" id="reset-status-colors">Вернуть цвета</button>
+      </fieldset>
       <label>Отображение заявок<select id="settings-layout"></select></label>
       <p class="quiet" id="settings-account" hidden></p>
       <p class="quiet" id="settings-status" role="status">Настройки сохраняются в этом браузере.</p>

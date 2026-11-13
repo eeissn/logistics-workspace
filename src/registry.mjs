@@ -5,9 +5,11 @@ export const layoutLabels = {
   compact: 'Компактный список',
   kanban: 'Канбан',
   split: 'Список + детали',
+  timeline: 'Таймлайн',
 };
 export const themeLabels = {violet: 'A Violet', sand: 'B Sand'};
 export const defaultAccents = {violet:'#6035c6', sand:'#252525'};
+export const statusColors = {new:'#9695a8', signed:'#e3ad39', loaded:'#7544da', unloaded:'#369658', failed:'#cd575a'};
 export const validAccent = value => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
 export const displayKey = 'logistics-workspace:display:v1';
 
@@ -26,6 +28,26 @@ export function readDisplayPreferences() {
   }
 }
 
+export function readStatusColors() {
+  try {
+    const saved = JSON.parse(globalThis.localStorage.getItem(displayKey))?.statusColors;
+    return Object.fromEntries(Object.keys(statusColors).filter(stage => validAccent(saved?.[stage]))
+      .map(stage => [stage, saved[stage]]));
+  } catch {
+    return {};
+  }
+}
+
+export function readThemeLayouts() {
+  try {
+    const saved = JSON.parse(globalThis.localStorage.getItem(displayKey))?.themeLayouts;
+    return Object.fromEntries(Object.keys(themeLabels).filter(theme => Object.hasOwn(layoutLabels, saved?.[theme]))
+      .map(theme => [theme, saved[theme]]));
+  } catch {
+    return {};
+  }
+}
+
 export const pendingEtrn = order => ['К созданию', 'В работе'].includes(etrnStatus(order.etrn));
 
 export function routeText(order) {
@@ -36,7 +58,7 @@ export function routeText(order) {
 
 const scheduleKinds = {pickup:'Погрузка', delivery:'Выгрузка'};
 
-function windowStart(order, kind) {
+export function windowStart(order, kind) {
   const starts = [];
   for (const point of order.points) {
     if (point.kind !== kind) continue;
@@ -58,24 +80,35 @@ const sorts = {
   date: order => order.date || '',
   number: order => order.number,
   customer: order => order.customer || '',
+  carrier: order => order.carrier || '',
   route: routeText,
   trip: tripStatus,
   etrn: order => etrnStatus(order.etrn),
 };
 const collator = new Intl.Collator('ru', {numeric:true});
 
-export function selectOrders(orders, {query, filter, view, today, sort, ascending}) {
+export function matchesTripView(order, view, today) {
+  const stage = tripStatus(order);
+  switch (view) {
+    case 'not-unloaded': return stage !== 'unloaded' && stage !== 'failed';
+    case 'planned': return stage === 'new' || stage === 'signed';
+    case 'loaded': return stage === 'loaded';
+    case 'completed': return stage === 'unloaded';
+    case 'failed': return stage === 'failed';
+    default: return !scheduleKinds[view] || scheduledToday(order, scheduleKinds[view], today);
+  }
+}
+
+export function selectOrders(orders, {query, filter, view, today, sort, ascending, from, to}) {
   const search = query.trim().toLocaleLowerCase('ru');
-  const kind = scheduleKinds[view];
   const scheduleKind = scheduleKinds[sort];
   const key = scheduleKind ? order => windowStart(order, scheduleKind) : sorts[sort];
   return orders.filter(order => {
-    const text = [order.number, order.customer, order.carrier, order.driver, order.etrn?.number,
+    const text = [order.number, order.customer, order.carrier, order.driver, order.vehicle, order.etrn?.number,
       routeText(order), ...order.points.map(point => point.address)].join(' ').toLocaleLowerCase('ru');
-    const stage = tripStatus(order);
     return text.includes(search)
-      && (!kind || scheduledToday(order, kind, today))
-      && (view !== 'not-unloaded' || (stage !== 'unloaded' && stage !== 'failed'))
+      && matchesTripView(order, view, today)
+      && (!(from || to) || (order.date && (!from || order.date >= from) && (!to || order.date <= to)))
       && (!filter || (filter === 'pending' ? pendingEtrn(order) : etrnStatus(order.etrn) === filter));
   }).map(order => ({order, value:key(order)})).sort((a, b) => {
     if (scheduleKind && Boolean(a.value) !== Boolean(b.value)) return a.value ? -1 : 1;

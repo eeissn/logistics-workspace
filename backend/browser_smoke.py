@@ -168,6 +168,21 @@ def registry_views(page, number, order_a, mobile):
     else:
         page.locator('#table [data-sort="pickup"]').click()
     expect(page.locator("#sort")).to_have_value("pickup")
+    row_without_contacts = registry.locator(".order").filter(has=page.get_by_text(undated, exact=True))
+    expect(row_without_contacts.get_by_text("Нет контактов")).to_be_visible()
+    expect(row_without_contacts.locator(".row-contacts")).to_have_count(0)
+    page.locator("#layout").select_option("timeline")
+    expect(registry.locator(".timeline-rail")).to_be_visible()
+    expect(registry.locator(".timeline-undated")).to_contain_text(undated)
+    page.locator("#layout").select_option("table")
+
+    click_workspace_action(page, "#settings", mobile)
+    settings.locator("#status-color-signed").fill("#ee9911")
+    settings.locator("[data-close]").click()
+    page.reload()
+    expect(registry).to_contain_text(order)
+    assert page.locator("html").evaluate("(root) => root.style.getPropertyValue('--status-signed')") == "#ee9911"
+
     page.locator('[data-view="not-unloaded"]').click()
     for appearance in ("violet", "sand"):
         theme(appearance)
@@ -259,6 +274,7 @@ def registry_views(page, number, order_a, mobile):
     expect(settings.locator("#accent-color")).to_have_value("#252525")
     settings.locator("[data-close]").click()
     theme("violet")
+    layout.select_option("table")
 
 
 def smoke(browser_type, origin, chromium, number, report_total, device=None):
