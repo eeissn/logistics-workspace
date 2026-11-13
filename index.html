@@ -134,17 +134,23 @@
 <dialog id="editor" aria-labelledby="editor-title">
   <form id="editor-form">
     <header class="dialog-head"><h2 id="editor-title">Заявка</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
-    <div class="fields">
-      <label>Номер заявки<input name="number" required maxlength="48"></label>
-      <label>Дата заявки<input name="date" type="date"></label>
-      <label>Заказчик<input name="customer"></label>
-      <label>Перевозчик<input name="carrier"></label>
-      <label>Водитель<input name="driver"></label>
-      <label>Транспорт<input name="vehicle"></label>
-      <label class="wide">Паспорт водителя<textarea name="passport" rows="2" autocomplete="off" spellcheck="false"></textarea></label>
-      <label class="wide">Направление<input name="route"></label>
-      <label class="wide">Груз<input name="cargo"></label>
-    </div>
+    <fieldset class="editor-section"><legend>Заявка и участники</legend>
+      <div class="fields">
+        <label>Номер заявки<input name="number" required maxlength="48"></label>
+        <label>Дата заявки<input name="date" type="date"></label>
+        <label>Заказчик<input name="customer"></label>
+        <label>Перевозчик<input name="carrier"></label>
+      </div>
+    </fieldset>
+    <fieldset class="editor-section"><legend>Перевозка</legend>
+      <div class="fields">
+        <label>Водитель<input name="driver"></label>
+        <label>Транспорт<input name="vehicle"></label>
+        <label class="wide">Паспорт водителя<textarea name="passport" rows="2" autocomplete="off" spellcheck="false"></textarea></label>
+        <label>Направление<input name="route"></label>
+        <label>Груз<input name="cargo"></label>
+      </div>
+    </fieldset>
     <fieldset><legend>Ставки и маржа</legend>
       <div class="fields">
         <label>Ставка заказчика, ₽<input name="customerAmount" type="number" min="0" step="0.01"></label>
@@ -171,19 +177,28 @@
     <footer class="dialog-foot"><button type="button" data-close>Отмена</button><button class="primary" type="submit">Сохранить заявку</button></footer>
   </form>
 </dialog>
-<dialog id="etrn-dialog" class="compact-dialog etrn-side" aria-labelledby="etrn-title">
+<dialog id="etrn-dialog" aria-labelledby="etrn-title">
   <form id="etrn-form">
-    <header class="dialog-head"><h2 id="etrn-title">ЭТРН</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
-    <label class="check"><input type="checkbox" name="required"> Требуется ЭТРН</label>
-    <div id="etrn-fields">
-      <label>Номер ЭТРН<input name="etrnNumber"></label>
-      <label class="check"><input type="checkbox" name="orderForm"> Создана заказ-заявка</label>
-      <label class="check"><input type="checkbox" name="created"> Создана ЭТРН</label>
-      <label class="check"><input type="checkbox" name="allSigned"> Подписана всеми</label>
+    <header class="dialog-head">
+      <div><h2 id="etrn-title">ЭТРН</h2><p id="etrn-status" role="status" class="etrn-status"></p></div>
+      <button type="button" data-close aria-label="Закрыть">×</button>
+    </header>
+    <div class="etrn-body">
+      <label class="check etrn-required"><input type="checkbox" name="required"> Требуется ЭТРН</label>
+      <div id="etrn-fields">
+        <label>Номер ЭТРН<input name="etrnNumber" spellcheck="false"></label>
+        <ol class="etrn-stages" aria-label="Этапы ЭТРН">
+          <li><label><span aria-hidden="true">1</span><strong>Создана заказ-заявка</strong><input type="checkbox" name="orderForm"></label></li>
+          <li><label><span aria-hidden="true">2</span><strong>Создана ЭТРН</strong><input type="checkbox" name="created"></label></li>
+          <li><label><span aria-hidden="true">3</span><strong>Подписана всеми</strong><input type="checkbox" name="allSigned"></label></li>
+        </ol>
+      </div>
+      <label class="check etrn-manual"><input type="checkbox" name="manualComplete"> Закрыть вручную</label>
+      <p id="etrn-error" class="error" role="alert"></p>
     </div>
-    <label class="check manual-complete"><input type="checkbox" name="manualComplete"> Закрыть вручную</label>
-    <p id="etrn-error" class="error" role="alert"></p>
-    <footer class="dialog-foot"><button class="primary" id="etrn-save" type="submit">Сохранить</button></footer>
+    <footer class="dialog-foot">
+      <button type="button" data-close>Отмена</button><button class="primary" id="etrn-save" type="submit">Сохранить</button>
+    </footer>
   </form>
 </dialog>
 <dialog id="review-dialog" aria-labelledby="review-title">
@@ -221,6 +236,7 @@
   </div>
 </dialog>
 <section id="print-report" hidden></section>
+<div id="contact-popover" class="contact-panel" role="region" aria-label="Контакты заявки" hidden></div>
 <script type="module" src="/src/app.mjs"></script>
 </body>
 </html>

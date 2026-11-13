@@ -62,22 +62,19 @@ textarea { resize: vertical; }
 .order small, .review-fields small { display: block; color: var(--muted); font-size: .76rem; margin-top: .17rem; }
 .order-link { min-height: 0; border: 0; padding: 0; font-weight: 680; background: transparent; text-align: left; }
 .order-link:hover { background: transparent; text-decoration: underline; }
-.trip-status, .etrn-link, .row-contacts > summary { font-size: .76rem; min-height: 32px; padding: .34rem .48rem; }
+.trip-status, .etrn-link, .row-contacts { font-size: .76rem; min-height: 32px; padding: .34rem .48rem; }
 .trip-status { width: 100%; }
 .trip-status[data-stage=loaded], [data-stage=loaded] > .stage-badge { color: #24563d; background: #e9f5ed; border-color: #d9e9dd; }
 .trip-status[data-stage=failed], [data-stage=failed] > .stage-badge { color: #8a302c; background: #fcf0ee; border-color: #f1ddda; }
 .etrn-link { justify-self: start; color: var(--ink); background: var(--surface); font-weight: 500; }
 .etrn-link[data-state=pending] { color: #614a22; background: #f7f1e5; border-color: #efe6d4; }
-.row-contacts { position: relative; margin: 0; padding: 0; border: 0; }
-.row-contacts > summary { display: inline-flex; align-items: center; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; font-weight: 560; margin: 0; }
+.row-contacts { display: inline-flex; align-items: center; background: transparent; border: 0; text-decoration: underline; text-underline-offset: 3px; font-weight: 560; margin: 0; }
 .contact-actions { min-width: 0; }
-.order-table .row-contacts > summary { min-height: 0; padding-block: .12rem; }
+.order-table .row-contacts { min-height: 28px; padding-block: .12rem; }
 .order-table .driver-link { white-space: nowrap; padding-inline: 0; margin-inline-start: .48rem; font-size: .72rem; }
 .driver-link { min-height: 0; padding: .1rem .48rem; border: 0; background: transparent; text-align: left; font-size: .75rem; text-decoration: underline; text-underline-offset: 3px; }
 #driver-message { display: block; width: 100%; margin-top: .4rem; resize: vertical; }
 .demo-note { padding: .55rem .75rem; background: var(--surface); border-radius: 8px; color: var(--muted); font-size: .83rem; }
-.contact-panel { position: absolute; z-index: 2; right: 0; top: calc(100% + 3px); width: min(258px,75vw); background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: .75rem; box-shadow: 0 8px 28px #0002; }
-.contact-panel p { margin: .1rem; color: var(--muted); }
 .contact-entry + .contact-entry { border-top: 1px solid var(--line); margin-top: .45rem; padding-top: .45rem; }
 .phones { display: flex; flex-wrap: wrap; gap: .25rem .65rem; margin-top: .18rem; }
 .phones a { text-underline-offset: 3px; white-space: nowrap; }
@@ -118,7 +115,6 @@ dialog details[open] summary { margin-bottom: .55rem; }
 .upload-fields > label { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: .65rem; }
 .editor-etrn { display: flex; align-items: center; justify-content: space-between; gap: .55rem; border: 1px solid var(--line); border-radius: 10px; padding: .55rem .7rem; }
 .compact-dialog { max-width: 390px; }
-.etrn-side { margin-right: .75rem; margin-left: auto; }
 .manual-complete { margin-top: .35rem; color: var(--muted); }
 .review-card { background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 1rem; }
 .review-card h3 { margin: 0; font-size: 1.12rem; letter-spacing: -.03em; }
@@ -237,7 +233,6 @@ dialog details[open] summary { margin-bottom: .55rem; }
 .sort-column { border: 0; color: inherit; background: transparent; text-align: left; padding: .1rem .2rem; min-height: 24px; font-size: inherit; }
 .sort-column[aria-current=true] { color: var(--theme-outline); font-weight: 700; }
 #archive-table { margin-top: .65rem; }
-.archive .contact-panel { z-index: 3; }
 
 .compact-list, .split-list, .split-points { padding: 0; margin: 0; list-style: none; }
 .compact-list li + li, .split-list li + li { border-top: 1px solid var(--line); }
@@ -290,7 +285,6 @@ dialog details[open] summary { margin-bottom: .55rem; }
 .split-actions { display: flex; flex-wrap: wrap; align-items: start; gap: .45rem; margin-top: 1rem; }
 .split-status { display: flex; flex-wrap: wrap; gap: .45rem; margin-bottom: .65rem; }
 .split-status .trip-status { width: auto; max-width: 100%; }
-.split-actions .contact-panel { right: auto; left: 0; }
 .split-back { display: none; margin-bottom: .6rem; }
 @media (max-width: 760px) {
   .split-view { display: block; }
@@ -302,7 +296,6 @@ dialog details[open] summary { margin-bottom: .55rem; }
   .split-view[data-inline=true] .split-detail { border: 0; background: transparent; box-shadow: none; }
   .split-view[data-inline=true] .split-back { float: right; margin-left: .4rem; }
   .split-back { display: inline-block; }
-  .split-actions .contact-panel { position: static; }
 }
 @media (max-width: 740px) {
   .registry-tabs button { min-height: 44px; padding-inline: .55rem; font-size: .79rem; }
@@ -313,7 +306,7 @@ dialog details[open] summary { margin-bottom: .55rem; }
   }
   .order > .contact-actions { display: flex; flex-wrap: wrap; }
   .registry-toolbar :is(input, select, button) { min-height: 44px; }
-  .order-table .row-contacts > summary { min-height: 44px; }
+  .order-table .row-contacts { min-height: 44px; }
   .order-table .driver-link { margin-inline-start: 0; padding-inline: .35rem; white-space: normal; }
   .filters #search { flex: 1 1 9rem; }
   .filters #filter { flex: 0 1 9rem; }
@@ -323,7 +316,7 @@ dialog details[open] summary { margin-bottom: .55rem; }
   .view-picker, .sort-tools label { font-size: 0; }
   .registry-tools select { font-size: .83rem; }
   .view-picker > span { display: none; }
-  .workspace-nav button, .trip-status, .etrn-link, .row-contacts > summary, .driver-link, .order-link { min-height: 44px; }
+  .workspace-nav button, .trip-status, .etrn-link, .row-contacts, .driver-link, .order-link { min-height: 44px; }
   .order-link { max-width: 100%; }
   .status-cell { max-width: min(45vw, 11rem); }
   .registry-tools, .sort-tools { gap: .35rem; }
@@ -456,9 +449,6 @@ dialog details[open] summary { margin-bottom: .55rem; }
   .etrn-cell { grid-row: 6; }
   .order > .contact-actions { grid-row: 6; grid-column: 2/4; }
 }
-@media (min-width: 741px) and (max-width: 1059px) {
-  .order-table .contact-panel { position: static; width: auto; padding: .35rem; box-shadow: none; }
-}
 
 
 /* Table layout follows the Violet reference. Sand retains its split toolbar. */
@@ -492,7 +482,6 @@ dialog details[open] summary { margin-bottom: .55rem; }
   [data-theme=violet] .registry-command { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); }
   [data-theme=violet] .registry-search, [data-theme=violet] .registry-command .actions { grid-column: 1/-1; }
   [data-theme=violet] .registry-command .actions > button { flex: 1 1 auto; }
-  .contact-panel { right: 0; max-width: calc(100vw - 2.5rem); }
 }
 @media (max-width: 740px) {
   [data-theme=violet] .intro { padding-bottom: 0; border-bottom: 0; }
@@ -879,54 +868,27 @@ button {
   }
 }
 
-/* UI/UX 2.0 — панель деталей ПК */
 @media (min-width: 1060px) {
   .split-detail {
     border: 1px solid var(--line);
     border-radius: 16px;
-    padding: 20px;
+    padding: 20px 20px 24px;
     background: var(--paper);
     box-shadow: 0 4px 20px rgb(20 20 40 / 5%);
   }
 
-  .split-section {
-    padding-block: 12px;
-  }
-
-  .split-section h3 {
-    font-size: 14px;
-    font-weight: 700;
-    margin-bottom: 10px;
-  }
-}
-
-/* UI/UX 2.0 — нижняя часть панели деталей */
-@media (min-width: 1060px) {
-  .split-detail {
-    padding-bottom: 24px;
-  }
-
+  .split-section { padding-block: 12px; }
+  .split-section h3 { font-size: 14px; font-weight: 700; margin-bottom: 10px; }
   .split-detail .split-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
     gap: 10px;
     margin-top: 16px;
-  }
-
-  .split-detail .split-actions button {
-    min-height: 40px;
-    border-radius: 9px;
-  }
-}
-
-/* UI/UX 2.0 — нижние действия панели */
-@media (min-width: 1060px) {
-  .split-detail .split-actions {
     padding-top: 16px;
     border-top: 1px solid var(--line);
     justify-content: flex-start;
+    align-items: center;
   }
+
+  .split-detail .split-actions button { min-height: 40px; border-radius: 9px; }
 }
 
 @keyframes dialog-appear {
@@ -973,32 +935,6 @@ dialog::backdrop {
   .layout-tabs button,
   .registry-tabs button {
     transition: none;
-  }
-}
-
-/* UI/UX 2.0 — появление содержимого */
-@keyframes content-appear {
-  from {
-    opacity: 0;
-    transform: translateY(5px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.registry .order-table,
-.registry .compact-list,
-.registry .kanban {
-  animation: content-appear .18s ease-out;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .registry .order-table,
-  .registry .compact-list,
-  .registry .kanban {
-    animation: none;
   }
 }
 
@@ -1293,6 +1229,7 @@ textarea:focus {
   background: var(--violet-table-head);
   color: var(--muted);
   border-bottom: 1px solid var(--line);
+  font-weight: 650;
 }
 
 [data-theme="violet"] .order-table .table-head,
@@ -1331,7 +1268,7 @@ textarea:focus {
 /* 4. Статусы рейсов */
 [data-theme="violet"] .order-table .trip-status {
   min-height: 36px;
-  padding: 7px 10px;
+  padding: 7px 9px;
   border-radius: 9px;
   font-size: 12px;
   font-weight: 600;
@@ -1340,6 +1277,8 @@ textarea:focus {
 
 /* 5. ЭТРН */
 [data-theme="violet"] .order-table .etrn-link {
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 7px 10px;
   font-size: 12px;
@@ -1404,104 +1343,9 @@ textarea:focus {
   --violet-table-row: #fafbfd;
 }
 
-/* Читаемые заголовки */
-[data-theme="violet"] .order-table .table-head {
-  color: var(--muted);
-  font-weight: 650;
-}
-
-/* Разделители строк */
-[data-theme="violet"] .order-table .order {
-  border-bottom: 1px solid var(--line);
-}
-
-/* Компактные статусы */
-[data-theme="violet"] .order-table .trip-status {
-  min-height: 36px;
-  padding: 7px 9px;
-  border-radius: 9px;
-}
-
-/* ЭТРН */
-[data-theme="violet"] .order-table .etrn-link {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-}
-
-/* Активная сортировка */
-[data-theme="violet"] .sort-column[aria-current="true"] {
-  color: var(--accent);
-}
-
-/* Мягкая подсветка строк */
-[data-theme="violet"] .order-table .order:hover {
-  background: var(--hover);
-}
-
 /* =========================================
    UI/UX 3.0 — CONTACTS, ETRN & DIALOGS
    ========================================= */
-
-/* 1. Всплывающие контакты */
-.order-table {
-  overflow: visible;
-}
-
-.order-table .order {
-  position: relative;
-}
-
-.order-table .order:has(.row-contacts[open]) {
-  z-index: 10;
-}
-
-.order-table .row-contacts {
-  position: relative;
-}
-
-.order-table .contact-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  left: auto;
-  z-index: 30;
-
-  width: 280px;
-  max-width: min(280px, 80vw);
-
-  padding: 14px;
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-
-  box-shadow:
-    0 12px 32px rgb(0 0 0 / 10%),
-    0 2px 8px rgb(0 0 0 / 4%);
-}
-
-.contact-panel p {
-  line-height: 1.5;
-}
-
-.contact-entry {
-  padding-block: 5px;
-}
-
-.contact-entry + .contact-entry {
-  padding-top: 12px;
-  margin-top: 10px;
-}
-
-.contact-panel a {
-  color: var(--ink);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
-}
-
-.contact-close {
-  margin-top: 12px;
-}
 
 /* 2. Модальные окна */
 dialog {
@@ -1579,14 +1423,6 @@ dialog .check label {
 
 /* 6. Мобильная адаптация */
 @media (max-width: 740px) {
-  .order-table .contact-panel {
-    position: static;
-    width: 100%;
-    max-width: 100%;
-    margin-top: 8px;
-    box-shadow: 0 4px 16px rgb(0 0 0 / 8%);
-  }
-
   dialog {
     width: calc(100% - 20px);
     max-height: calc(100dvh - 20px);
@@ -1598,25 +1434,92 @@ dialog .check label {
   }
 }
 
-/* UI/UX 3.0 — исправление всплывающих контактов */
+@media (min-width: 741px) {
+  [data-theme=violet] .order-table { overflow-x: auto; }
+}
 
-/* Разрешаем окнам выходить за границы таблицы */
+/* Shared viewport overlay, outside the scrollable registry. */
+.contact-panel {
+  position: fixed;
+  z-index: 40;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: .85rem;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--panel-radius);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 14%);
+}
+.contact-panel h2 { margin: 0 0 .45rem; font-size: 1rem; }
+.contact-panel .contact-entry + .contact-entry { margin-top: .55rem; padding-top: .55rem; }
+.contact-panel .contact-close { margin-top: .65rem; }
+.contact-panel a { color: var(--ink); }
+.row-contacts[aria-expanded=true] { background: var(--hover); }
+
+#etrn-dialog { width: min(450px, calc(100% - 20px)); overflow: hidden; }
+#etrn-form {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 22px);
+}
+#etrn-form .dialog-head, #etrn-form .dialog-foot {
+  flex: none;
+  margin: 0;
+  padding: .85rem 1rem;
+}
+.etrn-body { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: .8rem 1rem; }
+.etrn-status {
+  display: inline-block;
+  margin: .35rem 0 0;
+  padding: .16rem .5rem;
+  border-radius: 1rem;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: .78rem;
+  font-weight: 600;
+}
+.etrn-required, .etrn-manual { border: 1px solid var(--line); border-radius: 10px; padding-inline: .65rem; }
+.etrn-required { background: var(--surface); }
+.etrn-manual { margin-top: .85rem; }
+#etrn-fields { margin-top: .85rem; }
+.etrn-stages { display: grid; gap: .35rem; list-style: none; padding: 0; margin: .85rem 0 0; }
+.etrn-stages label {
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto;
+  gap: .6rem;
+  align-items: center;
+  min-height: 44px;
+  padding: .35rem .65rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.etrn-stages label:has(input:checked) { background: var(--surface); }
+.etrn-stages label > span {
+  display: grid; place-items: center; width: 1.5rem; height: 1.5rem;
+  border-radius: 50%; background: var(--surface); color: var(--ink);
+}
+.etrn-stages input { min-height: auto; width: 1.1rem; height: 1.1rem; margin: 0; }
+.etrn-stages strong { font-weight: 600; }
+#etrn-error:not(:empty) { margin: .6rem 0 0; }
+#editor .editor-section { margin-block: .65rem; }
+#editor :is(input, textarea, select, summary):focus-visible { scroll-margin-block: 5rem; }
+.split-windows .split-points { margin-top: .25rem; }
+.split-windows .split-points li:first-child { border-top: 0; padding-top: 0; }
+
 @media (min-width: 1060px) {
-  [data-theme="violet"] .order-table {
-    overflow: visible;
+  [data-theme=sand] .split-view > .split-detail {
+    position: sticky;
+    top: 1rem;
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+    scrollbar-gutter: stable;
   }
-
-  /* Поднимаем строку с открытыми контактами */
-  [data-theme="violet"] .order-table
-  .order:has(.row-contacts[open]) {
-    position: relative;
-    z-index: 20;
-  }
-
-  /* В последних трёх строках открываем контакты вверх */
-  [data-theme="violet"] .order-table
-  .order:nth-last-child(-n+3) .contact-panel {
-    top: auto;
-    bottom: calc(100% + 8px);
-  }
+}
+@media (max-width: 740px) {
+  #editor .fields { grid-template-columns: minmax(0,1fr); }
+  #editor .dialog-foot button, #etrn-form .dialog-foot button { flex: 1 1 0; }
+  #editor :is(input:not([type=checkbox]), textarea, select), #etrn-fields input:not([type=checkbox]) { font-size: 1rem; }
+  .contact-panel .contact-close { min-height: 44px; }
 }
