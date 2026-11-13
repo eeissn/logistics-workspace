@@ -47,11 +47,30 @@ test('display settings validate theme and layout independently and handle unread
     if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor);
     else delete globalThis.localStorage;
   });
-  assert.deepEqual(readDisplayPreferences(), {theme:'violet', layout:'table'});
+  assert.deepEqual(readDisplayPreferences(), {theme:'violet', layout:'table', accents:{}});
   stored = '{"theme":"sand","layout":"kanban"}';
-  assert.deepEqual(readDisplayPreferences(), {theme:'sand', layout:'kanban'});
+  assert.deepEqual(readDisplayPreferences(), {theme:'sand', layout:'kanban', accents:{}});
   stored = '{"theme":"constructor","layout":"split"}';
-  assert.deepEqual(readDisplayPreferences(), {theme:'violet', layout:'split'});
+  assert.deepEqual(readDisplayPreferences(), {theme:'violet', layout:'split', accents:{}});
+  stored = '{"theme":"sand","accents":{"violet":"#54a080","sand":"invalid"}}';
+  assert.deepEqual(readDisplayPreferences(), {theme:'sand', layout:'table', accents:{violet:'#54a080'}});
   stored = '{"theme":';
-  assert.deepEqual(readDisplayPreferences(), {theme:'violet', layout:'table'});
+  assert.deepEqual(readDisplayPreferences(), {theme:'violet', layout:'table', accents:{}});
+});
+
+test('pickup and delivery sort by the earliest valid window and put missing dates last in both directions', () => {
+  const records = [
+    ['A', ['12.11.2026 09:00'], ['15.11.2026 9:00', '13.11.2026 18:00']],
+    ['B', ['14.11.2026'], ['13.11.2026 8:30–11:00']],
+    ['C', ['32.11.2026'], ['Без даты']],
+    ['D', ['11.11.2026'], ['13.11–14.11']],
+  ].map(([number, pickups, deliveries]) => ({
+    ...makeOrder(number, '2026-11-01', {}),
+    points:[...pickups.map(schedule => ({kind:'Погрузка', schedule, address:''})),
+      ...deliveries.map(schedule => ({kind:'Выгрузка', schedule, address:''}))],
+  }));
+  const numbers = (sort, ascending) => selectOrders(records, {...query, sort, ascending}).map(order => order.number);
+  assert.deepEqual(numbers('delivery', true), ['D', 'B', 'A', 'C']);
+  assert.deepEqual(numbers('delivery', false), ['A', 'B', 'D', 'C']);
+  assert.deepEqual(numbers('pickup', true), ['D', 'A', 'B', 'C']);
 });

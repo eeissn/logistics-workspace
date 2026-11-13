@@ -6,7 +6,7 @@ import { checkImportFile, readExcelArchive } from './import-files.mjs';
 import { auth, demo, localOrders, sessionChangeKey, store } from './storage.mjs';
 import { driverMessage } from './driver.mjs';
 import { demoOrder } from './demo.mjs';
-import { displayKey, layoutLabels, pendingEtrn, readDisplayPreferences, routeText, selectOrders, themeLabels } from './registry.mjs';
+import { defaultAccents, displayKey, layoutLabels, pendingEtrn, readDisplayPreferences, routeText, selectOrders, themeLabels, validAccent } from './registry.mjs';
 
 const $ = id => document.getElementById(id);
 const currency = new Intl.NumberFormat('ru', {style:'currency', currency:'RUB', maximumFractionDigits:0});
@@ -36,8 +36,8 @@ let refreshing;
 let accountGeneration = 0;
 const pendingImports = new Map();
 let view = 'all';
-let sort = 'date';
-let ascending = false;
+let sort = 'delivery';
+let ascending = true;
 const display = readDisplayPreferences();
 const selections = new Map();
 const savingTrips = new Set();
@@ -231,7 +231,7 @@ function renderRows(container, rows) {
   const header = node('div', null, 'row table-head');
   header.setAttribute('role', 'row');
   for (const [column, title] of [['number','Заявка'], ['customer','Заказчик / перевозчик'],
-    ['route','Маршрут / даты'], ['trip','Статус рейса'], ['etrn','ЭТРН'], ['', 'Телефоны']]) {
+    ['route','Маршрут'], ['pickup','Загрузка'], ['delivery','Выгрузка'], ['trip','Статус рейса'], ['etrn','ЭТРН'], ['', 'Телефоны']]) {
     const heading = node('div');
     heading.setAttribute('role', 'columnheader');
     if (column === sort || (column === 'number' && sort === 'date')) {
@@ -267,6 +267,7 @@ function renderRows(container, rows) {
   for (const order of rows) {
     const row = node('div', null, 'row order');
     row.setAttribute('role', 'row');
+    row.dataset.stage = tripStatus(order);
     const label = node('div', null, 'order-id');
     label.append(action('№ ' + order.number, () => openOrder(order.number), 'order-link'),
       node('small', order.date ? order.date.split('-').reverse().join('.') : 'Дата не указана'));
@@ -274,28 +275,45 @@ function renderRows(container, rows) {
     names.append(node('strong', order.customer || 'Заказчик не указан'), node('small', order.carrier || 'Перевозчик не указан'));
     const direction = node('div', null, 'destination');
     direction.append(node('strong', routeText(order) || 'Маршрут не указан'));
-    const dates = routeDates(order);
-    if (dates) direction.append(node('small', dates));
+    const windows = ['Погрузка', 'Выгрузка'].map((kind, index) => {
+      const cell = node('div', null, 'route-window ' + (index === 0 ? 'pickup-window' : 'delivery-window'));
+      const schedules = order.points.filter(point => point.kind === kind && point.schedule).map(point => point.schedule);
+      if (schedules.length) {
+        const label = node('small', index === 0 ? 'Загр.' : 'Выгр.', 'window-label');
+        label.setAttribute('aria-hidden', 'true');
+        cell.append(label, node('span', schedules.join(' · ')));
+      } else {
+        cell.dataset.empty = 'true';
+        cell.append(node('span', '—', 'quiet'));
+      }
+      return cell;
+    });
     const stage = node('div', null, 'status-cell');
     stage.append(tripControl(order));
     const etrn = node('div', null, 'etrn-cell');
     etrn.append(etrnAction(order));
-    row.append(label, names, direction, stage, etrn, contactsCell(order));
+    row.append(label, names, direction, ...windows, stage, etrn, contactsCell(order));
     for (const cell of row.children) cell.setAttribute('role', 'cell');
     table.append(row);
   }
   container.append(table);
 }
 
-function orderSummary(order, open, selected) {
+function orderSummary(order, open, selected, showParties = false) {
   const button = action(null, open, 'order-summary');
   button.dataset.order = order.number;
+  button.dataset.stage = tripStatus(order);
   if (selected !== undefined) button.setAttribute('aria-pressed', String(selected));
   button.append(node('strong', '№ ' + order.number),
     node('span', tripTitles.get(tripStatus(order)) ?? 'Статус не распознан', 'stage-badge'),
     node('span', routeText(order) || 'Маршрут не указан', 'summary-route'));
   const dates = routeDates(order);
-  if (dates) button.append(node('small', dates, 'quiet'));
+  if (showParties) {
+    const parties = node('span', null, 'summary-parties');
+    parties.append(node('span', order.customer || '—'), node('small', order.carrier || '—'));
+    button.append(parties);
+  }
+  if (dates || showParties) button.append(node('small', dates || '—', 'quiet summary-dates'));
   return button;
 }
 
@@ -342,6 +360,18 @@ function renderSplit(container, rows) {
   const split = node('div', null, 'split-view');
   split.dataset.expanded = String(Boolean(matched && selection.expanded));
   const list = node('ul', null, 'split-list');
+  const inline = display.theme === 'sand' && window.matchMedia('(max-width: 760px)').matches;
+  split.dataset.inline = String(inline);
+  const grid = display.theme === 'sand' && !inline;
+  if (grid) {
+    list.classList.add('split-grid');
+    const heading = node('li', null, 'split-grid-head');
+    for (const name of ['№ заявки', 'Заказчик / перевозчик', 'Маршрут', 'Окна', 'Статус']) {
+      heading.append(node('span', name));
+    }
+    list.append(heading);
+  }
+  let selectedEntry;
   const panel = node('section', null, 'split-detail');
   panel.setAttribute('aria-label', 'Детали заявки');
   for (const item of rows) {
@@ -354,24 +384,34 @@ function renderSplit(container, rows) {
       } else {
         [...container.querySelectorAll('[data-order]')].find(button => button.dataset.order === item.number)?.focus();
       }
-    }, item.number === order.number));
+    }, item.number === order.number, grid));
+    if (item === order) selectedEntry = entry;
     list.append(entry);
   }
 
-  panel.append(action('← К списку', () => {
+  panel.append(action(inline ? 'Свернуть' : '← К списку', () => {
     selections.set(container, {number:order.number, expanded:false});
     render();
     container.querySelector('[aria-pressed="true"]')?.focus();
   }, 'split-back'), node('h2', 'Заявка № ' + order.number));
-  const fields = node('dl', null, 'split-fields');
-  for (const [label, value] of [['Дата заявки', order.date?.split('-').reverse().join('.')], ['Маршрут', routeText(order)],
-    ['Заказчик', order.customer], ['Перевозчик', order.carrier], ['Водитель', order.driver],
-    ['Транспорт', order.vehicle], ['Груз', order.cargo]]) {
-    const field = node('div');
-    field.append(node('dt', label), node('dd', value || 'Не указано'));
-    fields.append(field);
+  const status = node('div', null, 'split-status');
+  status.append(tripControl(order), etrnAction(order));
+  panel.append(status);
+  for (const [title, pairs] of [
+    ['Основное', [['Дата заявки', order.date?.split('-').reverse().join('.')], ['Заказчик', order.customer], ['Перевозчик', order.carrier]]],
+    ['Маршрут', [['Направление', routeText(order)], ['Груз', order.cargo]]],
+    ['Водитель и транспорт', [['Водитель', order.driver], ['Транспорт', order.vehicle]]],
+  ]) {
+    const group = node('section', null, 'split-section');
+    const fields = node('dl', null, 'split-fields');
+    for (const [label, value] of pairs) {
+      const field = node('div');
+      field.append(node('dt', label), node('dd', value || '—'));
+      fields.append(field);
+    }
+    group.append(node('h3', title), fields);
+    panel.append(group);
   }
-  panel.append(fields);
   if (order.points.length) {
     const points = node('ul', null, 'split-points');
     for (const point of order.points) {
@@ -383,10 +423,13 @@ function renderSplit(container, rows) {
     panel.append(points);
   }
   const actions = node('div', null, 'split-actions');
-  actions.append(tripControl(order), etrnAction(order), contactsCell(order),
+  actions.append(contactsCell(order),
     action('Открыть заявку', () => openOrder(order.number), 'primary'));
   panel.append(actions);
-  split.append(list, panel);
+  split.append(list);
+  if (inline) {
+    if (split.dataset.expanded === 'true') selectedEntry.append(panel);
+  } else split.append(panel);
   container.append(split);
 }
 
@@ -571,13 +614,58 @@ function readDraft() {
 
 function applyDisplay() {
   if (document.documentElement) document.documentElement.dataset.theme = display.theme;
-  document.querySelectorAll('meta[name="theme-color"]').forEach(meta => {
-    meta.content = display.theme === 'sand' ? '#f8f3e9' : '#f6f4fc';
-  });
+  applyAccent();
   $('theme').value = display.theme;
   $('layout').value = display.layout;
   $('settings-layout').value = display.layout;
 }
+
+function applyAccent() {
+  const accent = display.accents[display.theme];
+  $('accent-color').value = accent ?? defaultAccents[display.theme];
+  $('reset-accent').disabled = !accent;
+  const root = document.documentElement;
+  if (!root) return;
+  if (!accent) {
+    root.style.removeProperty('--custom-accent');
+    root.style.removeProperty('--custom-accent-text');
+    root.style.removeProperty('--custom-accent-hover');
+    root.style.removeProperty('--custom-focus');
+    return;
+  }
+  const channels = accent.slice(1).match(/../g).map(channel => {
+    const value = parseInt(channel, 16) / 255;
+    return value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4;
+  });
+  const luminance = channels[0] * .2126 + channels[1] * .7152 + channels[2] * .0722;
+  root.style.setProperty('--custom-accent', accent);
+  root.style.setProperty('--custom-accent-text', luminance > .179 ? '#000' : '#fff');
+  root.style.setProperty('--custom-accent-hover', `color-mix(in srgb, ${accent}, ${luminance > .179 ? '#fff' : '#000'} 10%)`);
+  root.style.setProperty('--custom-focus', luminance > .25 ? '#45454d' : accent);
+}
+
+function saveDisplay() {
+  try {
+    localStorage.setItem(displayKey, JSON.stringify(display));
+    $('settings-status').textContent = 'Настройки сохраняются в этом браузере.';
+  } catch {
+    $('settings-status').textContent = 'Браузер не сохранил настройки. Они действуют до закрытия страницы.';
+  }
+}
+
+$('accent-color').addEventListener('input', event => {
+  const accent = event.currentTarget.value;
+  if (!validAccent(accent)) return;
+  display.accents[display.theme] = accent;
+  applyAccent();
+  saveDisplay();
+});
+$('reset-accent').addEventListener('click', () => {
+  $('accent-color').focus();
+  delete display.accents[display.theme];
+  applyAccent();
+  saveDisplay();
+});
 
 for (const [id, labels] of [['theme', themeLabels], ['layout', layoutLabels], ['settings-layout', layoutLabels]]) {
   for (const [value, label] of Object.entries(labels)) {
@@ -588,22 +676,33 @@ for (const [id, labels] of [['theme', themeLabels], ['layout', layoutLabels], ['
   $(id).addEventListener('change', event => {
     display[id === 'theme' ? 'theme' : 'layout'] = event.currentTarget.value;
     applyDisplay();
-    try {
-      localStorage.setItem(displayKey, JSON.stringify(display));
-      $('settings-status').textContent = 'Настройки сохраняются в этом браузере.';
-    } catch {
-      $('settings-status').textContent = 'Браузер не сохранил настройки. Они действуют до закрытия страницы.';
-    }
-    if (id !== 'theme') render();
+    saveDisplay();
+    if (id !== 'theme' || display.layout === 'split') render();
   });
 }
 applyDisplay();
+const mobileNav = window.matchMedia?.('(max-width: 850px)');
+function setWorkspaceMenu() {
+  $('workspace-menu').open = !mobileNav?.matches;
+}
+setWorkspaceMenu();
+mobileNav?.addEventListener('change', setWorkspaceMenu);
+
+window.matchMedia?.('(max-width: 760px)')?.addEventListener('change', () => {
+  if (display.layout === 'split') render();
+});
 
 $('settings').addEventListener('click', () => {
   const email = $('account-email').textContent;
   $('settings-account').textContent = email;
   $('settings-account').hidden = !email;
   $('settings-dialog').showModal();
+});
+$('settings-dialog').addEventListener('close', () => {
+  if (!mobileNav?.matches) return;
+  const menu = $('workspace-menu');
+  menu.open = false;
+  menu.querySelector('summary').focus();
 });
 $('sort').addEventListener('change', event => {
   sort = event.currentTarget.value;
@@ -698,6 +797,7 @@ function signInScreen(message = '') {
   refreshing = undefined;
   auth.clear();
   $('sign-out').disabled = false;
+  setWorkspaceMenu();
   for (const reset of pendingImports.values()) reset();
   for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
   orders = [];
@@ -869,7 +969,6 @@ for (const button of document.querySelectorAll('[data-view]')) {
   button.addEventListener('click', () => {
     view = button.dataset.view;
     for (const tab of document.querySelectorAll('[data-view]')) tab.setAttribute('aria-pressed', String(tab === button));
-    $('view-title').textContent = view === 'all' ? 'Заявки' : button.textContent;
     render();
   });
 }

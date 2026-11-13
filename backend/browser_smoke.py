@@ -88,6 +88,13 @@ def import_fixtures(chromium, number):
     return pdfs, {"name": "orders.xlsx", "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "buffer": data.getvalue()}
 
 
+def click_workspace_action(page, button, mobile):
+    menu = page.locator("#workspace-menu")
+    if mobile and menu.get_attribute("open") is None:
+        menu.locator("summary").click()
+    page.locator(button).click()
+
+
 def order_lifecycle(page, chromium, number, report_total, mobile):
     pdfs, workbook = import_fixtures(chromium, number)
     page.locator("#import").click()
@@ -99,7 +106,7 @@ def order_lifecycle(page, chromium, number, report_total, mobile):
     page.locator("#review-save").click()
     expect(page.locator("#review-dialog")).to_be_hidden()
 
-    page.locator("#ledger").click()
+    click_workspace_action(page, "#ledger", mobile)
     page.locator("#ledger-file").set_input_files(workbook)
     page.locator('#ledger-form [type="submit"]').click()
     expect(page.locator("#ledger-dialog")).to_be_hidden()
@@ -118,7 +125,7 @@ def order_lifecycle(page, chromium, number, report_total, mobile):
     page.locator("#archive-title").click()
     expect(page.locator("#archive-table")).to_contain_text(str(number))
 
-    page.locator("#report").click()
+    click_workspace_action(page, "#report", mobile)
     page.locator("#report-month").fill("2026-11")
     expect(page.locator("#report-preview h3")).to_have_text(re.compile(report_total))
     page.locator("#report-dialog [data-close]").click()
@@ -136,7 +143,7 @@ def registry_views(page, number, mobile):
     }
 
     def theme(value):
-        page.locator("#settings").click()
+        click_workspace_action(page, "#settings", mobile)
         expect(settings.locator("#settings-account")).to_have_text("first@example.test")
         settings.locator("#theme").select_option(value)
         expect(page.locator("html")).to_have_attribute("data-theme", value)
@@ -144,6 +151,13 @@ def registry_views(page, number, mobile):
 
     expect(page.locator("html")).to_have_attribute("data-theme", "violet")
     expect(layout).to_have_value("table")
+    expect(page.locator("#sort")).to_have_value("delivery")
+    expect(page.locator('#table [data-sort="delivery"]')).to_have_attribute("aria-current", "true")
+    if mobile:
+        page.locator("#sort").select_option("pickup")
+    else:
+        page.locator('#table [data-sort="pickup"]').click()
+    expect(page.locator("#sort")).to_have_value("pickup")
     page.locator('[data-view="not-unloaded"]').click()
     for appearance in ("violet", "sand"):
         theme(appearance)
@@ -166,17 +180,24 @@ def registry_views(page, number, mobile):
                 expect(page.locator("#editor")).to_be_visible()
                 page.locator("#editor .dialog-head [data-close]").click()
                 if mobile:
-                    expect(registry.locator(".split-list")).to_be_hidden()
+                    if appearance == "sand":
+                        expect(registry.locator(".split-list")).to_be_visible()
+                        expect(registry.locator(".split-list li .split-detail")).to_be_visible()
+                    else:
+                        expect(registry.locator(".split-list")).to_be_hidden()
                     panel.locator(".split-back").click()
                     expect(registry.locator(".split-list")).to_be_visible()
 
-    page.locator("#settings").click()
+    click_workspace_action(page, "#settings", mobile)
+    settings.locator("#accent-color").fill("#226650")
+    expect(page.locator("html")).to_have_attribute("style", re.compile("--custom-accent: #226650"))
     settings.locator("#settings-layout").select_option("kanban")
     settings.locator("[data-close]").click()
     expect(layout).to_have_value("kanban")
     page.reload()
     expect(layout).to_have_value("kanban")
     expect(page.locator("html")).to_have_attribute("data-theme", "sand")
+    expect(page.locator("html")).to_have_attribute("style", re.compile("--custom-accent: #226650"))
     expect(registry).to_contain_text(order)
     page.locator('[data-view="not-unloaded"]').click()
 
@@ -213,6 +234,13 @@ def registry_views(page, number, mobile):
     expect(page.locator("#notice")).to_have_text("Статус рейса сохранён.")
     layout.select_option("table")
     theme("violet")
+    assert page.locator("html").evaluate("(root) => root.style.getPropertyValue('--custom-accent')") == ""
+    theme("sand")
+    click_workspace_action(page, "#settings", mobile)
+    settings.locator("#reset-accent").click()
+    expect(settings.locator("#accent-color")).to_have_value("#252525")
+    settings.locator("[data-close]").click()
+    theme("violet")
 
 
 def smoke(browser_type, origin, chromium, number, report_total, device=None):
@@ -239,7 +267,7 @@ def smoke(browser_type, origin, chromium, number, report_total, device=None):
         expect(b.locator("#table")).not_to_contain_text(order_a)
         create_order(b, order_b)
 
-        peer.locator("#sign-out").click()
+        click_workspace_action(peer, "#sign-out", device is not None)
         expect(peer.locator("#sign-in")).to_be_visible()
         expect(a.locator("#sign-in")).to_be_visible()
         expect(a.locator("#editor")).to_be_hidden()
