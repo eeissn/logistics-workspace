@@ -53,7 +53,9 @@ test('display settings validate theme and layout independently and handle unread
   stored = '{"theme":"constructor","layout":"split"}';
   assert.deepEqual(readDisplayPreferences(), {theme:'violet', layout:'split', accents:{}});
   stored = '{"theme":"sand","accents":{"violet":"#54a080","sand":"invalid"}}';
-  assert.deepEqual(readDisplayPreferences(), {theme:'sand', layout:'table', accents:{violet:'#54a080'}});
+  assert.deepEqual(readDisplayPreferences(), {theme:'sand', layout:'split', accents:{violet:'#54a080'}});
+  stored = '{"theme":"sand","layout":"timeline"}';
+  assert.deepEqual(readDisplayPreferences(), {theme:'sand', layout:'split', accents:{}});
   stored = '{"theme":';
   assert.deepEqual(readDisplayPreferences(), {theme:'violet', layout:'table', accents:{}});
 });

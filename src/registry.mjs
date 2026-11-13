@@ -5,7 +5,6 @@ export const layoutLabels = {
   compact: 'Компактный список',
   kanban: 'Канбан',
   split: 'Список + детали',
-  timeline: 'Таймлайн',
 };
 export const themeLabels = {violet: 'A Violet', sand: 'B Sand'};
 export const defaultAccents = {violet:'#6035c6', sand:'#252525'};
@@ -18,7 +17,7 @@ export function readDisplayPreferences() {
     const saved = JSON.parse(globalThis.localStorage.getItem(displayKey));
     return {
       theme: Object.hasOwn(themeLabels, saved?.theme) ? saved.theme : 'violet',
-      layout: Object.hasOwn(layoutLabels, saved?.layout) ? saved.layout : 'table',
+      layout: Object.hasOwn(layoutLabels, saved?.layout) ? saved.layout : saved?.theme === 'sand' ? 'split' : 'table',
       accents: Object.fromEntries(Object.keys(themeLabels)
         .filter(theme => validAccent(saved?.accents?.[theme]))
         .map(theme => [theme, saved.accents[theme]])),
@@ -58,7 +57,7 @@ export function routeText(order) {
 
 const scheduleKinds = {pickup:'Погрузка', delivery:'Выгрузка'};
 
-export function windowStart(order, kind) {
+function windowStart(order, kind) {
   const starts = [];
   for (const point of order.points) {
     if (point.kind !== kind) continue;

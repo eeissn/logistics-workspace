@@ -65,11 +65,11 @@
       <button type="button" data-view="loaded" aria-pressed="false">Загрузились</button>
       <button type="button" data-view="completed" aria-pressed="false">Выгрузились</button>
       <button type="button" data-view="failed" aria-pressed="false">Проблемные</button>
-      <button type="button" class="sand-shortcut" id="sand-details">Список + детали</button>
+
     </nav>
     <div class="registry-toolbar">
       <div class="registry-tools">
-        <label class="view-picker"><span aria-hidden="true">▤</span> Вид <select id="layout"></select></label>
+        <label class="view-picker"><span aria-hidden="true">▤</span> Вид <select id="layout" aria-label="Вид реестра"></select></label>
         <div class="sort-tools">
           <label>Сортировка <select id="sort"><option value="delivery">Дата выгрузки</option><option value="pickup">Дата загрузки</option><option value="date">Дата заявки</option><option value="number">Номер</option><option value="customer">Заказчик</option><option value="carrier">Перевозчик</option><option value="route">Маршрут</option><option value="trip">Статус рейса</option><option value="etrn">ЭТРН</option></select></label>
           <button type="button" id="sort-direction" aria-label="Изменить порядок сортировки" aria-pressed="false">↑</button>

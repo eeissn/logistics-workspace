@@ -6,7 +6,7 @@ import { checkImportFile, readExcelArchive } from './import-files.mjs';
 import { auth, demo, localOrders, sessionChangeKey, store } from './storage.mjs';
 import { driverMessage } from './driver.mjs';
 import { demoOrders } from './demo.mjs';
-import { defaultAccents, displayKey, layoutLabels, matchesTripView, pendingEtrn, readDisplayPreferences, readStatusColors, readThemeLayouts, routeText, selectOrders, statusColors, themeLabels, validAccent, windowStart } from './registry.mjs';
+import { defaultAccents, displayKey, layoutLabels, matchesTripView, pendingEtrn, readDisplayPreferences, readStatusColors, readThemeLayouts, routeText, selectOrders, statusColors, themeLabels, validAccent } from './registry.mjs';
 
 const $ = id => document.getElementById(id);
 const currency = new Intl.NumberFormat('ru', {style:'currency', currency:'RUB', maximumFractionDigits:0});
@@ -444,51 +444,6 @@ function renderSplit(container, rows) {
   container.append(split);
 }
 
-function renderTimeline(container, rows) {
-  const scheduled = rows.map(order => {
-    const pickup = windowStart(order, 'Погрузка');
-    const delivery = windowStart(order, 'Выгрузка');
-    return {order, pickup, delivery};
-  });
-  const days = [...new Set(scheduled.flatMap(({pickup, delivery}) => [pickup, delivery])
-    .filter(Boolean).map(date => date.slice(0, 10)))].sort();
-  const board = node('div', null, 'timeline');
-  if (days.length) {
-    const rail = node('div', null, 'timeline-rail');
-    rail.tabIndex = 0;
-    rail.setAttribute('role', 'region');
-    rail.setAttribute('aria-label', 'Календарь рейсов');
-    const grid = node('div', null, 'timeline-grid');
-    grid.style.gridTemplateColumns = `minmax(8rem, 12rem) repeat(${days.length}, minmax(5rem, 1fr))`;
-    grid.append(node('strong', 'Заявка', 'timeline-heading'));
-    for (const day of days) grid.append(node('strong', day.slice(5).split('-').reverse().join('.'), 'timeline-heading'));
-    let row = 2;
-    for (const {order, pickup, delivery} of scheduled) {
-      if (!(pickup || delivery)) continue;
-      const link = action('№ ' + order.number, () => openOrder(order.number), 'timeline-order');
-      link.style.gridRow = row;
-      const first = days.indexOf((pickup || delivery).slice(0, 10));
-      const last = days.indexOf((delivery || pickup).slice(0, 10));
-      const bar = action(routeText(order) || '№ ' + order.number, () => openOrder(order.number), 'timeline-bar');
-      bar.dataset.stage = tripStatus(order);
-      bar.style.gridRow = row++;
-      bar.style.gridColumn = `${Math.min(first, last) + 2} / ${Math.max(first, last) + 3}`;
-      bar.title = routeDates(order);
-      grid.append(link, bar);
-    }
-    rail.append(grid);
-    board.append(rail);
-  }
-  const undated = scheduled.filter(({pickup, delivery}) => !(pickup || delivery));
-  if (undated.length) {
-    const section = node('section', null, 'timeline-undated');
-    section.append(node('h3', 'Без окна загрузки и выгрузки'));
-    renderCompact(section, undated.map(({order}) => order));
-    board.append(section);
-  }
-  container.append(board);
-}
-
 function renderRegistry(container, rows) {
   const scrollLeft = container.firstElementChild?.scrollLeft ?? 0;
   container.replaceChildren();
@@ -499,7 +454,7 @@ function renderRegistry(container, rows) {
     container.append(empty);
     return;
   }
-  ({table:renderRows, compact:renderCompact, kanban:renderKanban, split:renderSplit, timeline:renderTimeline})[display.layout](container, rows, scrollLeft);
+  ({table:renderRows, compact:renderCompact, kanban:renderKanban, split:renderSplit})[display.layout](container, rows, scrollLeft);
 }
 
 function render() {
@@ -687,7 +642,6 @@ function applyDisplay() {
   $('settings-layout').value = display.layout;
   $('status-palette').hidden = display.theme !== 'violet';
   for (const [layout, button] of layoutButtons) button.setAttribute('aria-pressed', String(layout === display.layout));
-  $('sand-details').setAttribute('aria-pressed', String(display.layout === 'split'));
 }
 
 function applyAccent() {
@@ -748,7 +702,7 @@ function setDisplay(key, value) {
   render();
 }
 
-for (const [layout, icon] of [['table','☷'], ['compact','▦'], ['kanban','▥'], ['timeline','≡'], ['split','◫']]) {
+for (const [layout, icon] of [['table','☷'], ['compact','▦'], ['kanban','▥'], ['split','◫']]) {
   const button = action(null, () => setDisplay('layout', layout));
   const symbol = node('span', icon);
   symbol.setAttribute('aria-hidden', 'true');
@@ -756,7 +710,6 @@ for (const [layout, icon] of [['table','☷'], ['compact','▦'], ['kanban','▥
   layoutButtons.set(layout, button);
   $('layout-tabs').append(button);
 }
-$('sand-details').addEventListener('click', () => setDisplay('layout', 'split'));
 
 const colorInputs = new Map();
 function applyStatusColors() {

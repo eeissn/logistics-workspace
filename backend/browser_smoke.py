@@ -171,10 +171,7 @@ def registry_views(page, number, order_a, mobile):
     row_without_contacts = registry.locator(".order").filter(has=page.get_by_text(undated, exact=True))
     expect(row_without_contacts.get_by_text("Нет контактов")).to_be_visible()
     expect(row_without_contacts.locator(".row-contacts")).to_have_count(0)
-    page.locator("#layout").select_option("timeline")
-    expect(registry.locator(".timeline-rail")).to_be_visible()
-    expect(registry.locator(".timeline-undated")).to_contain_text(undated)
-    page.locator("#layout").select_option("table")
+    expect(layout.locator("option")).to_have_count(4)
 
     click_workspace_action(page, "#settings", mobile)
     settings.locator("#status-color-signed").fill("#ee9911")
