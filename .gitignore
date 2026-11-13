@@ -6,3 +6,10 @@ __pycache__/
 .env
 *.sqlite3
 *.sqlite3-*
+*.cms
+*.pem
+*.key
+*.pfx
+*.p12
+id_ed25519*
+id_rsa*
