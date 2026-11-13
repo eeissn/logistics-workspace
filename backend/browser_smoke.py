@@ -209,6 +209,33 @@ def registry_views(page, number, order_a, mobile):
     page.locator('[data-view="not-unloaded"]').click()
     for appearance in ("violet", "sand"):
         theme(appearance)
+        filters = page.get_by_role("button", name="Фильтры", exact=True)
+        filters.click()
+        page.locator("#filter").select_option("pending")
+        page.locator("#filters-dialog [data-close]").click()
+        expect(page.locator("#filters-count")).to_have_text("1")
+        expect(page.locator("#filters-count")).to_be_visible()
+        expect(page.get_by_role("button", name="Фильтры: 1 активный")).to_be_visible()
+
+        period = page.locator("#period-open")
+        period.click()
+        page.locator("#period-from").fill("2026-11-09")
+        page.locator("#period-to").fill("2026-11-13")
+        page.get_by_role("button", name="Применить").click()
+        expect(period).to_have_text("09.11–13.11")
+        expect(period).to_have_accessible_name("Период: 2026-11-09 — 2026-11-13")
+        if mobile:
+            assert page.evaluate("""() => ['#search', '#filters-open', '#period-open', '#new', '#import'].every(selector => {
+                const rect = document.querySelector(selector).getBoundingClientRect();
+                return rect.left >= 0 && rect.right <= innerWidth && rect.height >= 44;
+            })""")
+        period.click()
+        page.locator("#period-reset").click()
+        expect(period).to_have_text("Период")
+        page.locator("#filters-open").click()
+        page.locator("#filter").select_option("")
+        page.locator("#filters-dialog [data-close]").click()
+        expect(page.locator("#filters-count")).to_be_hidden()
         for view, selector in marker.items():
             layout.select_option(view)
             expect(registry.locator(selector)).to_be_visible()

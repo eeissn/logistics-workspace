@@ -525,6 +525,10 @@ function renderRegistry(container, rows) {
   if (display.layout === 'table' && container.firstElementChild) container.firstElementChild.scrollLeft = scrollLeft;
 }
 
+function shortPeriodDate(value) {
+  return value ? value.slice(5).split('-').reverse().join('.') : '…';
+}
+
 function render() {
   closeContacts();
   const day = today();
@@ -534,8 +538,13 @@ function render() {
     const badge = button.querySelector('.view-count');
     if (badge) badge.textContent = orders.filter(order => matchesTripView(order, button.dataset.view, day)).length;
   }
-  $('filters-open').textContent = $('filter').value ? 'Фильтры · 1' : 'Фильтры';
-  $('period-open').textContent = period.from || period.to ? `Период · ${period.from || '…'} — ${period.to || '…'}` : 'Период';
+  const hasFilter = Boolean($('filter').value);
+  const hasPeriod = Boolean(period.from || period.to);
+  $('filters-count').hidden = !hasFilter;
+  $('filters-open').setAttribute('aria-label', hasFilter ? 'Фильтры: 1 активный' : 'Фильтры');
+  $('period-label').textContent = hasPeriod ? `${shortPeriodDate(period.from)}–${shortPeriodDate(period.to)}` : 'Период';
+  $('period-open').setAttribute('aria-label', hasPeriod ? `Период: ${period.from || 'без начала'} — ${period.to || 'без окончания'}` : 'Период');
+  $('period-open').dataset.active = String(hasPeriod);
   $('sort').value = sort;
   $('sort-direction').textContent = ascending ? '↑' : '↓';
   $('sort-direction').setAttribute('aria-pressed', String(ascending));
