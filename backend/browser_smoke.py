@@ -134,6 +134,8 @@ def import_fixtures(chromium, number):
     for index, row in enumerate(rows, 1):
         cells = "".join(f'<c r="{chr(65 + col)}{index}" t="inlineStr"><is><t>{escape(value)}</t></is></c>'
                         for col, value in enumerate(row))
+        if index == 2:
+            cells = cells.replace('r="B2"', 'r="B2" s="1"')
         xml_rows.append(f'<row r="{index}">{cells}</row>')
     main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
     rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -145,6 +147,7 @@ def import_fixtures(chromium, number):
         xlsx.writestr("xl/workbook.xml", f'<workbook xmlns="{main}" xmlns:r="{rel}"><sheets><sheet name="Ноябрь" sheetId="1" r:id="rId1"/></sheets></workbook>')
         xlsx.writestr("xl/_rels/workbook.xml.rels", f'<Relationships xmlns="{package_rel}"><Relationship Id="rId1" Type="{rel}/worksheet" Target="worksheets/sheet1.xml"/></Relationships>')
         xlsx.writestr("xl/worksheets/sheet1.xml", f'<worksheet xmlns="{main}"><sheetData>{"".join(xml_rows)}</sheetData></worksheet>')
+        xlsx.writestr("xl/styles.xml", f'<styleSheet xmlns="{main}"><fills><fill/><fill><patternFill patternType="solid"><fgColor rgb="FFFFE599"/></patternFill></fill></fills><cellXfs><xf fillId="0"/><xf fillId="1"/></cellXfs></styleSheet>')
     return pdfs, {"name": "orders.xlsx", "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "buffer": data.getvalue()}
 
 
@@ -169,7 +172,14 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     click_workspace_action(page, "#ledger", mobile)
     page.locator("#ledger-file").set_input_files(workbook)
     page.locator('#ledger-form [type="submit"]').click()
+    expect(page.locator("#ledger-preview")).to_contain_text("К импорту: 1")
+    expect(page.locator("#ledger-preview")).to_contain_text("Подписана (1)")
+    page.locator('#ledger-form [type="submit"]').click()
     expect(page.locator("#ledger-dialog")).to_be_hidden()
+    excel_row = page.locator("#table .order").filter(has_text=f"EXCEL-{number}")
+    expect(excel_row.locator(".trip-status")).to_have_value("signed")
+    excel_row.locator(".trip-status").select_option("new")
+    expect(page.locator("#notice")).to_have_text("Статус рейса сохранён.")
     expect(page.locator("#table")).to_contain_text(f"EXCEL-{number}")
 
     registry_views(page, number, order_a, mobile)

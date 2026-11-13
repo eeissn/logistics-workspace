@@ -3,7 +3,7 @@ import { mountCalculator } from './calculator.mjs';
 import { parseSheetText } from './sheet-preview.mjs';
 import { archived, blankOrder, etrnProgress, etrnStatus, margin, mergeImport, monthReport, orderMargin, tripStatus, tripStatuses, upsert } from './domain.mjs';
 import { importPair, phones } from './import.mjs';
-import { addLedgerOrders, parseLedger } from './ledger.mjs';
+import { addLedgerOrders, previewLedger } from './ledger.mjs';
 import { checkImportFile, readExcelArchive } from './import-files.mjs';
 import { auth, demo, localOrders, sessionChangeKey, store } from './storage.mjs';
 import { driverMessage } from './driver.mjs';
@@ -40,6 +40,7 @@ let saveFailure;
 let refreshFailure;
 let serverConfirmed = false;
 let sheetActor;
+let ledgerPreview;
 let accountGeneration = 0;
 const pendingImports = new Map();
 let view = 'all';
@@ -1136,6 +1137,7 @@ function signInScreen(message = '') {
   $('editor-form').reset();
   $('import-form').reset();
   $('ledger-form').reset();
+  clearLedgerPreview();
   $('etrn-form').reset();
   $('report-preview').replaceChildren();
   $('review-card').replaceChildren();
@@ -1396,9 +1398,16 @@ $('review-save').addEventListener('click', async () => {
 $('ledger').addEventListener('click', () => {
   if (pendingImports.has($('ledger-form'))) return;
   $('ledger-form').reset();
+  clearLedgerPreview();
   $('ledger-error').textContent = '';
   $('ledger-dialog').showModal();
 });
+$('ledger-file').addEventListener('change', clearLedgerPreview);
+function clearLedgerPreview() {
+  ledgerPreview = undefined;
+  $('ledger-preview').replaceChildren();
+  $('ledger-submit').textContent = 'Проверить файл';
+}
 $('ledger-form').addEventListener('submit', async event => {
   event.preventDefault();
   const operation = startImport(event.submitter, event.currentTarget);
@@ -1406,24 +1415,54 @@ $('ledger-form').addEventListener('submit', async event => {
   const file = $('ledger-file').files[0];
   $('ledger-error').textContent = '';
   try {
-    const archive = await readExcelArchive(file);
-    if (!operation.active()) return;
-    const {readSheet} = await import('read-excel-file/browser');
-    if (!operation.active()) return;
-    const rows = await readSheet(archive, 'Ноябрь');
-    if (!operation.active()) return;
-    const imported = parseLedger(rows, '2026-11');
-    if (!imported.length) throw new Error('В листе нет заявок за ноябрь 2026.');
+    if (ledgerPreview?.file !== file || !ledgerPreview) {
+      const archive = await readExcelArchive(file);
+      if (!operation.active()) return;
+      const {readSheet} = await import('read-excel-file/browser');
+      if (!operation.active()) return;
+      const rows = await readSheet(archive, 'Ноябрь');
+      if (!operation.active()) return;
+      const current = await store.list();
+      if (!operation.active() || $('ledger-file').files[0] !== file) return;
+      let colors;
+      if (typeof DOMParser === 'function') {
+        const {readLedgerColors} = await import('./ledger-colors.mjs');
+        if (!operation.active() || $('ledger-file').files[0] !== file) return;
+        colors = readLedgerColors(archive, 'Ноябрь', rows);
+      }
+      const preview = previewLedger(rows, '2026-11', current, colors);
+      $('ledger-preview').replaceChildren(node('p', `Найдено: ${preview.found}. К импорту: ${preview.orders.length}. Дубли: ${preview.duplicates}. Ошибки: ${preview.invalid}.`));
+      if (preview.missing.size) {
+        $('ledger-preview').append(node('p', 'Пустые или нераспознанные поля: ' +
+          [...preview.missing].map(([label, count]) => `${label} (${count})`).join(', '), 'quiet'));
+      }
+      const stages = new Map();
+      for (const order of preview.orders) {
+        const label = tripTitles.get(tripStatus(order));
+        stages.set(label, (stages.get(label) ?? 0) + 1);
+      }
+      if (stages.size) {
+        $('ledger-preview').append(node('p', 'Статусы: ' +
+          [...stages].map(([label, count]) => `${label} (${count})`).join(', '), 'quiet'));
+      }
+      if (preview.orders.length) {
+        ledgerPreview = {file, ...preview};
+        $('ledger-submit').textContent = 'Подтвердить импорт';
+      }
+      return;
+    }
+    const preview = ledgerPreview;
     const current = await store.list();
-    if (!operation.active()) return;
-    const saved = addLedgerOrders(current, imported);
-    const result = await saveRecords(saved, current);
+    if (!operation.active() || ledgerPreview !== preview) return;
+    const saved = addLedgerOrders(current, preview.orders);
+    const added = saved.length - current.length;
+    const result = added ? await saveRecords(saved, current) : current;
     if (!operation.active()) return;
     orders = result;
     $('ledger-dialog').close();
     render();
-    const added = saved.length - current.length;
-    $('notice').textContent = `Добавлено: ${added}. Уже в реестре: ${imported.length - added}.`;
+    clearLedgerPreview();
+    $('notice').textContent = `Добавлено: ${added}. Уже в реестре: ${preview.duplicates + preview.orders.length - added}.`;
   } catch (error) { if (operation.active()) $('ledger-error').textContent = error.message; }
   finally { operation.finish(); }
 });

@@ -261,7 +261,13 @@ for (const [boundary, reject] of [['reader', true], ['list', false], ['save', fa
     const delayed = pause();
     if (boundary === 'list') app.setList(delayed.wait);
     if (boundary === 'save') app.setSave(delayed.wait);
-    const pending = submitExcel(app, '101', boundary === 'reader' ? delayed.wait : undefined);
+    let pending;
+    if (boundary === 'save') {
+      await submitExcel(app, '101');
+      pending = app.get('ledger-form').fire('submit', app.get('excel-button'));
+    } else {
+      pending = submitExcel(app, '101', boundary === 'reader' ? delayed.wait : undefined);
+    }
     await delayed.entered;
     assert.equal(app.get('excel-button').disabled, true);
     await app.signOut();
@@ -288,6 +294,8 @@ for (const [boundary, reject] of [['reader', true], ['list', false], ['save', fa
     assert.equal(app.writes.length, boundary === 'save' ? 1 : 0);
     next.resolve([ledgerHeader, ['2026-11-09', '203'], ['2026-11-09', '202']]);
     await current;
+    assert.match(app.get('ledger-preview').text, /К импорту: 1/);
+    await app.get('ledger-form').fire('submit', app.get('excel-button'));
     assert.equal(app.writes.at(-1).base, base);
     assert.deepEqual(app.writes.at(-1).orders.map(item => item.number), ['203', '202']);
     assert.equal(app.get('ledger-dialog').open, false);
