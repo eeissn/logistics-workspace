@@ -145,6 +145,7 @@ def registry_views(page, number, order_a, mobile):
     undated = f"№ {order_a}"
     sort = page.locator("#sort")
     direction = page.locator("#sort-direction")
+    fixture_numbers = re.compile(r"^(?:" + "|".join(map(re.escape, (order, excel, undated))) + r")$")
     marker = {
         "table": ".order-table", "compact": ".compact-list",
         "kanban": ".kanban", "split": ".split-view",
@@ -160,7 +161,7 @@ def registry_views(page, number, order_a, mobile):
     expect(page.locator("html")).to_have_attribute("data-theme", "violet")
     expect(layout).to_have_value("table")
     expect(sort).to_have_value("delivery")
-    expect(registry.locator(".order-link")).to_have_text([order, excel, undated])
+    expect(registry.locator(".order-link").filter(has_text=fixture_numbers)).to_have_text([order, excel, undated])
     expect(page.locator('#table [data-sort="delivery"]')).to_have_attribute("aria-current", "true")
     if mobile:
         page.locator("#sort").select_option("pickup")
@@ -177,6 +178,7 @@ def registry_views(page, number, order_a, mobile):
             expect(registry).to_contain_text("EXCEL-")
             # All three fixture orders share a trip stage, so this also checks ordering inside a kanban column.
             numbers = registry.locator(".order-link" if view == "table" else ".order-summary > strong")
+            numbers = numbers.filter(has_text=fixture_numbers)
             for column, ascending in (("delivery", [order, excel]), ("pickup", [excel, order])):
                 sort.select_option(column)
                 expect(numbers).to_have_text([*ascending, undated])
