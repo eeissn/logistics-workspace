@@ -470,3 +470,17 @@ dialog details[open] summary { margin-bottom: .55rem; }
   [data-theme=violet] .registry-command .actions > button { flex: 1 1 auto; }
   .contact-panel { right: 0; max-width: calc(100vw - 2.5rem); }
 }
+@media (max-width: 740px) {
+  [data-theme=violet] .intro { padding-bottom: 0; border-bottom: 0; }
+  [data-theme=violet] .layout-tabs { display: none; }
+  .registry-tabs, [data-theme=sand] .registry-tabs {
+    width: 100%; flex-wrap: nowrap; overflow-x: auto; padding-bottom: .25rem;
+  }
+  .registry-tabs button { flex: 0 0 auto; }
+  .registry-tools { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .registry-tools label, .registry-tools select { width: 100%; }
+  .sort-tools { flex-wrap: nowrap; min-width: 0; }
+  #sort-direction { flex: 0 0 40px; padding-inline: .35rem; }
+  [data-theme=sand] .registry-command { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .35rem; }
+  [data-theme=sand] .registry-search, [data-theme=sand] .registry-command .actions { grid-column: 1/-1; }
+}
