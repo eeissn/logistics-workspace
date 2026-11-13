@@ -862,3 +862,102 @@ button {
     scroll-snap-align: start;
   }
 }
+
+/* UI/UX 2.0 — таблица на ПК */
+@media (min-width: 1060px) {
+  [data-theme="violet"] .order-table .order {
+    min-height: 52px;
+    transition: background-color .2s ease;
+  }
+
+  [data-theme="violet"] .order-table .order:hover {
+    background: #f1edfc;
+  }
+
+  [data-theme="violet"] .order-table .table-head {
+    background: #f5f2fc;
+    color: #5f5874;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-theme="violet"] .order-table .order {
+      transition: none;
+    }
+  }
+}
+
+/* UI/UX 2.0 — читаемость таблицы ПК */
+@media (min-width: 1060px) {
+  .order-table .order {
+    line-height: 1.4;
+  }
+
+  .order-table .row {
+    column-gap: 10px;
+  }
+
+  .order-table .customer-cell,
+  .order-table .carrier-cell {
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: auto;
+  }
+
+  .order-table .route-window {
+    font-size: 12px;
+  }
+}
+
+/* UI/UX 2.0 — панель деталей ПК */
+@media (min-width: 1060px) {
+  .split-detail {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 20px;
+    background: var(--paper);
+    box-shadow: 0 4px 20px rgb(20 20 40 / 5%);
+  }
+
+  .split-section {
+    padding-block: 12px;
+  }
+
+  .split-section h3 {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+}
+
+/* UI/UX 2.0 — нижняя часть панели деталей */
+@media (min-width: 1060px) {
+  .split-detail {
+    padding-bottom: 24px;
+  }
+
+  .split-detail .split-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 16px;
+  }
+
+  .split-detail .split-actions button {
+    min-height: 40px;
+    border-radius: 9px;
+  }
+}
+
+/* UI/UX 2.0 — нижние действия панели */
+@media (min-width: 1060px) {
+  .split-detail .split-actions {
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    justify-content: flex-start;
+  }
+
+  .split-detail .split-actions > button {
+    min-height: 40px;
+  }
+}
