@@ -1,9 +1,11 @@
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -86,6 +88,36 @@ class WorkspaceTests(unittest.TestCase):
         with database(self.path) as db:
             first, second = db.execute("SELECT password FROM users").fetchall()
         self.assertNotEqual(first[0], second[0])
+
+    def test_old_tab_cannot_use_the_replacement_cookie_with_its_old_csrf(self):
+        old_tab = self.writer(self.first)
+        self.assertEqual(self.put(self.first, old_tab, 0, [order("A")]).status_code, 200)
+
+        # Both tabs share one cookie jar. The new login replaces its cookie,
+        # while the older tab still holds the previous CSRF token in memory.
+        new_tab = self.writer(self.first, "second")
+        self.assertEqual(self.put(self.first, new_tab, 0, [order("B")]).status_code, 200)
+        self.assertEqual(self.first.get("/api/records", headers=old_tab).status_code, 401)
+        self.assertEqual(self.put(self.first, old_tab, 1, [order("A-stale")]).status_code, 403)
+        self.assertEqual(self.first.post("/api/logout", headers=old_tab).status_code, 403)
+        current = self.first.get("/api/records", headers=new_tab).json()
+        self.assertEqual([item["number"] for item in current["orders"]], ["B"])
+        self.assertEqual(current["revision"], 1)
+
+    def test_in_flight_write_cannot_commit_after_session_revocation(self):
+        from backend.app import validate_orders
+
+        headers = self.writer(self.first)
+        peer = self.writer(self.second)
+
+        def revoke_before_save(orders):
+            validate_orders(orders)
+            with database(self.path, write=True) as db:
+                db.execute("DELETE FROM sessions WHERE csrf=?", (headers["X-CSRF-Token"],))
+
+        with patch("backend.app.validate_orders", side_effect=revoke_before_save):
+            self.assertEqual(self.put(self.first, headers, 0, [order()]).status_code, 401)
+        self.assertEqual(self.second.get("/api/records", headers=peer).json(), {"revision": 0, "orders": []})
 
     def test_crud_and_sync_with_two_sessions(self):
         first = self.writer(self.first)
@@ -187,7 +219,9 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_schema_backup_and_reopen(self):
         headers = self.writer(self.first)
-        self.put(self.first, headers, 0, [order()])
+        second = self.writer(self.second, "second")
+        first_snapshot = self.put(self.first, headers, 0, [order()]).json()
+        second_snapshot = self.put(self.second, second, 0, [{**order(), "customer": "Second"}]).json()
         with TemporaryDirectory() as directory:
             path = Path(directory) / "backup.sqlite3"
             backup(self.path, path)
@@ -195,9 +229,15 @@ class WorkspaceTests(unittest.TestCase):
             with database(path) as db:
                 self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 2)
                 self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0], "ok")
-                self.assertEqual(db.execute("SELECT number FROM orders").fetchone()[0], "7123")
-                self.assertEqual(db.execute("SELECT COUNT(*) FROM users").fetchone()[0], 2)
-            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM orders").fetchone()[0], 2)
+            restored = create_app(path, ORIGIN)
+            with TestClient(restored, base_url=ORIGIN) as first, TestClient(restored, base_url=ORIGIN) as other:
+                self.assertEqual(first.get("/api/records", headers=headers).status_code, 401)
+                self.assertEqual(first.get("/api/records", headers=self.writer(first)).json(), first_snapshot)
+                self.assertEqual(other.get("/api/records", headers=self.writer(other, "second")).json(), second_snapshot)
+            if os.name == "posix":
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             with self.assertRaises(FileExistsError):
                 backup(self.path, path)
 

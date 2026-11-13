@@ -1,4 +1,5 @@
 const KEY = 'logistics-workspace:v1';
+export const sessionChangeKey = 'logistics-workspace:session-change';
 export const demo = import.meta.env?.VITE_DEMO === 'true';
 
 export function localOrders() {
@@ -43,8 +44,11 @@ async function request(path, method = 'GET', data, csrf) {
 }
 
 let account;
+let generation = 0;
+let cookieChange;
+let unconfirmedLogin = false;
 let newest;
-const revisions = new WeakMap();
+let revisions = new WeakMap();
 const offlineStore = {
   list: async () => localOrders(),
   async save(orders) {
@@ -53,8 +57,46 @@ const offlineStore = {
   },
 };
 
-function accept(snapshot, session) {
-  if (!session || account !== session) throw new Error('Сеанс завершён.');
+async function inSession(send, accept) {
+  const started = generation;
+  try {
+    const result = await send();
+    if (started === generation) return accept(result);
+  } catch (error) {
+    if (started === generation) throw error;
+  }
+  throw new Error('Сеанс завершён.');
+}
+
+// The browser applies Set-Cookie before fetch resolves.
+function changeCookie(send, accept) {
+  const started = generation;
+  const change = () => {
+    if (started !== generation) throw new Error('Сеанс завершён.');
+    return inSession(async () => {
+      const response = await send();
+      try {
+        // Notify peers even if this page has since discarded the response.
+        globalThis.localStorage?.setItem(sessionChangeKey, globalThis.crypto.randomUUID());
+      } catch {
+        // The next registry request still checks the cookie and CSRF token.
+      }
+      return response;
+    }, accept);
+  };
+  const result = (cookieChange ?? Promise.resolve()).then(() => {
+    const locks = globalThis.navigator?.locks;
+    return locks ? locks.request(sessionChangeKey, change) : change();
+  });
+  const settled = () => {
+    if (cookieChange === tail) cookieChange = undefined;
+  };
+  const tail = result.then(settled, settled);
+  cookieChange = tail;
+  return result;
+}
+
+function acceptSnapshot(snapshot) {
   revisions.set(snapshot.orders, snapshot.revision);
   if (!newest || snapshot.revision > newest.revision) newest = snapshot;
   return newest.orders;
@@ -62,32 +104,47 @@ function accept(snapshot, session) {
 
 export const auth = {
   async restore() {
-    account = await request('me');
-    return account;
-  },
-  async login(email, password) {
-    account = await request('login', 'POST', {email, password});
-    return account;
-  },
-  async logout() {
-    await request('logout', 'POST', undefined, account?.csrf);
+    if (cookieChange || unconfirmedLogin) throw new Error('Сеанс завершён.');
     this.clear();
+    return inSession(() => request('me'), result => account = result);
+  },
+  login(email, password) {
+    this.clear();
+    return changeCookie(async () => {
+      const previous = unconfirmedLogin;
+      unconfirmedLogin = true;
+      try {
+        return await request('login', 'POST', {email, password});
+      } catch (error) {
+        // An HTTP error from login does not set a session cookie.
+        if (error.status) unconfirmedLogin = previous;
+        throw error;
+      }
+    }, result => {
+      unconfirmedLogin = false;
+      return account = result;
+    });
+  },
+  logout() {
+    const csrf = account?.csrf;
+    return changeCookie(() => request('logout', 'POST', undefined, csrf), () => this.clear());
   },
   clear() {
+    generation++;
     account = undefined;
     newest = undefined;
+    revisions = new WeakMap();
   },
 };
 
 export const store = demo ? offlineStore : {
   async list() {
-    const session = account;
-    return accept(await request('records', 'GET', undefined, session?.csrf), session);
+    if (!account) throw new Error('Сеанс завершён.');
+    return inSession(() => request('records', 'GET', undefined, account.csrf), acceptSnapshot);
   },
   async save(orders, base) {
     const revision = revisions.get(base);
     if (revision === undefined || !account) throw new Error('Обновите реестр перед сохранением.');
-    const session = account;
-    return accept(await request('records', 'PUT', {revision, orders}, session.csrf), session);
+    return inSession(() => request('records', 'PUT', {revision, orders}, account.csrf), acceptSnapshot);
   },
 };

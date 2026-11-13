@@ -323,7 +323,7 @@ def create_app(path, origin):
 
     @app.put("/api/records")
     async def put_records(request: Request):
-        owner = session(request, mutate=True)["email"]
+        active = session(request, mutate=True)
         data = await read_json(request, MAX_BODY)
         revision, orders = data.get("revision"), data.get("orders")
         if type(revision) is not int or not 0 <= revision < 2**63 - 1:
@@ -332,7 +332,12 @@ def create_app(path, origin):
         def save():
             validate_orders(orders)
             with database(path, write=True) as db:
-                return replace_orders(db, owner, revision, orders)
+                # The request body may have been in flight when another tab logged out.
+                current = db.execute("SELECT 1 FROM sessions WHERE token=? AND email=? AND expires>?",
+                                     (active["token"], active["email"], int(time.time()))).fetchone()
+                if current is None:
+                    raise HTTPException(401, "Sign in required")
+                return replace_orders(db, active["email"], revision, orders)
 
         return await run_in_threadpool(save)
 
