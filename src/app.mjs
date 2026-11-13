@@ -167,7 +167,7 @@ function contactsCell(order) {
   }
   const trigger = action('Контакты · ' + count, () => {
     if (contactAnchor === trigger) closeContacts(true);
-    else openContacts(trigger, entries);
+    else openContacts(trigger, entries, driver);
   }, 'row-contacts');
   trigger.setAttribute('aria-controls', 'contact-popover');
   trigger.setAttribute('aria-expanded', 'false');
@@ -175,7 +175,7 @@ function contactsCell(order) {
   return cell;
 }
 
-function openContacts(trigger, entries) {
+function openContacts(trigger, entries, nextControl) {
   closeContacts();
   contactAnchor = trigger;
   trigger.setAttribute('aria-expanded', 'true');
@@ -192,13 +192,23 @@ function openContacts(trigger, entries) {
     }
     contactPanel.append(item);
   }
-  contactPanel.append(action('Закрыть', () => {
-    closeContacts(true);
-  }, 'contact-close'));
+  const closeButton = action('Закрыть', () => closeContacts(true), 'contact-close');
+  contactPanel.append(closeButton);
+  const controls = [...contactPanel.querySelectorAll('a[href], button')];
+  contactPanel.onkeydown = event => {
+    if (event.key !== 'Tab') return;
+    const index = controls.indexOf(event.target);
+    if (index === -1) return;
+    event.preventDefault();
+    const next = controls[index + (event.shiftKey ? -1 : 1)];
+    if (next) return next.focus();
+    closeContacts();
+    (event.shiftKey ? trigger : nextControl).focus();
+  };
   contactPanel.hidden = false;
   positionContacts();
   if (!contactAnchor) return;
-  contactPanel.querySelector('a, button')?.focus({preventScroll:true});
+  controls[0].focus({preventScroll:true});
   if (typeof IntersectionObserver === 'function') {
     contactObserver = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting && contactAnchor === trigger) closeContacts();
@@ -217,6 +227,7 @@ function closeContacts(restoreFocus = false) {
   contactFrame = undefined;
   trigger.setAttribute('aria-expanded', 'false');
   contactPanel.hidden = true;
+  contactPanel.onkeydown = null;
   contactPanel.replaceChildren();
   if (restoreFocus) trigger.focus({preventScroll:true});
 }
