@@ -1,5 +1,6 @@
 import './style.css';
 import { mountCalculator } from './calculator.mjs';
+import { parseSheetText } from './sheet-preview.mjs';
 import { archived, blankOrder, etrnProgress, etrnStatus, margin, mergeImport, monthReport, orderMargin, tripStatus, tripStatuses, upsert } from './domain.mjs';
 import { importPair, phones } from './import.mjs';
 import { addLedgerOrders, parseLedger } from './ledger.mjs';
@@ -38,6 +39,7 @@ let pendingWrites = 0;
 let saveFailure;
 let refreshFailure;
 let serverConfirmed = false;
+let sheetActor;
 let accountGeneration = 0;
 const pendingImports = new Map();
 let view = 'all';
@@ -743,6 +745,7 @@ function addPoint(point = {kind:'Погрузка'}) {
 }
 
 function openEditor(order, original = null, stamp = order.updatedAt) {
+  $('sheet-open').hidden = !sheetActor;
   editorStamp = stamp;
   draft = structuredClone(order);
   if (!draft.route) draft.route = routeText(draft);
@@ -1100,6 +1103,9 @@ function signInScreen(message = '') {
   pendingWrites = 0;
   saveFailure = refreshFailure = undefined;
   serverConfirmed = false;
+  sheetActor = undefined;
+  $('sheet-actor').value = '';
+  $('sheet-form').reset();
   auth.clear();
   calculator?.reset();
   cargoSection?.reset();
@@ -1187,8 +1193,52 @@ async function showAccount(account) {
     $('local-import').hidden = true;
   }
   showWorkspace(true);
+  const generation = accountGeneration;
+  if (import.meta.env?.VITE_SHEET_PREVIEW === 'true') {
+    auth.sheetPreview().then(result => {
+      if (generation !== accountGeneration) return;
+      sheetActor = result.actor;
+      $('sheet-open').hidden = !sheetActor;
+    }).catch(() => {});
+  }
   await refresh();
 }
+
+const sheetFields = ['number', 'title', 'amount', 'requested', 'promised'];
+$('sheet-open').addEventListener('click', () => {
+  if (!sheetActor) return;
+  const fields = $('sheet-form').elements;
+  $('sheet-form').reset();
+  $('sheet-status').textContent = '';
+  $('sheet-actor').value = sheetActor;
+  fields.number.value = form.elements.number.value;
+  fields.title.value = form.elements.cargo.value;
+  fields.amount.value = form.elements.customerAmount.value;
+  $('sheet-dialog').showModal();
+});
+$('sheet-parse').addEventListener('click', () => {
+  const values = parseSheetText($('sheet-paste').value);
+  for (const key of sheetFields) {
+    if (values[key] !== undefined) $('sheet-form').elements[key].value = values[key];
+  }
+  $('sheet-status').textContent = 'Проверьте распознанные поля перед подтверждением.';
+});
+$('sheet-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!sheetActor) return;
+  const operation = startImport(event.submitter);
+  if (!operation) return;
+  const data = Object.fromEntries(sheetFields.map(key => [key, event.currentTarget.elements[key].value.trim()]));
+  try {
+    const result = await auth.sheetPreview(data);
+    if (operation.active()) $('sheet-status').textContent = result.duplicate
+      ? 'Эта строка уже принята тестовым получателем.' : 'Тестовая строка принята.';
+  } catch (error) {
+    if (operation.active()) $('sheet-status').textContent = error.message;
+  } finally {
+    operation.finish();
+  }
+});
 
 $('sign-in-form').addEventListener('submit', async event => {
   event.preventDefault();

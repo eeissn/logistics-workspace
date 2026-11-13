@@ -26,7 +26,18 @@ PASSWORD = "synthetic-browser-test-password"
 
 def serve(root, port):
     database = root / "workspace.sqlite3"
-    app = create_app(database, f"https://localhost:{port}")
+    received = set()
+
+    def sheet_preview(email, row):
+        actor = {"first@example.test": "Герман", "second@example.test": "Марина"}[email]
+        if row is None:
+            return {"actor": actor}
+        key = (email, tuple(sorted(row.items())))
+        duplicate = key in received
+        received.add(key)
+        return {"actor": actor, "duplicate": duplicate}
+
+    app = create_app(database, f"https://localhost:{port}", sheet_preview)
     for user in ("first", "second"):
         add_user(database, f"{user}@example.test", PASSWORD)
     app.mount("/", StaticFiles(directory="dist", html=True))
@@ -71,6 +82,30 @@ def calculators(page, mobile):
     expect(cargo.locator("#autoinfo")).not_to_have_text("")
     expect(cargo.locator("#pdf")).to_be_enabled()
     cargo.locator("[data-close]").click()
+
+
+def sheet_preview(page, actor, number):
+    if os.environ.get("WORKSPACE_TEST_SHEET") != "1":
+        return
+    page.locator("#new").click()
+    page.locator("#sheet-open").click()
+    dialog = page.locator("#sheet-dialog")
+    expect(dialog.locator("#sheet-actor")).to_have_value(actor)
+    text = f"Заявка {number}, перевозка оборудования, 35000 рублей, обратились 13 ноября 2026, обещали 18 ноября 2026"
+    dialog.locator("#sheet-paste").fill(text)
+    dialog.locator("#sheet-parse").click()
+    expect(dialog.locator('[name="requested"]')).to_have_value("2026-11-13")
+    dialog.locator("[type=submit]").click()
+    expect(dialog.locator("#sheet-status")).to_have_text("Тестовая строка принята.")
+    page.reload()
+    page.locator("#new").click()
+    page.locator("#sheet-open").click()
+    dialog.locator("#sheet-paste").fill(text)
+    dialog.locator("#sheet-parse").click()
+    dialog.locator("[type=submit]").click()
+    expect(dialog.locator("#sheet-status")).to_have_text("Эта строка уже принята тестовым получателем.")
+    dialog.locator("[data-close]").click()
+    page.locator("#editor .dialog-head [data-close]").click()
 
 
 def import_fixtures(chromium, number):
@@ -459,6 +494,7 @@ def smoke(browser_type, origin, chromium, number, report_total, device=None):
         a = first.new_page()
         a.goto(origin)
         sign_in(a, "first")
+        sheet_preview(a, "Герман", number)
         calculators(a, device is not None)
         create_order(a, order_a)
 
@@ -473,6 +509,7 @@ def smoke(browser_type, origin, chromium, number, report_total, device=None):
         b = independent.new_page()
         b.goto(origin)
         sign_in(b, "second")
+        sheet_preview(b, "Марина", number)
         expect(b.locator("#table")).not_to_contain_text(order_a)
         create_order(b, order_b)
 

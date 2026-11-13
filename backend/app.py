@@ -1,12 +1,13 @@
 import argparse
 from contextlib import closing, contextmanager
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import getpass
 import hashlib
 import hmac
 import json
 import math
 import os
+import re
 from pathlib import Path
 import secrets
 import sqlite3
@@ -220,7 +221,7 @@ def replace_orders(db, owner, revision, orders):
     return snapshot(db, owner)
 
 
-def create_app(path, origin):
+def create_app(path, origin, sheet_preview=None):
     path = database_path(path)
     url = urlsplit(origin)
     if not url.hostname or origin != f"{url.scheme}://{url.netloc}" or url.username or url.password:
@@ -279,6 +280,32 @@ def create_app(path, origin):
         with database(path, write=True) as db:
             db.execute("DELETE FROM login_attempts WHERE ip=?", (ip,))
         return user["email"]
+
+    if sheet_preview is not None:
+        @app.get("/api/sheet-preview")
+        def preview_sheet_capability(request: Request):
+            row = session(request, bind=True)
+            return sheet_preview(row["email"], None)
+
+        @app.post("/api/sheet-preview")
+        async def preview_sheet_row(request: Request):
+            user = session(request, mutate=True)
+            data = await read_json(request, 4096)
+            keys = ("number", "title", "amount", "requested", "promised")
+            if not isinstance(data, dict) or set(data) != set(keys):
+                raise HTTPException(422, "Invalid row")
+            if not all(isinstance(data[key], str) and 0 < len(data[key].strip()) <= 200 for key in keys):
+                raise HTTPException(422, "Invalid row")
+            if len(data["number"]) > 48 or not re.fullmatch(r"\d{1,12}(?:\.\d{1,2})?", data["amount"]):
+                raise HTTPException(422, "Invalid amount or order number")
+            try:
+                for key in ("requested", "promised"):
+                    if date.fromisoformat(data[key]).isoformat() != data[key]:
+                        raise ValueError
+            except ValueError:
+                raise HTTPException(422, "Invalid dates") from None
+            user = session(request, mutate=True)
+            return sheet_preview(user["email"], data)
 
     @app.post("/api/login")
     async def login(request: Request, response: Response):

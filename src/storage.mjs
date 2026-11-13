@@ -105,6 +105,10 @@ function acceptSnapshot(snapshot) {
 }
 
 export const auth = {
+  sheetPreview(data) {
+    if (!account || demo) return Promise.reject(new Error('Сеанс завершён.'));
+    return inSession(() => request('sheet-preview', data ? 'POST' : 'GET', data, account.csrf), result => result);
+  },
   async restore() {
     if (cookieChange || unconfirmedLogin) throw new Error('Сеанс завершён.');
     this.clear();
