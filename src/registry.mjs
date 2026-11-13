@@ -6,7 +6,7 @@ export const layoutLabels = {
   kanban: 'Канбан',
   split: 'Список + детали',
 };
-export const themeLabels = {violet: 'A Violet', sand: 'B Sand'};
+export const themeLabels = {sputnik: 'Sputnik', violet: 'Violet', sand: 'Sand'};
 export const violetPalettes = {
   violet: 'Фиолетовая',
   gray: 'Серая',
@@ -16,7 +16,7 @@ export const violetPalettes = {
   pink: 'Розовая',
   red: 'Красная',
 };
-export const defaultAccents = {violet:'#6035c6', sand:'#252525'};
+export const defaultAccents = {sputnik:'#27313e', violet:'#6035c6', sand:'#252525'};
 export const statusColors = {new:'#9695a8', signed:'#e3ad39', loaded:'#7544da', unloaded:'#369658', failed:'#cd575a'};
 export const validAccent = value => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
 export const displayKey = 'logistics-workspace:display:v1';
@@ -25,7 +25,7 @@ export function readDisplayPreferences() {
   try {
     const saved = JSON.parse(globalThis.localStorage.getItem(displayKey));
     return {
-      theme: Object.hasOwn(themeLabels, saved?.theme) ? saved.theme : 'violet',
+      theme: Object.hasOwn(themeLabels, saved?.theme) ? saved.theme : 'sputnik',
       layout: Object.hasOwn(layoutLabels, saved?.layout) ? saved.layout : saved?.theme === 'sand' ? 'split' : 'table',
       violetPalette: Object.hasOwn(violetPalettes, saved?.violetPalette) ? saved.violetPalette : 'violet',
       accents: Object.fromEntries(Object.keys(themeLabels)
@@ -33,7 +33,7 @@ export function readDisplayPreferences() {
         .map(theme => [theme, saved.accents[theme]])),
     };
   } catch {
-    return {theme:'violet', layout:'table', violetPalette:'violet', accents:{}};
+    return {theme:'sputnik', layout:'table', violetPalette:'violet', accents:{}};
   }
 }
 

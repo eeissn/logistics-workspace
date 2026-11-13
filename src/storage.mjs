@@ -29,7 +29,9 @@ async function request(path, method = 'GET', data, csrf) {
       body: data === undefined ? undefined : JSON.stringify(data),
     });
   } catch {
-    throw new Error('Нет связи с сервером. Проверьте подключение и повторите действие.');
+    const error = new Error('Нет связи с сервером. Проверьте подключение и повторите действие.');
+    error.network = true;
+    throw error;
   }
   if (!response.ok) {
     const error = new Error(messages[response.status] || 'Сервер временно недоступен.');

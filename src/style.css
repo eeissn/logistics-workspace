@@ -2,11 +2,11 @@
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   color: var(--ink); background: var(--canvas); line-height: 1.42;
   --canvas: #fff; --paper: #fff; --ink: #191a20; --muted: #565864; --line: #e3e4e9;
-  --surface: #f7f7fa; --hover: #f5f5f8; --theme-accent: #6035c6;
+  --surface: #f5f6f7; --hover: #eef0f2; --theme-accent: #27313e;
   --accent: var(--custom-accent, var(--theme-accent));
   --accent-text: var(--custom-accent-text, #fff);
   --accent-hover: var(--custom-accent-hover, color-mix(in srgb, var(--accent), #000 10%));
-  --nav-active: #eee8fb; --theme-outline: #6035c6; --outline: var(--custom-focus, var(--theme-outline));
+  --nav-active: #e6e9ed; --theme-outline: #465568; --outline: var(--custom-focus, var(--theme-outline));
   --control-radius: 8px; --panel-radius: 10px; --card-space: .72rem;
   --shadow: 0 2px 6px #16172b08;
 }
@@ -24,10 +24,6 @@ button:hover { background: var(--hover); }
 button:disabled { opacity: .55; cursor: wait; }
 button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 button.primary:hover { background: var(--accent-hover); }
-:root:not([data-theme=sand]) #new { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
-:root:not([data-theme=sand]) #new:hover { background: var(--accent-hover); }
-:root:not([data-theme=sand]) #import { background: var(--paper); color: var(--ink); border-color: var(--line); }
-:root:not([data-theme=sand]) #import:hover { background: var(--hover); }
 :focus-visible { outline: 2px solid var(--outline); outline-offset: 3px; }
 [hidden] { display: none !important; }
 a { color: inherit; }
@@ -37,7 +33,7 @@ a { color: inherit; }
   border-right: 1px solid var(--line); padding: 1.2rem .75rem;
   display: flex; flex-direction: column; gap: .8rem;
 }
-.brand { padding: .15rem .48rem; color: var(--ink); text-decoration: none; font-size: .91rem; font-weight: 650; letter-spacing: -.022em; }
+.brand { display: flex; align-items: center; gap: .45rem; padding: .15rem .15rem; color: var(--ink); text-decoration: none; font-size: .875rem; font-weight: 650; letter-spacing: -.022em; }
 .nav-tools { display: grid; gap: .18rem; }
 .workspace-nav button { text-align: left; border: 0; background: transparent; color: var(--muted); }
 .workspace-nav button:hover { background: var(--hover); color: var(--ink); }
@@ -174,10 +170,11 @@ dialog details[open] summary { margin-bottom: .55rem; }
 .workspace-menu { flex: 1; min-height: 0; }
 .workspace-menu-body { height: 100%; display: flex; flex-direction: column; }
 .workspace-menu > summary { display: none; }
-.account-tools { margin-top: auto; border-top: 1px solid var(--line); padding-top: .45rem; }
+.account-tools { display: grid; margin-top: auto; border-top: 1px solid var(--line); padding-top: .45rem; }
 .sync-tools { display: flex; flex-wrap: wrap; gap: .1rem; color: var(--muted); font-size: .78rem; }
 #account-email { flex-basis: 100%; padding: .35rem .55rem; }
 @media (min-width: 851px) {
+  .workspace-menu::details-content { height: 100%; }
   .workspace-menu > .workspace-menu-body { display: flex; }
 }
 @media (max-width: 850px) {
@@ -195,9 +192,10 @@ dialog details[open] summary { margin-bottom: .55rem; }
   .account-tools button { min-height: 44px; }
 }
 #account-email { overflow-wrap: anywhere; }
-#sync-status:not(:empty) { margin-bottom: .5rem; }
-
-.brand::before { content: ""; display: inline-block; width: .7em; height: .7em; margin-right: .45rem; border: 2px solid var(--accent); border-radius: 2px; transform: rotate(45deg); }
+#sync-status { font-size: .75rem; text-align: end; }
+#sync-status:not(:empty)::before { content: ''; display: inline-block; width: .42rem; height: .42rem; border-radius: 50%; margin-inline-end: .35rem; background: currentColor; }
+#sync-status[data-state=saved] { color: #22654b; }
+#sync-status[data-state=offline], #sync-status[data-state=failed], #sync-status[data-state=unavailable] { color: #923632; }
 .registry-tabs, .registry-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
 .registry-tabs { margin-bottom: .7rem; }
 .registry-tabs button { min-height: 36px; }
@@ -281,14 +279,14 @@ dialog details[open] summary { margin-bottom: .55rem; }
 .split-fields dt { color: var(--muted); font-size: .78rem; }
 .split-fields dd { margin: 0; }
 .split-points { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .45rem; padding: 0; margin: 0; }
-.split-points li { display: grid; gap: .15rem; align-content: start; padding: .5rem .65rem; border: 1px solid var(--line); border-radius: 9px; }
+.split-points li { display: grid; gap: .15rem; align-content: start; padding: .2rem .55rem; border-inline-start: 2px solid var(--line); }
 .split-points li:only-child { grid-column: 1 / -1; }
 .split-points small { font-size: .84rem; color: var(--ink); font-variant-numeric: tabular-nums; }
 .split-detail > .etrn-link { margin-bottom: .55rem; }
 .split-actions { display: flex; flex-wrap: wrap; align-items: start; gap: .45rem; margin-top: 1rem; }
 .split-status { display: flex; flex-wrap: wrap; gap: .45rem; margin-bottom: .65rem; }
 .trip-overview {
-  padding: .85rem;
+  padding: .65rem;
   margin-bottom: .5rem;
   border: 1px solid var(--line);
   border-radius: var(--panel-radius);
@@ -391,6 +389,8 @@ dialog details[open] summary { margin-bottom: .55rem; }
 
 /* Violet uses an operational toolbar and denser rows. Sand emphasizes the detail panel. */
 :root[data-theme=violet] {
+  --theme-accent: #6035c6;
+  --theme-outline: #6035c6;
   --canvas: #f7f8fa;
   --surface: #f0f2f6;
   --hover: #edf0f5;
@@ -419,8 +419,7 @@ dialog details[open] summary { margin-bottom: .55rem; }
 [data-theme=violet] .workspace-nav { background: var(--violet-sidebar); }
 [data-theme=violet] .registry-link { box-shadow: inset 3px 0 var(--accent); }
 [data-theme=violet] .intro { padding-bottom: .65rem; border-bottom: 1px solid var(--line); }
-.intro-caption { color: var(--muted); margin: .2rem 0 0; font-size: .84rem; }
-[data-theme=violet] .registry-tabs button[aria-pressed=true], [data-theme=violet] #new {
+[data-theme=violet] .registry-tabs button[aria-pressed=true] {
   background: linear-gradient(180deg, color-mix(in srgb, var(--accent), #fff 8%), var(--accent));
   color: var(--accent-text);
 }
@@ -448,7 +447,6 @@ dialog details[open] summary { margin-bottom: .55rem; }
 .favorite-views strong { padding: .3rem .65rem; font-size: .82rem; }
 .favorite-views button[aria-pressed=true] { background: var(--nav-active); color: var(--ink); }
 .registry-tabs button[data-view=failed]:not([aria-pressed=true]) { color: #a62935; background: #fff3f4; }
-[data-theme=sand] .intro-caption { display: none; }
 [data-theme=sand] .intro h1 { letter-spacing: -.035em; }
 [data-theme=sand] .registry-command { background: #f7f7f6; padding: .55rem; border-radius: 9px; }
 [data-theme=sand] .split-detail { border-top: 3px solid #dac69a; box-shadow: none; }
@@ -468,11 +466,11 @@ dialog details[open] summary { margin-bottom: .55rem; }
 #reset-status-colors { margin-top: .55rem; }
 [data-theme=violet] .order-table .order-id { padding-inline-start: .85rem; }
 [data-theme=violet] .order-table .order-id::before { width: 5px; min-height: 18px; }
-[data-theme=violet] [data-stage=new] { --status-mark: var(--status-new); }
-[data-theme=violet] [data-stage=signed] { --status-mark: var(--status-signed); }
-[data-theme=violet] [data-stage=loaded] { --status-mark: var(--status-loaded); }
-[data-theme=violet] [data-stage=unloaded] { --status-mark: var(--status-unloaded); }
-[data-theme=violet] [data-stage=failed] { --status-mark: var(--status-failed); }
+[data-stage=new] { --status-mark: var(--status-new); }
+[data-stage=signed] { --status-mark: var(--status-signed); }
+[data-stage=loaded] { --status-mark: var(--status-loaded); }
+[data-stage=unloaded] { --status-mark: var(--status-unloaded); }
+[data-stage=failed] { --status-mark: var(--status-failed); }
 @media (min-width: 1060px) {
   main { max-width: none; padding-inline: clamp(.8rem,1.6vw,1.65rem); }
   .row { grid-template-columns: minmax(78px,.72fr) minmax(46px,.4fr) minmax(65px,1fr) minmax(65px,1fr) minmax(88px,1.35fr) minmax(75px,.8fr) minmax(75px,.8fr) minmax(75px,.75fr) minmax(98px,.9fr) minmax(111px,1fr); gap: .42rem; }
@@ -483,7 +481,6 @@ dialog details[open] summary { margin-bottom: .55rem; }
   .order-table .row { min-width: 810px; }
 }
 @media (max-width: 740px) {
-  .intro-caption { display: none; }
   .registry-command > button, .registry-search { min-height: 44px; }
   .order-table .order { grid-template-columns: minmax(0,1fr) minmax(0,1fr) auto; }
   .order-date { grid-row: 1; grid-column: 2; }
@@ -529,8 +526,8 @@ dialog details[open] summary { margin-bottom: .55rem; }
 @media (max-width: 740px) {
   .order-table .row { padding-block: .4rem; }
   .order-link { white-space: normal; }
-  [data-theme=violet] .registry-command { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); }
-  [data-theme=violet] .registry-search, [data-theme=violet] .registry-command .actions { grid-column: 1/-1; }
+  .registry-command { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .registry-search, .registry-command .actions { grid-column: 1/-1; }
 }
 @media (max-width: 740px) {
   [data-theme=violet] .intro { padding-bottom: 0; border-bottom: 0; }
@@ -543,8 +540,6 @@ dialog details[open] summary { margin-bottom: .55rem; }
   .sort-tools { flex-wrap: nowrap; min-width: 0; }
   #sort { padding-inline-start: .4rem; }
   #sort-direction { flex: 0 0 40px; padding-inline: .35rem; }
-  [data-theme=sand] .registry-command { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .35rem; }
-  [data-theme=sand] .registry-search, [data-theme=sand] .registry-command .actions { grid-column: 1/-1; }
   .registry-search input { font-size: 1rem; min-width: 0; min-height: 44px; }
   .registry-command .actions {
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1307,8 +1302,7 @@ textarea:focus {
 }
 
 /* 8. Основные подписи интерфейса */
-[data-theme="violet"] .view-picker > span,
-[data-theme="violet"] .intro-caption {
+[data-theme="violet"] .view-picker > span {
   color: var(--muted);
 }
 

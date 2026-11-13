@@ -22,7 +22,7 @@
   </form>
 </section>
 <aside id="workspace-nav" class="workspace-nav" hidden>
-  <a class="brand" href="./">Logistics Workspace</a>
+  <a class="brand" href="./"><img src="%BASE_URL%favicon-32.png" alt="" width="22" height="22">Sputnik Workspace</a>
   <a class="registry-link" href="#view-title" aria-current="page">Заявки</a>
   <details class="workspace-menu" id="workspace-menu">
     <summary aria-label="Меню рабочего пространства">⋯</summary>
@@ -42,25 +42,25 @@
           <span id="account-email"></span>
           <button id="sync-refresh" type="button">Обновить</button>
           <button id="local-import" type="button" hidden>Перенести заявки с устройства</button>
-          <button id="sign-out" type="button">Выйти</button>
         </div>
         <button type="button" id="settings" aria-haspopup="dialog">Настройки</button>
+        <button id="sign-out" type="button" hidden>Выйти</button>
       </div>
     </div>
   </details>
 </aside>
 <main id="workspace" hidden>
   <header class="intro">
-    <div><h1 id="view-title">Заявки</h1><p class="intro-caption">Планирование перевозок и контроль статусов</p></div>
+    <h1 id="view-title">Заявки</h1>
+    <p id="sync-status" class="quiet" role="status"></p>
   </header>
   <div class="registry-command">
     <label class="registry-search"><svg class="command-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input id="search" type="search" aria-label="Поиск по заявкам" placeholder="Номер, заказчик, перевозчик, маршрут, машина, водитель…"></label>
     <button id="filters-open" type="button" aria-haspopup="dialog"><svg class="command-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-6 7v5l-4 2v-7z"/></svg><span>Фильтры</span><span id="filters-count" class="command-count" hidden>1</span></button>
     <button id="period-open" type="button" aria-haspopup="dialog"><svg class="command-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="14" rx="2"/><path d="M8 4v4m8-4v4M4 10h16"/></svg><span id="period-label">Период</span></button>
-    <div class="actions"><button id="new" type="button"><span aria-hidden="true">+</span> <span class="action-label">Новая заявка</span></button><button id="import" class="primary" type="button"><span aria-hidden="true">↑</span> <span class="action-label">Загрузить два PDF</span></button></div>
+    <div class="actions"><button id="new" class="primary" type="button"><span aria-hidden="true">+</span> <span class="action-label">Новая заявка</span></button><button id="import" type="button"><span aria-hidden="true">↑</span> <span class="action-label">Загрузить два PDF</span></button></div>
   </div>
   <p id="active-filters" class="active-filters" hidden></p>
-  <p id="sync-status" class="quiet" role="status"></p>
   <p id="demo-note" class="demo-note" hidden>Демоверсия · заявка и контакты вымышлены. Для проверки используй тестовые документы.</p>
   <section class="registry" aria-label="Реестр заявок">
     <nav class="registry-tabs" aria-label="Разделы заявок">
@@ -118,10 +118,10 @@
         <input id="accent-color" type="color" value="#6035c6">
         <button type="button" id="reset-accent">Цвет темы</button>
       </div>
-      <fieldset id="status-palette" hidden><legend>Индикаторы статусов Violet</legend>
+      <details id="status-palette" hidden><summary>Цвета статусов</summary>
         <div id="status-colors"></div>
         <button type="button" id="reset-status-colors">Вернуть цвета</button>
-      </fieldset>
+      </details>
       <label>Отображение заявок<select id="settings-layout"></select></label>
       <p class="quiet" id="settings-account" hidden></p>
       <p class="quiet" id="settings-status" role="status">Настройки сохраняются в этом браузере.</p>

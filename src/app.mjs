@@ -33,6 +33,10 @@ let etrnStamp;
 let signedIn = false;
 let signingIn = false;
 let refreshing;
+let pendingWrites = 0;
+let saveFailure;
+let refreshFailure;
+let serverConfirmed = false;
 let accountGeneration = 0;
 const pendingImports = new Map();
 let view = 'all';
@@ -90,12 +94,53 @@ function assertUnchanged(current, number, stamp) {
   }
 }
 
+function showSyncStatus() {
+  if (demo || !signedIn) return;
+  const status = $('sync-status');
+  const problem = saveFailure ?? refreshFailure;
+  const state = pendingWrites || refreshing !== undefined ? 'busy'
+    : problem?.network || problem?.status >= 500 ? 'offline'
+    : saveFailure ? 'failed' : refreshFailure ? 'unavailable'
+    : serverConfirmed ? 'saved' : '';
+  status.dataset.state = state;
+  status.textContent = ({
+    busy: 'Синхронизация', offline: 'Нет соединения',
+    failed: 'Ошибка сохранения', unavailable: 'Реестр недоступен', saved: 'Сохранено',
+  })[state] ?? '';
+  status.title = saveFailure?.network
+    ? 'Сервер не подтвердил запись. Проверьте заявку после восстановления связи.'
+    : problem?.message ?? '';
+}
+
+async function saveRecords(records, current) {
+  if (demo) return store.save(records, current);
+  const generation = accountGeneration;
+  pendingWrites++;
+  showSyncStatus();
+  try {
+    const saved = await store.save(records, current);
+    if (generation === accountGeneration) {
+      saveFailure = refreshFailure = undefined;
+      serverConfirmed = true;
+    }
+    return saved;
+  } catch (error) {
+    if (generation === accountGeneration) saveFailure = error;
+    throw error;
+  } finally {
+    if (generation === accountGeneration) {
+      pendingWrites--;
+      showSyncStatus();
+    }
+  }
+}
+
 async function updateOrder(number, stamp, update, generation) {
   const current = await store.list();
   if (generation !== accountGeneration) return;
   assertUnchanged(current, number, stamp);
   const order = current.find(item => item.number === number);
-  const saved = await store.save(upsert(current, update(order), number), current);
+  const saved = await saveRecords(upsert(current, update(order), number), current);
   if (generation === accountGeneration) orders = saved;
 }
 
@@ -762,7 +807,7 @@ function applyDisplay() {
   $('theme').value = display.theme;
   $('layout').value = display.layout;
   $('settings-layout').value = display.layout;
-  $('status-palette').hidden = display.theme !== 'violet';
+  $('status-palette').hidden = display.theme === 'sand';
 }
 
 function applyAccent() {
@@ -987,7 +1032,7 @@ form.addEventListener('submit', async event => {
     const current = await store.list();
     if (generation !== accountGeneration) return;
     assertUnchanged(current, previousNumber, editorStamp);
-    const saved = await store.save(upsert(current, readDraft(), previousNumber), current);
+    const saved = await saveRecords(upsert(current, readDraft(), previousNumber), current);
     if (generation !== accountGeneration) return;
     orders = saved;
     editor.close();
@@ -1032,6 +1077,9 @@ function signInScreen(message = '') {
   signedIn = false;
   accountGeneration++;
   refreshing = undefined;
+  pendingWrites = 0;
+  saveFailure = refreshFailure = undefined;
+  serverConfirmed = false;
   auth.clear();
   $('sign-out').disabled = false;
   setWorkspaceMenu();
@@ -1054,6 +1102,7 @@ function signInScreen(message = '') {
   }
   $('account-email').textContent = '';
   $('sync-status').textContent = '';
+  $('sync-status').title = '';
   $('notice').textContent = '';
   $('print-report').replaceChildren();
   $('editor-form').reset();
@@ -1078,6 +1127,7 @@ async function refresh() {
   if (!signedIn || refreshing !== undefined) return;
   const generation = accountGeneration;
   refreshing = generation;
+  showSyncStatus();
   try {
     const saved = await store.list();
     if (!signedIn || generation !== accountGeneration) return;
@@ -1087,15 +1137,19 @@ async function refresh() {
       render();
       $('archive').open = archiveOpen;
     }
-    $('sync-status').textContent = '';
+    refreshFailure = undefined;
+    serverConfirmed = true;
   } catch (error) {
     if (generation !== accountGeneration) return;
     if (signedIn && (error.status === 401 || error.status === 403)) {
       if (!$('sign-out').disabled) signInScreen('Сеанс закончился. Войдите снова.');
     }
-    else if (signedIn) $('sync-status').textContent = error.message;
+    else if (signedIn) refreshFailure = error;
   } finally {
-    if (generation === accountGeneration) refreshing = undefined;
+    if (generation === accountGeneration) {
+      refreshing = undefined;
+      showSyncStatus();
+    }
   }
 }
 
@@ -1104,12 +1158,12 @@ async function showAccount(account) {
   signedIn = true;
   $('account-email').textContent = account.email;
   $('sync-tools').hidden = false;
+  $('sign-out').hidden = false;
   try {
     $('local-import').hidden = localOrders().length === 0;
   } catch {
     $('local-import').hidden = true;
   }
-  $('sync-status').textContent = 'Загружаем заявки…';
   showWorkspace(true);
   await refresh();
 }
@@ -1166,7 +1220,7 @@ $('local-import').addEventListener('click', async event => {
     const unique = [...new Map(local.map(order => [order.number, order])).values()];
     const saved = addLedgerOrders(current, unique);
     if (saved.length > current.length) {
-      const result = await store.save(saved, current);
+      const result = await saveRecords(saved, current);
       if (!operation.active()) return;
       orders = result;
       render();
@@ -1257,7 +1311,7 @@ $('review-save').addEventListener('click', async () => {
     const current = await store.list();
     if (!active()) return;
     assertUnchanged(current, previous, stamp);
-    const saved = await store.save(upsert(current, order, previous), current);
+    const saved = await saveRecords(upsert(current, order, previous), current);
     if (!active()) return;
     orders = saved;
     $('review-dialog').close();
@@ -1291,7 +1345,7 @@ $('ledger-form').addEventListener('submit', async event => {
     const current = await store.list();
     if (!operation.active()) return;
     const saved = addLedgerOrders(current, imported);
-    const result = await store.save(saved, current);
+    const result = await saveRecords(saved, current);
     if (!operation.active()) return;
     orders = result;
     $('ledger-dialog').close();

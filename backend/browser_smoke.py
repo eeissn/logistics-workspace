@@ -41,7 +41,7 @@ def sign_in(page, user):
     page.locator('#sign-in-form [name="password"]').fill(PASSWORD)
     page.locator('#sign-in-form [type="submit"]').click()
     expect(page.locator("#account-email")).to_have_text(f"{user}@example.test")
-    expect(page.locator("#sync-status")).to_have_text("")
+    expect(page.locator("#sync-status")).to_have_text("Сохранено")
 
 
 def create_order(page, number):
@@ -177,7 +177,7 @@ def registry_views(page, number, order_a, mobile):
             expect(page.locator("html")).to_have_css("background-color", "rgb(255, 255, 255)")
         settings.locator("[data-close]").click()
 
-    expect(page.locator("html")).to_have_attribute("data-theme", "violet")
+    expect(page.locator("html")).to_have_attribute("data-theme", "sputnik")
     expect(layout).to_have_value("table")
     expect(sort).to_have_value("delivery")
     expect(registry.locator(".order-link").filter(has_text=fixture_numbers)).to_have_text([order, excel, undated])
@@ -193,6 +193,7 @@ def registry_views(page, number, order_a, mobile):
     expect(layout.locator("option")).to_have_count(4)
     expect(page.get_by_role("group", name="Виды реестра")).to_have_count(0)
 
+    theme("violet")
     click_workspace_action(page, "#settings", mobile)
     palette = settings.locator("#violet-palette")
     expect(palette.locator("option")).to_have_count(7)
@@ -201,6 +202,7 @@ def registry_views(page, number, order_a, mobile):
     palette.select_option("blue")
     expect(root).to_have_attribute("data-violet-palette", "blue")
     assert root.evaluate("(element) => getComputedStyle(element).backgroundColor") != original
+    settings.locator("#status-palette summary").click()
     settings.locator("#status-color-signed").fill("#ee9911")
     settings.locator("[data-close]").click()
     page.reload()
@@ -210,7 +212,7 @@ def registry_views(page, number, order_a, mobile):
 
     expect(page.locator(".registry-tabs button")).to_have_count(2)
     page.locator('[data-view="not-unloaded"]').click()
-    for appearance in ("violet", "sand"):
+    for appearance in ("sputnik", "violet", "sand"):
         theme(appearance)
         filters = page.get_by_role("button", name="Фильтры", exact=True)
         filters.click()
@@ -331,12 +333,14 @@ def registry_views(page, number, order_a, mobile):
     page.once("dialog", lambda dialog: dialog.accept())
     trip.select_option("unloaded")
     expect(page.locator("#notice")).to_contain_text("другом устройстве")
+    expect(page.locator("#sync-status")).to_have_text("Ошибка сохранения")
     expect(trip).to_have_value(original)
     page.unroute("**/api/records", conflict)
 
     page.once("dialog", lambda dialog: dialog.accept())
     trip.select_option("unloaded")
     expect(page.locator("#notice")).to_have_text("Статус рейса сохранён.")
+    expect(page.locator("#sync-status")).to_have_text("Сохранено")
     expect(card).to_have_count(0)
     page.locator('[data-view="all"]').click()
     expect(card.locator(".trip-status")).to_have_value("unloaded")
@@ -461,7 +465,7 @@ def smoke(browser_type, origin, chromium, number, report_total, device=None):
         expect(peer.locator("#table")).not_to_contain_text(order_a)
         expect(a.locator("#workspace")).to_be_hidden()
         expect(b.locator("#table")).to_contain_text(order_b)
-    print(f"{browser_type.name}: 2 themes × 4 registry views, pickup/delivery sorting, PDF, Excel, ETRN, archive, margin and account isolation passed", flush=True)
+    print(f"{browser_type.name}: 3 themes × 4 registry views, pickup/delivery sorting, PDF, Excel, ETRN, archive, margin and account isolation passed", flush=True)
 
 
 def main():
