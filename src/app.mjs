@@ -290,7 +290,7 @@ function renderRows(container, rows) {
       const cell = node('div', null, 'route-window ' + (index === 0 ? 'pickup-window' : 'delivery-window'));
       const schedules = order.points.filter(point => point.kind === kind && point.schedule).map(point => point.schedule);
       if (schedules.length) {
-        const label = node('small', index === 0 ? 'Загр.' : 'Выгр.', 'window-label');
+        const label = node('small', index === 0 ? 'Загрузка' : 'Выгрузка', 'window-label');
         label.setAttribute('aria-hidden', 'true');
         cell.append(label, node('span', schedules.join(' · ')));
       } else {
