@@ -1,11 +1,12 @@
 import './style.css';
-import { archived, blankOrder, etrnProgress, etrnStatus, margin, mergeImport, monthReport, orderMargin, scheduledToday, tripStatus, tripStatuses, upsert } from './domain.mjs';
+import { archived, blankOrder, etrnProgress, etrnStatus, margin, mergeImport, monthReport, orderMargin, tripStatus, tripStatuses, upsert } from './domain.mjs';
 import { importPair, phones } from './import.mjs';
 import { addLedgerOrders, parseLedger } from './ledger.mjs';
 import { checkImportFile, readExcelArchive } from './import-files.mjs';
 import { auth, demo, localOrders, sessionChangeKey, store } from './storage.mjs';
 import { driverMessage } from './driver.mjs';
 import { demoOrder } from './demo.mjs';
+import { displayKey, layoutLabels, pendingEtrn, readDisplayPreferences, routeText, selectOrders, themeLabels } from './registry.mjs';
 
 const $ = id => document.getElementById(id);
 const currency = new Intl.NumberFormat('ru', {style:'currency', currency:'RUB', maximumFractionDigits:0});
@@ -14,7 +15,6 @@ const fieldNames = ['number','date','customer','carrier','driver','passport','ve
 const paymentNames = ['originals','edo','unit','conditions'];
 const contactRoles = ['Заказчик','Перевозчик','Водитель'];
 const etrnKeys = ['required','manualComplete','orderForm','created','allSigned'];
-const pending = order => ['К созданию','В работе'].includes(etrnStatus(order.etrn));
 const splitLines = text => text.split('\n').map(line => line.trim()).filter(Boolean);
 const editor = $('editor');
 const form = $('editor-form');
@@ -36,6 +36,12 @@ let refreshing;
 let accountGeneration = 0;
 const pendingImports = new Map();
 let view = 'all';
+let sort = 'date';
+let ascending = false;
+const display = readDisplayPreferences();
+const selections = new Map();
+const savingTrips = new Set();
+const tripTitles = new Map(tripStatuses);
 let driverOrder;
 const today = () => new Intl.DateTimeFormat('sv-SE', {timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 
@@ -86,9 +92,16 @@ async function updateOrder(number, stamp, update, generation) {
   if (generation === accountGeneration) orders = saved;
 }
 
-function tripControl(order) {
+function tripControl(order, confirmMove = false) {
   const select = node('select', null, 'trip-status');
-  const initial = tripStatus(order);
+  const stage = tripStatus(order);
+  const initial = tripTitles.has(stage) ? stage : '';
+  if (!initial) {
+    const unknown = node('option', 'Статус не распознан');
+    unknown.value = '';
+    unknown.disabled = true;
+    select.append(unknown);
+  }
   select.setAttribute('aria-label', 'Статус заявки № ' + order.number);
   for (const [key, title] of tripStatuses) {
     const option = node('option', title);
@@ -96,30 +109,34 @@ function tripControl(order) {
     select.append(option);
   }
   select.value = initial;
-  select.dataset.stage = initial;
+  select.dataset.stage = stage;
+  select.disabled = savingTrips.has(order.number);
   select.addEventListener('change', async () => {
+    const stage = select.value;
+    if (savingTrips.has(order.number) || (confirmMove &&
+        !window.confirm(`Изменить статус заявки № ${order.number} на «${tripTitles.get(stage)}»?`))) {
+      select.value = initial;
+      return;
+    }
     const generation = accountGeneration;
+    savingTrips.add(order.number);
+    select.disabled = true;
     try {
-      const stage = select.value;
-      const archiveWasOpen = $('archive').open;
       await updateOrder(order.number, order.updatedAt, current => ({...current, trip:{...current.trip, stage}}), generation);
       if (generation !== accountGeneration) return;
-      render();
-      $('archive').open = archiveWasOpen;
       $('notice').textContent = 'Статус рейса сохранён.';
     } catch (error) {
       if (generation !== accountGeneration) return;
-      select.value = initial;
+      if (error.status === 401 || error.status === 403) return signInScreen(error.message);
       $('notice').textContent = error.message;
+    } finally {
+      if (generation === accountGeneration) {
+        savingTrips.delete(order.number);
+        render();
+      }
     }
   });
   return select;
-}
-
-function routeText(order) {
-  if (order.route?.trim()) return order.route;
-  const places = order.points.map(point => point.address.split(' · ').at(-1).split(',')[0].replace(/\s+(?:д|г|п)\.$/u,'').trim());
-  return [...new Set(places.filter(Boolean))].join(' → ');
 }
 
 function routeDates(order) {
@@ -185,54 +202,227 @@ $('driver-edit').addEventListener('click', () => {
   openEditor(driverOrder, driverOrder.number);
 });
 
-function renderRows(table, rows) {
-  table.replaceChildren();
-  if (!rows.length) {
-    const empty = node('div', null, 'empty');
-    empty.append(node('h2', orders.length ? 'Здесь пока нет заявок' : 'Добавь первую заявку'),
-      node('p', orders.length ? 'Проверь выбранный раздел или поиск.' : 'Загрузи PDF заказчика и перевозчика или импортируй реестр из Excel.'));
-    table.append(empty);
-    return;
-  }
+function openOrder(number) {
+  const current = orders.find(order => order.number === number);
+  if (!current) return;
+  const container = $(archived(current) ? 'archive-table' : 'table');
+  selections.set(container, {number, expanded:true});
+  openEditor(current, number);
+}
+
+function etrnAction(order) {
+  const progress = etrnProgress(order.etrn);
+  const button = action(progress, () => openEtrn(order.number), 'etrn-link');
+  button.dataset.state = pendingEtrn(order) ? 'pending' : 'regular';
+  button.setAttribute('aria-label', 'ЭТРН заявки № ' + order.number + ': ' + progress);
+  return button;
+}
+
+function setSort(column) {
+  ascending = column === sort ? !ascending : column !== 'date';
+  sort = column;
+  render();
+}
+
+function renderRows(container, rows) {
+  const table = node('div', null, 'order-table');
+  table.setAttribute('role', 'table');
+  table.setAttribute('aria-label', container.id === 'table' ? 'Активные заявки' : 'Архивные заявки');
   const header = node('div', null, 'row table-head');
-  for (const title of ['Заявка','Заказчик / перевозчик','Направление','Статус рейса','ЭТРН','Телефоны']) header.append(node('span', title));
+  header.setAttribute('role', 'row');
+  for (const [column, title] of [['number','Заявка'], ['customer','Заказчик / перевозчик'],
+    ['route','Маршрут / даты'], ['trip','Статус рейса'], ['etrn','ЭТРН'], ['', 'Телефоны']]) {
+    const heading = node('div');
+    heading.setAttribute('role', 'columnheader');
+    if (column === sort || (column === 'number' && sort === 'date')) {
+      heading.setAttribute('aria-sort', ascending ? 'ascending' : 'descending');
+    }
+    if (column) {
+      const button = action(title, () => {
+        setSort(column);
+        container.querySelector(`[data-sort="${column}"]`)?.focus();
+      }, 'sort-column');
+      button.dataset.sort = column;
+      if (sort === column) {
+        button.setAttribute('aria-current', 'true');
+        button.textContent += ascending ? ' ↑' : ' ↓';
+      }
+      heading.append(button);
+      if (column === 'number') {
+        const date = action('Дата', () => {
+          setSort('date');
+          container.querySelector('[data-sort="date"]')?.focus();
+        }, 'sort-column');
+        date.dataset.sort = 'date';
+        if (sort === 'date') {
+          date.setAttribute('aria-current', 'true');
+          date.textContent += ascending ? ' ↑' : ' ↓';
+        }
+        heading.append(date);
+      }
+    } else heading.textContent = title;
+    header.append(heading);
+  }
   table.append(header);
   for (const order of rows) {
     const row = node('div', null, 'row order');
-    const label = node('span', null, 'order-id');
-    const open = () => openEditor(orders.find(item => item.number === order.number) ?? order, order.number);
-    label.append(action('№ ' + order.number, open, 'order-link'),
+    row.setAttribute('role', 'row');
+    const label = node('div', null, 'order-id');
+    label.append(action('№ ' + order.number, () => openOrder(order.number), 'order-link'),
       node('small', order.date ? order.date.split('-').reverse().join('.') : 'Дата не указана'));
-    const names = node('span', null, 'names');
+    const names = node('div', null, 'names');
     names.append(node('strong', order.customer || 'Заказчик не указан'), node('small', order.carrier || 'Перевозчик не указан'));
-    const direction = node('span', null, 'destination');
+    const direction = node('div', null, 'destination');
     direction.append(node('strong', routeText(order) || 'Маршрут не указан'));
-    if (routeDates(order)) direction.append(node('small', routeDates(order)));
-    const etrn = action(etrnProgress(order.etrn), () => openEtrn(order.number), 'etrn-link');
-    etrn.dataset.state = pending(order) ? 'pending' : 'regular';
-    etrn.setAttribute('aria-label', 'ЭТРН заявки № ' + order.number + ': ' + etrnProgress(order.etrn));
-    row.append(label, names, direction, tripControl(order), etrn, contactsCell(order));
+    const dates = routeDates(order);
+    if (dates) direction.append(node('small', dates));
+    const stage = node('div', null, 'status-cell');
+    stage.append(tripControl(order));
+    const etrn = node('div', null, 'etrn-cell');
+    etrn.append(etrnAction(order));
+    row.append(label, names, direction, stage, etrn, contactsCell(order));
+    for (const cell of row.children) cell.setAttribute('role', 'cell');
     table.append(row);
   }
+  container.append(table);
+}
+
+function orderSummary(order, open, selected) {
+  const button = action(null, open, 'order-summary');
+  button.dataset.order = order.number;
+  if (selected !== undefined) button.setAttribute('aria-pressed', String(selected));
+  button.append(node('strong', '№ ' + order.number),
+    node('span', tripTitles.get(tripStatus(order)) ?? 'Статус не распознан', 'stage-badge'),
+    node('span', routeText(order) || 'Маршрут не указан', 'summary-route'));
+  const dates = routeDates(order);
+  if (dates) button.append(node('small', dates, 'quiet'));
+  return button;
+}
+
+function renderCompact(container, rows) {
+  const list = node('ul', null, 'compact-list');
+  for (const order of rows) {
+    const item = node('li');
+    item.append(orderSummary(order, () => openOrder(order.number)));
+    list.append(item);
+  }
+  container.append(list);
+}
+
+function renderKanban(container, rows, scrollLeft) {
+  const board = node('div', null, 'kanban');
+  board.tabIndex = 0;
+  board.setAttribute('role', 'region');
+  board.setAttribute('aria-label', 'Канбан по статусам рейсов');
+  const groups = new Map([...tripStatuses.map(([stage]) => [stage, []]), ['', []]]);
+  for (const order of rows) {
+    const stage = tripStatus(order);
+    (groups.get(stage) ?? groups.get('')).push(order);
+  }
+  for (const [stage, title] of [...tripStatuses, ['', 'Статус не распознан']]) {
+    const group = groups.get(stage);
+    if (!group.length && (!stage || container.id === 'archive-table')) continue;
+    const column = node('section', null, 'kanban-column');
+    column.append(node('h3', title + ' · ' + group.length));
+    for (const order of group) {
+      const card = node('article', null, 'kanban-card');
+      card.append(orderSummary(order, () => openOrder(order.number)), tripControl(order, true), etrnAction(order));
+      column.append(card);
+    }
+    board.append(column);
+  }
+  container.append(board);
+  board.scrollLeft = scrollLeft;
+}
+
+function renderSplit(container, rows) {
+  const selection = selections.get(container);
+  const matched = rows.find(order => order.number === selection?.number);
+  const order = matched ?? rows[0];
+  const split = node('div', null, 'split-view');
+  split.dataset.expanded = String(Boolean(matched && selection.expanded));
+  const list = node('ul', null, 'split-list');
+  const panel = node('section', null, 'split-detail');
+  panel.setAttribute('aria-label', 'Детали заявки');
+  for (const item of rows) {
+    const entry = node('li');
+    entry.append(orderSummary(item, () => {
+      selections.set(container, {number:item.number, expanded:true});
+      render();
+      if (window.matchMedia('(max-width: 760px)').matches) {
+        container.querySelector('.split-back').focus();
+      } else {
+        [...container.querySelectorAll('[data-order]')].find(button => button.dataset.order === item.number)?.focus();
+      }
+    }, item.number === order.number));
+    list.append(entry);
+  }
+
+  panel.append(action('← К списку', () => {
+    selections.set(container, {number:order.number, expanded:false});
+    render();
+    container.querySelector('[aria-pressed="true"]')?.focus();
+  }, 'split-back'), node('h2', 'Заявка № ' + order.number));
+  const fields = node('dl', null, 'split-fields');
+  for (const [label, value] of [['Дата заявки', order.date?.split('-').reverse().join('.')], ['Маршрут', routeText(order)],
+    ['Заказчик', order.customer], ['Перевозчик', order.carrier], ['Водитель', order.driver],
+    ['Транспорт', order.vehicle], ['Груз', order.cargo]]) {
+    const field = node('div');
+    field.append(node('dt', label), node('dd', value || 'Не указано'));
+    fields.append(field);
+  }
+  panel.append(fields);
+  if (order.points.length) {
+    const points = node('ul', null, 'split-points');
+    for (const point of order.points) {
+      const item = node('li');
+      item.append(node('strong', point.kind), node('span', point.address || 'Адрес не указан'));
+      if (point.schedule) item.append(node('small', point.schedule, 'quiet'));
+      points.append(item);
+    }
+    panel.append(points);
+  }
+  const actions = node('div', null, 'split-actions');
+  actions.append(tripControl(order), etrnAction(order), contactsCell(order),
+    action('Открыть заявку', () => openOrder(order.number), 'primary'));
+  panel.append(actions);
+  split.append(list, panel);
+  container.append(split);
+}
+
+function renderRegistry(container, rows) {
+  const scrollLeft = container.firstElementChild?.scrollLeft ?? 0;
+  container.replaceChildren();
+  if (!rows.length) {
+    const empty = node('div', null, 'empty');
+    empty.append(node('h2', orders.length ? 'Заявки не найдены' : 'Добавь первую заявку'),
+      node('p', orders.length ? 'Проверь выбранный раздел или поиск.' : 'Создай заявку вручную или импортируй PDF или Excel.'));
+    container.append(empty);
+    return;
+  }
+  ({table:renderRows, compact:renderCompact, kanban:renderKanban, split:renderSplit})[display.layout](container, rows, scrollLeft);
 }
 
 function render() {
-  const query = $('search').value.trim().toLocaleLowerCase('ru');
-  const filter = $('filter').value;
-  const date = today();
-  const kind = {pickup:'Погрузка', delivery:'Выгрузка'}[view];
-  const matches = orders.filter(order => {
-    const matchesText = [order.number, order.customer, order.carrier, order.driver, order.etrn?.number, routeText(order), ...order.points.map(point=>point.address)]
-      .join(' ').toLocaleLowerCase('ru').includes(query);
-    return matchesText && (!kind || scheduledToday(order, kind, date))
-      && (!filter || (filter === 'pending' ? pending(order) : etrnStatus(order.etrn) === filter));
-  }).sort((a,b) => (b.date || '').localeCompare(a.date || '') || b.number.localeCompare(a.number,'ru',{numeric:true}));
+  $('sort').value = sort;
+  $('sort-direction').textContent = ascending ? '↑' : '↓';
+  $('sort-direction').setAttribute('aria-pressed', String(ascending));
+  const matches = selectOrders(orders, {
+    query:$('search').value, filter:$('filter').value, view, today:today(), sort, ascending,
+  });
   const active = matches.filter(order => !archived(order));
   const past = matches.filter(archived);
-  renderRows($('table'), active);
+  const primary = $('table');
+  const archive = $('archive-table');
+  const selected = selections.get(primary);
+  if (selected && !active.some(order => order.number === selected.number) && past.some(order => order.number === selected.number)) {
+    selections.set(archive, selected);
+  }
+  renderRegistry(primary, active);
   $('archive').hidden = !past.length;
   $('archive-title').textContent = 'Архив · ' + past.length;
-  if (past.length) renderRows($('archive-table'), past);
+  if (past.length) renderRegistry(archive, past);
+  else archive.replaceChildren();
 }
 
 function profit(order) {
@@ -379,6 +569,49 @@ function readDraft() {
   return order;
 }
 
+function applyDisplay() {
+  if (document.documentElement) document.documentElement.dataset.theme = display.theme;
+  document.querySelectorAll('meta[name="theme-color"]').forEach(meta => {
+    meta.content = display.theme === 'sand' ? '#f8f3e9' : '#f6f4fc';
+  });
+  $('theme').value = display.theme;
+  $('layout').value = display.layout;
+  $('settings-layout').value = display.layout;
+}
+
+for (const [id, labels] of [['theme', themeLabels], ['layout', layoutLabels], ['settings-layout', layoutLabels]]) {
+  for (const [value, label] of Object.entries(labels)) {
+    const option = node('option', label);
+    option.value = value;
+    $(id).append(option);
+  }
+  $(id).addEventListener('change', event => {
+    display[id === 'theme' ? 'theme' : 'layout'] = event.currentTarget.value;
+    applyDisplay();
+    try {
+      localStorage.setItem(displayKey, JSON.stringify(display));
+      $('settings-status').textContent = 'Настройки сохраняются в этом браузере.';
+    } catch {
+      $('settings-status').textContent = 'Браузер не сохранил настройки. Они действуют до закрытия страницы.';
+    }
+    if (id !== 'theme') render();
+  });
+}
+applyDisplay();
+
+$('settings').addEventListener('click', () => {
+  const email = $('account-email').textContent;
+  $('settings-account').textContent = email;
+  $('settings-account').hidden = !email;
+  $('settings-dialog').showModal();
+});
+$('sort').addEventListener('change', event => {
+  sort = event.currentTarget.value;
+  ascending = sort !== 'date';
+  render();
+});
+$('sort-direction').addEventListener('click', () => setSort(sort));
+
 for (const button of document.querySelectorAll('[data-close]')) button.addEventListener('click', () => button.closest('dialog').close());
 $('search').addEventListener('input', render);
 $('filter').addEventListener('change', render);
@@ -468,6 +701,10 @@ function signInScreen(message = '') {
   for (const reset of pendingImports.values()) reset();
   for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
   orders = [];
+  selections.clear();
+  savingTrips.clear();
+  $('settings-account').textContent = '';
+  $('settings-account').hidden = true;
   draft = reviewOrder = driverOrder = null;
   previousNumber = etrnOrderNumber = reviewPrevious = null;
   editorStamp = etrnStamp = reviewStamp = undefined;

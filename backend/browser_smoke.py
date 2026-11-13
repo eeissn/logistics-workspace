@@ -88,7 +88,7 @@ def import_fixtures(chromium, number):
     return pdfs, {"name": "orders.xlsx", "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "buffer": data.getvalue()}
 
 
-def order_lifecycle(page, chromium, number, report_total):
+def order_lifecycle(page, chromium, number, report_total, mobile):
     pdfs, workbook = import_fixtures(chromium, number)
     page.locator("#import").click()
     page.locator("#customer-pdf").set_input_files(pdfs[0])
@@ -104,6 +104,8 @@ def order_lifecycle(page, chromium, number, report_total):
     page.locator('#ledger-form [type="submit"]').click()
     expect(page.locator("#ledger-dialog")).to_be_hidden()
     expect(page.locator("#table")).to_contain_text(f"EXCEL-{number}")
+
+    registry_views(page, number, mobile)
 
     row = page.locator("#table .order").filter(has=page.get_by_role("button", name=f"№ {number}", exact=True))
     row.locator(".etrn-link").click()
@@ -122,6 +124,97 @@ def order_lifecycle(page, chromium, number, report_total):
     page.locator("#report-dialog [data-close]").click()
 
 
+def registry_views(page, number, mobile):
+    layout = page.locator("#layout")
+    registry = page.locator("#table")
+    search = page.locator("#search")
+    settings = page.locator("#settings-dialog")
+    order = f"№ {number}"
+    marker = {
+        "table": ".order-table", "compact": ".compact-list",
+        "kanban": ".kanban", "split": ".split-view",
+    }
+
+    def theme(value):
+        page.locator("#settings").click()
+        expect(settings.locator("#settings-account")).to_have_text("first@example.test")
+        settings.locator("#theme").select_option(value)
+        expect(page.locator("html")).to_have_attribute("data-theme", value)
+        settings.locator("[data-close]").click()
+
+    expect(page.locator("html")).to_have_attribute("data-theme", "violet")
+    expect(layout).to_have_value("table")
+    page.locator('[data-view="not-unloaded"]').click()
+    for appearance in ("violet", "sand"):
+        theme(appearance)
+        for view, selector in marker.items():
+            layout.select_option(view)
+            expect(registry.locator(selector)).to_be_visible()
+            expect(registry).to_contain_text(order)
+            expect(registry).to_contain_text("EXCEL-")
+            search.fill("no such synthetic order")
+            expect(registry).to_contain_text("Заявки не найдены")
+            search.clear()
+            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+            if view == "split":
+                entry = registry.locator(".order-summary").filter(has_text=order).first
+                entry.click()
+                panel = registry.locator(".split-detail")
+                expect(panel).to_be_visible()
+                expect(panel.locator("h2")).to_have_text(f"Заявка {order}")
+                panel.get_by_role("button", name="Открыть заявку").click()
+                expect(page.locator("#editor")).to_be_visible()
+                page.locator("#editor .dialog-head [data-close]").click()
+                if mobile:
+                    expect(registry.locator(".split-list")).to_be_hidden()
+                    panel.locator(".split-back").click()
+                    expect(registry.locator(".split-list")).to_be_visible()
+
+    page.locator("#settings").click()
+    settings.locator("#settings-layout").select_option("kanban")
+    settings.locator("[data-close]").click()
+    expect(layout).to_have_value("kanban")
+    page.reload()
+    expect(layout).to_have_value("kanban")
+    expect(page.locator("html")).to_have_attribute("data-theme", "sand")
+    expect(registry).to_contain_text(order)
+    page.locator('[data-view="not-unloaded"]').click()
+
+    card = registry.locator(".kanban-card").filter(has_text=f"№ EXCEL-{number}")
+    trip = card.locator(".trip-status")
+    original = trip.input_value()
+    page.once("dialog", lambda dialog: dialog.dismiss())
+    trip.select_option("unloaded")
+    expect(trip).to_have_value(original)
+
+    def conflict(route):
+        if route.request.method == "PUT":
+            route.fulfill(status=409)
+        else:
+            route.continue_()
+
+    page.route("**/api/records", conflict)
+    page.once("dialog", lambda dialog: dialog.accept())
+    trip.select_option("unloaded")
+    expect(page.locator("#notice")).to_contain_text("другом устройстве")
+    expect(trip).to_have_value(original)
+    page.unroute("**/api/records", conflict)
+
+    page.once("dialog", lambda dialog: dialog.accept())
+    trip.select_option("unloaded")
+    expect(page.locator("#notice")).to_have_text("Статус рейса сохранён.")
+    expect(card).to_have_count(0)
+    page.locator('[data-view="all"]').click()
+    expect(card.locator(".trip-status")).to_have_value("unloaded")
+    expect(card.locator(".etrn-link")).to_have_text("К созданию")
+    page.once("dialog", lambda dialog: dialog.accept())
+    card.locator(".trip-status").select_option(original)
+    expect(card.locator(".trip-status")).to_have_value(original)
+    expect(page.locator("#notice")).to_have_text("Статус рейса сохранён.")
+    layout.select_option("table")
+    theme("violet")
+
+
 def smoke(browser_type, origin, chromium, number, report_total, device=None):
     order_a = f"A-{browser_type.name}"
     order_b = f"B-{browser_type.name}"
@@ -136,7 +229,7 @@ def smoke(browser_type, origin, chromium, number, report_total, device=None):
         peer = first.new_page()
         peer.goto(origin)
         expect(peer.locator("#table")).to_contain_text(order_a)
-        order_lifecycle(a, chromium, number, report_total)
+        order_lifecycle(a, chromium, number, report_total, device is not None)
         a.get_by_role("button", name=f"№ {order_a}", exact=True).click()
         expect(a.locator("#editor")).to_be_visible()
 
@@ -156,7 +249,7 @@ def smoke(browser_type, origin, chromium, number, report_total, device=None):
         expect(peer.locator("#table")).not_to_contain_text(order_a)
         expect(a.locator("#workspace")).to_be_hidden()
         expect(b.locator("#table")).to_contain_text(order_b)
-    print(f"{browser_type.name}: PDF, Excel, ETRN, archive, margin and account isolation passed", flush=True)
+    print(f"{browser_type.name}: 2 themes × 4 registry views, PDF, Excel, ETRN, archive, margin and account isolation passed", flush=True)
 
 
 def main():
