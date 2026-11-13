@@ -640,18 +640,7 @@ button {
   --hover: #f5f1e8;
 }
 
-.order:hover {
-  background: var(--hover);
-}
 
-button {
-  transition: background-color .18s ease,
-              border-color .18s ease,
-              box-shadow .18s ease,
-              color .18s ease;
-}
-
-/* UI/UX 2.0 — читаемость таблицы */
 .order-table .order {
   line-height: 1.5;
 }
@@ -837,19 +826,6 @@ button {
   }
 }
 
-/* UI/UX 2.0 — мобильный канбан */
-@media (max-width: 740px) {
-  .kanban-board {
-    scroll-snap-type: x proximity;
-    overscroll-behavior-x: contain;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .kanban-column {
-    scroll-snap-align: start;
-  }
-}
-
 /* UI/UX 2.0 — плавная прокрутка канбана */
 @media (max-width: 740px) {
   .kanban {
@@ -857,13 +833,8 @@ button {
     overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
   }
-
-  .kanban-column {
-    scroll-snap-align: start;
-  }
 }
 
-/* UI/UX 2.0 — таблица на ПК */
 @media (min-width: 1060px) {
   [data-theme="violet"] .order-table .order {
     min-height: 52px;
@@ -956,8 +927,696 @@ button {
     border-top: 1px solid var(--line);
     justify-content: flex-start;
   }
+}
 
-  .split-detail .split-actions > button {
-    min-height: 40px;
+@keyframes dialog-appear {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+dialog[open] {
+  animation: dialog-appear .2s ease-out;
+}
+
+dialog::backdrop {
+  background: rgb(15 15 30 / 42%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  dialog[open] {
+    animation: none;
+  }
+}
+
+/* UI/UX 2.0 — переключатели видов */
+.layout-tabs button,
+.registry-tabs button {
+  transition:
+    background-color .2s ease,
+    color .2s ease,
+    border-color .2s ease,
+    box-shadow .2s ease;
+}
+
+.layout-tabs button[aria-pressed="true"],
+.registry-tabs button[aria-pressed="true"] {
+  box-shadow: 0 2px 8px rgb(30 25 60 / 10%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layout-tabs button,
+  .registry-tabs button {
+    transition: none;
+  }
+}
+
+/* UI/UX 2.0 — появление содержимого */
+@keyframes content-appear {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.registry .order-table,
+.registry .compact-list,
+.registry .kanban {
+  animation: content-appear .18s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .registry .order-table,
+  .registry .compact-list,
+  .registry .kanban {
+    animation: none;
+  }
+}
+
+/* UI/UX 2.0 — плавные действия без рывков */
+.split-detail button {
+  transition:
+    background-color .15s ease,
+    border-color .15s ease,
+    box-shadow .15s ease,
+    color .15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .split-detail button {
+    transition: none;
+  }
+}
+
+/* UI/UX 3.0 — Typography */
+:root {
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Arial,
+    sans-serif;
+
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+.intro h1 {
+  font-size: clamp(26px, 2.5vw, 34px);
+  font-weight: 750;
+  letter-spacing: -0.045em;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+/* UI/UX 3.0 — улучшенная читаемость */
+:root {
+  font-size: 15px;
+}
+
+.order,
+.order-table .order {
+  font-size: 14px;
+}
+
+.order small,
+.split-fields,
+.split-fields dd {
+  font-size: 13px;
+}
+
+.workspace-nav button,
+.registry-tabs button,
+.registry-tools,
+.split-detail {
+  font-size: 14px;
+}
+
+.table-head,
+.split-fields dt,
+.split-grid-head {
+  font-size: 12px;
+}
+
+button,
+input,
+select,
+textarea {
+  font-size: 14px;
+}
+
+/* UI/UX 3.0 — читаемая типографика ПК */
+@media (min-width: 1060px) {
+  .workspace-nav button,
+  .registry-tabs button,
+  .registry-tools,
+  .split-detail {
+    font-size: 14px;
+  }
+
+  .split-grid .order-summary {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .split-grid .order-summary small,
+  .split-grid .summary-dates,
+  .split-fields dt {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .split-fields dd {
+    font-size: 14px;
+  }
+
+  .split-section h3 {
+    font-size: 15px;
+  }
+
+  .split-detail h2 {
+    font-size: 19px;
+  }
+
+  .split-grid-head {
+    font-size: 12px;
+  }
+}
+
+/* UI/UX 3.0 — кнопки и поля */
+button,
+input,
+select,
+textarea {
+  border-radius: 10px;
+}
+
+button {
+  font-weight: 550;
+}
+
+button:not(:disabled):hover {
+  border-color: color-mix(
+    in srgb,
+    var(--accent) 28%,
+    var(--line)
+  );
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
+}
+
+[data-theme="violet"] button.primary {
+  box-shadow: 0 3px 10px rgb(96 53 198 / 14%);
+}
+
+[data-theme="sand"] button.primary {
+  box-shadow: 0 3px 10px rgb(0 0 0 / 10%);
+}
+
+/* UI/UX 3.0 — Violet */
+:root[data-theme="violet"] {
+  --canvas: #faf8ff;
+  --surface: #f3effd;
+  --hover: #ede7fc;
+  --line: #e5def4;
+  --nav-active: #e9defc;
+  --violet-sidebar: #f0ebfa;
+  --violet-table-head: #f0eafb;
+  --violet-table-row: #fdfbff;
+}
+
+[data-theme="violet"] .workspace-nav {
+  border-right: 1px solid #ded4f2;
+}
+
+[data-theme="violet"] .registry-link {
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+[data-theme="violet"] .order-table {
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+[data-theme="violet"] .order-table .order:hover {
+  background: #f1eaff;
+}
+
+[data-theme="violet"] .layout-tabs {
+  box-shadow: 0 3px 12px rgb(96 53 198 / 6%);
+}
+
+/* VIOLET 2.0 — таблица заявок */
+@media (min-width: 1060px) {
+  [data-theme="violet"] .order-table {
+    border: 1px solid #e5def4;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 6px 24px rgb(55 35 110 / 5%);
+  }
+
+  [data-theme="violet"] .order-table .row {
+    padding-block: 12px;
+    column-gap: 12px;
+  }
+
+  [data-theme="violet"] .order-table .order {
+    min-height: 64px;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  [data-theme="violet"] .order-table .table-head {
+    padding-block: 13px;
+    font-size: 12px;
+    font-weight: 650;
+    color: #625577;
+    background: #f1ecfa;
+  }
+
+  [data-theme="violet"] .order-table .customer-cell,
+  [data-theme="violet"] .order-table .carrier-cell {
+    overflow-wrap: break-word;
+    word-break: normal;
+    hyphens: none;
+  }
+
+  [data-theme="violet"] .order-table .order:hover {
+    background: #f0eafd;
+  }
+
+  [data-theme="violet"] .order-table .order-link {
+    font-size: 14px;
+    font-weight: 750;
+  }
+}
+
+/* VIOLET 2.0 — пропорции столбцов */
+@media (min-width: 1060px) {
+  [data-theme="violet"] .order-table .row {
+    grid-template-columns:
+      minmax(115px, 1fr)
+      minmax(46px, .35fr)
+      minmax(130px, 1.15fr)
+      minmax(130px, 1.15fr)
+      minmax(135px, 1.2fr)
+      minmax(125px, 1fr)
+      minmax(125px, 1fr)
+      minmax(85px, .7fr)
+      minmax(125px, 1fr)
+      minmax(130px, 1.1fr);
+
+    column-gap: 8px;
+  }
+
+  [data-theme="violet"] .order-table .route-window {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+
+/* VIOLET 2.0 — интерактивность таблицы */
+@media (min-width: 1060px) {
+  [data-theme="violet"] .order-table .order {
+    transition:
+      background-color .15s ease,
+      box-shadow .15s ease;
+  }
+
+  [data-theme="violet"] .order-table .order:hover {
+    background: var(--hover);
+    box-shadow: inset 0 0 0 1px
+      color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+
+  [data-theme="violet"] .order-table .order:focus-within {
+    background: var(--nav-active);
+    box-shadow: inset 0 0 0 1px
+      color-mix(in srgb, var(--accent) 20%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="violet"] .order-table .order {
+    transition: none;
+  }
+}
+
+/* ==========================================
+   VIOLET 3.0 — PALETTE & TABLE
+   Цвета зависят от настроек пользователя
+   ========================================== */
+
+/* 1. Заголовки таблицы */
+[data-theme="violet"] .order-table .table-head {
+  background: var(--violet-table-head);
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+
+[data-theme="violet"] .order-table .table-head,
+[data-theme="violet"] .order-table .table-head button {
+  color: var(--muted);
+}
+
+/* 2. Активная сортировка */
+[data-theme="violet"] .sort-column[aria-current="true"] {
+  color: var(--accent);
+  font-weight: 750;
+}
+
+/* 3. Фон и границы */
+[data-theme="violet"] .order-table {
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+
+[data-theme="violet"] .order-table .order {
+  border-bottom: 1px solid var(--line);
+}
+
+[data-theme="violet"] .order-table .order:nth-child(even) {
+  background: var(--violet-table-row);
+}
+
+[data-theme="violet"] .order-table .order:hover {
+  background: var(--hover);
+}
+
+[data-theme="violet"] .order-table .order:focus-within {
+  background: var(--nav-active);
+}
+
+/* 4. Статусы рейсов */
+[data-theme="violet"] .order-table .trip-status {
+  min-height: 36px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: border-color .15s ease;
+}
+
+/* 5. ЭТРН */
+[data-theme="violet"] .order-table .etrn-link {
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+/* 6. Номера заявок */
+[data-theme="violet"] .order-table .order-link {
+  font-weight: 750;
+  color: var(--ink);
+}
+
+/* 7. Названия компаний и маршруты */
+[data-theme="violet"] .order-table .customer-cell,
+[data-theme="violet"] .order-table .carrier-cell {
+  line-height: 1.45;
+}
+
+[data-theme="violet"] .order-table .destination {
+  font-weight: 600;
+}
+
+/* 8. Основные подписи интерфейса */
+[data-theme="violet"] .view-picker > span,
+[data-theme="violet"] .intro-caption {
+  color: var(--muted);
+}
+
+/* 9. Серая палитра — нейтральные оттенки */
+:root[data-theme="violet"][data-violet-palette="gray"] {
+  --violet-sidebar: #f1f1f1;
+  --violet-table-head: #eaeaea;
+  --violet-table-row: #fafafa;
+  --canvas: #f7f7f7;
+  --surface: #f1f1f1;
+  --hover: #e9e9e9;
+  --line: #dedede;
+  --nav-active: #e5e5e5;
+  --theme-outline: #555555;
+}
+
+/* 10. Учитываем отключение анимаций */
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="violet"] .order-table .trip-status {
+    transition: none;
+  }
+}
+
+/* ==========================================
+   VIOLET 3.0 — GRAPHITE FINISH
+   ========================================== */
+
+/* Графитовая палитра */
+:root[data-theme="violet"][data-violet-palette="graphite"] {
+  --canvas: #f5f6f8;
+  --surface: #eef0f3;
+  --hover: #e8ebf0;
+  --line: #dce0e6;
+  --nav-active: #e1e5eb;
+
+  --violet-sidebar: #eceff3;
+  --violet-table-head: #e5e8ed;
+  --violet-table-row: #fafbfd;
+}
+
+/* Читаемые заголовки */
+[data-theme="violet"] .order-table .table-head {
+  color: var(--muted);
+  font-weight: 650;
+}
+
+/* Разделители строк */
+[data-theme="violet"] .order-table .order {
+  border-bottom: 1px solid var(--line);
+}
+
+/* Компактные статусы */
+[data-theme="violet"] .order-table .trip-status {
+  min-height: 36px;
+  padding: 7px 9px;
+  border-radius: 9px;
+}
+
+/* ЭТРН */
+[data-theme="violet"] .order-table .etrn-link {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+/* Активная сортировка */
+[data-theme="violet"] .sort-column[aria-current="true"] {
+  color: var(--accent);
+}
+
+/* Мягкая подсветка строк */
+[data-theme="violet"] .order-table .order:hover {
+  background: var(--hover);
+}
+
+/* =========================================
+   UI/UX 3.0 — CONTACTS, ETRN & DIALOGS
+   ========================================= */
+
+/* 1. Всплывающие контакты */
+.order-table {
+  overflow: visible;
+}
+
+.order-table .order {
+  position: relative;
+}
+
+.order-table .order:has(.row-contacts[open]) {
+  z-index: 10;
+}
+
+.order-table .row-contacts {
+  position: relative;
+}
+
+.order-table .contact-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  left: auto;
+  z-index: 30;
+
+  width: 280px;
+  max-width: min(280px, 80vw);
+
+  padding: 14px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+
+  box-shadow:
+    0 12px 32px rgb(0 0 0 / 10%),
+    0 2px 8px rgb(0 0 0 / 4%);
+}
+
+.contact-panel p {
+  line-height: 1.5;
+}
+
+.contact-entry {
+  padding-block: 5px;
+}
+
+.contact-entry + .contact-entry {
+  padding-top: 12px;
+  margin-top: 10px;
+}
+
+.contact-panel a {
+  color: var(--ink);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.contact-close {
+  margin-top: 12px;
+}
+
+/* 2. Модальные окна */
+dialog {
+  border-radius: 18px;
+  border: 1px solid var(--line);
+
+  box-shadow:
+    0 24px 70px rgb(0 0 0 / 16%),
+    0 4px 16px rgb(0 0 0 / 5%);
+}
+
+dialog::backdrop {
+  background: rgb(17 19 28 / 42%);
+}
+
+.dialog-head {
+  padding-block: 16px;
+}
+
+.dialog-head h2 {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.dialog-head button {
+  border-radius: 8px;
+}
+
+/* 3. Поля ввода */
+dialog input:not([type="checkbox"]),
+dialog textarea,
+dialog select {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+}
+
+dialog textarea {
+  padding: 12px;
+  line-height: 1.55;
+}
+
+dialog input:focus-visible,
+dialog textarea:focus-visible,
+dialog select:focus-visible {
+  border-color: var(--accent);
+}
+
+/* 4. Чекбоксы ЭТРН */
+dialog input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+dialog .check {
+  padding-block: 5px;
+  gap: 10px;
+}
+
+dialog .check label {
+  line-height: 1.45;
+}
+
+/* 5. Нижние кнопки */
+.dialog-foot {
+  gap: 10px;
+  padding-top: 14px;
+}
+
+.dialog-foot button {
+  min-height: 40px;
+  padding-inline: 16px;
+  border-radius: 10px;
+}
+
+/* 6. Мобильная адаптация */
+@media (max-width: 740px) {
+  .order-table .contact-panel {
+    position: static;
+    width: 100%;
+    max-width: 100%;
+    margin-top: 8px;
+    box-shadow: 0 4px 16px rgb(0 0 0 / 8%);
+  }
+
+  dialog {
+    width: calc(100% - 20px);
+    max-height: calc(100dvh - 20px);
+    border-radius: 16px;
+  }
+
+  dialog button {
+    min-height: 44px;
+  }
+}
+
+/* UI/UX 3.0 — исправление всплывающих контактов */
+
+/* Разрешаем окнам выходить за границы таблицы */
+@media (min-width: 1060px) {
+  [data-theme="violet"] .order-table {
+    overflow: visible;
+  }
+
+  /* Поднимаем строку с открытыми контактами */
+  [data-theme="violet"] .order-table
+  .order:has(.row-contacts[open]) {
+    position: relative;
+    z-index: 20;
+  }
+
+  /* В последних трёх строках открываем контакты вверх */
+  [data-theme="violet"] .order-table
+  .order:nth-last-child(-n+3) .contact-panel {
+    top: auto;
+    bottom: calc(100% + 8px);
   }
 }
