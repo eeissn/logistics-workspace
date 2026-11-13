@@ -61,7 +61,10 @@ def import_fixtures(chromium, number):
         ):
             text = (
                 f"Заявка № {number} от 09.11.2026\nЗаказчик: {customer}\n"
-                f"Исполнитель: {carrier}\nПОГРУЗКА: Тестовый склад\nОПЛАТА: {amount} руб без НДС"
+                f"Исполнитель: {carrier}\n"
+                "ПОГРУЗКА: Тестовый склад\nДата и время: 12.11.2026 09:00\n"
+                "ВЫГРУЗКА: Тестовый терминал\nДата и время: 13.11.2026 09:00\n"
+                f"ОПЛАТА: {amount} руб без НДС"
             )
             page.set_content(f'<meta charset="utf-8"><pre>{escape(text)}</pre>')
             pdfs.append({"name": f"order-{index}.pdf", "mimeType": "application/pdf", "buffer": page.pdf()})
@@ -69,7 +72,8 @@ def import_fixtures(chromium, number):
     headers = ("Дата", "Номер заявки", "Заказчик", "Перевозчик", "Направление",
                "Ставка с Заказчиком", "Ставка с Перевозчиком", "Маржа", "Загрузка",
                "Выгрузка", "Заказ-заявка", "ЭТРН")
-    rows = [headers, ("2026-11-09", f"EXCEL-{number}", "Тестовый заказчик", "", "", "", "", "5000")]
+    rows = [headers, ("2026-11-09", f"EXCEL-{number}", "Тестовый заказчик", "", "", "", "", "5000",
+                      "11.11.2026 08:00", "13.11.2026 15:00")]
     xml_rows = []
     for index, row in enumerate(rows, 1):
         cells = "".join(f'<c r="{chr(65 + col)}{index}" t="inlineStr"><is><t>{escape(value)}</t></is></c>'
@@ -95,7 +99,7 @@ def click_workspace_action(page, button, mobile):
     page.locator(button).click()
 
 
-def order_lifecycle(page, chromium, number, report_total, mobile):
+def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     pdfs, workbook = import_fixtures(chromium, number)
     page.locator("#import").click()
     page.locator("#customer-pdf").set_input_files(pdfs[0])
@@ -112,7 +116,7 @@ def order_lifecycle(page, chromium, number, report_total, mobile):
     expect(page.locator("#ledger-dialog")).to_be_hidden()
     expect(page.locator("#table")).to_contain_text(f"EXCEL-{number}")
 
-    registry_views(page, number, mobile)
+    registry_views(page, number, order_a, mobile)
 
     row = page.locator("#table .order").filter(has=page.get_by_role("button", name=f"№ {number}", exact=True))
     row.locator(".etrn-link").click()
@@ -131,12 +135,16 @@ def order_lifecycle(page, chromium, number, report_total, mobile):
     page.locator("#report-dialog [data-close]").click()
 
 
-def registry_views(page, number, mobile):
+def registry_views(page, number, order_a, mobile):
     layout = page.locator("#layout")
     registry = page.locator("#table")
     search = page.locator("#search")
     settings = page.locator("#settings-dialog")
     order = f"№ {number}"
+    excel = f"№ EXCEL-{number}"
+    undated = f"№ {order_a}"
+    sort = page.locator("#sort")
+    direction = page.locator("#sort-direction")
     marker = {
         "table": ".order-table", "compact": ".compact-list",
         "kanban": ".kanban", "split": ".split-view",
@@ -151,7 +159,8 @@ def registry_views(page, number, mobile):
 
     expect(page.locator("html")).to_have_attribute("data-theme", "violet")
     expect(layout).to_have_value("table")
-    expect(page.locator("#sort")).to_have_value("delivery")
+    expect(sort).to_have_value("delivery")
+    expect(registry.locator(".order-link")).to_have_text([order, excel, undated])
     expect(page.locator('#table [data-sort="delivery"]')).to_have_attribute("aria-current", "true")
     if mobile:
         page.locator("#sort").select_option("pickup")
@@ -166,6 +175,13 @@ def registry_views(page, number, mobile):
             expect(registry.locator(selector)).to_be_visible()
             expect(registry).to_contain_text(order)
             expect(registry).to_contain_text("EXCEL-")
+            # All three fixture orders share a trip stage, so this also checks ordering inside a kanban column.
+            numbers = registry.locator(".order-link" if view == "table" else ".order-summary > strong")
+            for column, ascending in (("delivery", [order, excel]), ("pickup", [excel, order])):
+                sort.select_option(column)
+                expect(numbers).to_have_text([*ascending, undated])
+                direction.click()
+                expect(numbers).to_have_text([*reversed(ascending), undated])
             search.fill("no such synthetic order")
             expect(registry).to_contain_text("Заявки не найдены")
             search.clear()
@@ -257,7 +273,7 @@ def smoke(browser_type, origin, chromium, number, report_total, device=None):
         peer = first.new_page()
         peer.goto(origin)
         expect(peer.locator("#table")).to_contain_text(order_a)
-        order_lifecycle(a, chromium, number, report_total, device is not None)
+        order_lifecycle(a, chromium, number, order_a, report_total, device is not None)
         a.get_by_role("button", name=f"№ {order_a}", exact=True).click()
         expect(a.locator("#editor")).to_be_visible()
 
@@ -277,7 +293,7 @@ def smoke(browser_type, origin, chromium, number, report_total, device=None):
         expect(peer.locator("#table")).not_to_contain_text(order_a)
         expect(a.locator("#workspace")).to_be_hidden()
         expect(b.locator("#table")).to_contain_text(order_b)
-    print(f"{browser_type.name}: 2 themes × 4 registry views, PDF, Excel, ETRN, archive, margin and account isolation passed", flush=True)
+    print(f"{browser_type.name}: 2 themes × 4 registry views, pickup/delivery sorting, PDF, Excel, ETRN, archive, margin and account isolation passed", flush=True)
 
 
 def main():

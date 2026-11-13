@@ -63,14 +63,15 @@ test('pickup and delivery sort by the earliest valid window and put missing date
     ['A', ['12.11.2026 09:00'], ['15.11.2026 9:00', '13.11.2026 18:00']],
     ['B', ['14.11.2026'], ['13.11.2026 8:30–11:00']],
     ['C', ['32.11.2026'], ['Без даты']],
-    ['D', ['11.11.2026'], ['13.11–14.11']],
+    ['D', ['11.11.2026'], ['13.11–14.11.2026 до 23:00']],
+    ['E', ['2026-11-12T10:00'], ['2026-11-13T12:15']],
   ].map(([number, pickups, deliveries]) => ({
     ...makeOrder(number, '2026-11-01', {}),
     points:[...pickups.map(schedule => ({kind:'Погрузка', schedule, address:''})),
       ...deliveries.map(schedule => ({kind:'Выгрузка', schedule, address:''}))],
   }));
   const numbers = (sort, ascending) => selectOrders(records, {...query, sort, ascending}).map(order => order.number);
-  assert.deepEqual(numbers('delivery', true), ['D', 'B', 'A', 'C']);
-  assert.deepEqual(numbers('delivery', false), ['A', 'B', 'D', 'C']);
-  assert.deepEqual(numbers('pickup', true), ['D', 'A', 'B', 'C']);
+  assert.deepEqual(numbers('delivery', true), ['D', 'B', 'E', 'A', 'C']);
+  assert.deepEqual(numbers('delivery', false), ['A', 'E', 'B', 'D', 'C']);
+  assert.deepEqual(numbers('pickup', true), ['D', 'A', 'E', 'B', 'C']);
 });

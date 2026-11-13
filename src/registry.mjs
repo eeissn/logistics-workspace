@@ -40,11 +40,15 @@ function windowStart(order, kind) {
   const starts = [];
   for (const point of order.points) {
     if (point.kind !== kind) continue;
-    const date = dateRange(point.schedule, order.date)[0];
+    const schedule = point.schedule || '';
+    const [first, next] = schedule.matchAll(/\b(?:\d{4}-\d{2}-\d{2}(?=\b|T)|\d{1,2}\.\d{1,2}(?:\.\d{4})?\b)/g);
+    if (!first) continue;
+    const date = first[0].includes('-') ? first[0] : dateRange(first[0], order.date)[0];
     if (!date) continue;
     const instant = new Date(date);
     if (!Number.isFinite(instant.valueOf()) || instant.toISOString().slice(0, 10) !== date) continue;
-    const time = point.schedule.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+    const opening = schedule.slice(first.index + first[0].length, next?.index);
+    const time = opening.match(/(?:^|[^\d])([01]?\d|2[0-3]):([0-5]\d)\b/);
     starts.push(time ? date + 'T' + time[1].padStart(2,'0') + ':' + time[2] : date);
   }
   return starts.sort()[0] ?? '';
