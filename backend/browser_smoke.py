@@ -120,7 +120,22 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
 
     row = page.locator("#table .order").filter(has=page.get_by_role("button", name=f"№ {number}", exact=True))
     row.locator(".etrn-link").click()
-    page.locator('#etrn-form [name="manualComplete"]').check()
+    dialog = page.locator("#etrn-dialog")
+    required = dialog.get_by_role("checkbox", name="Требуется ЭТРН")
+    required.uncheck()
+    expect(dialog.locator("#etrn-status")).to_have_text("Не требуется")
+    expect(dialog.locator("#etrn-fields")).to_be_hidden()
+    required.check()
+    expect(dialog.locator(".etrn-stages strong")).to_have_text(
+        ["Создана заказ-заявка", "Создана ЭТРН", "Подписана всеми"])
+    dialog.locator('[name="etrnNumber"]').fill(f"ETRN-{number}")
+    for name in ("orderForm", "created", "allSigned"):
+        dialog.locator(f'[name="{name}"]').check()
+    expect(dialog.locator("#etrn-status")).to_have_text("Подписана")
+    dialog.get_by_role("button", name="Отмена").click()
+    row.locator(".etrn-link").click()
+    expect(dialog.locator('[name="etrnNumber"]')).not_to_have_value(f"ETRN-{number}")
+    dialog.locator('[name="manualComplete"]').check()
     page.locator("#etrn-save").click()
     expect(page.locator("#etrn-dialog")).to_be_hidden()
     expect(row.locator(".etrn-link")).to_have_text("Закрыта вручную")
@@ -191,9 +206,46 @@ def registry_views(page, number, order_a, mobile):
     expect(root).to_have_attribute("data-violet-palette", "blue")
     assert root.evaluate("(root) => root.style.getPropertyValue('--status-signed')") == "#ee9911"
 
+    expect(page.locator(".registry-tabs button")).to_have_count(2)
     page.locator('[data-view="not-unloaded"]').click()
     for appearance in ("violet", "sand"):
         theme(appearance)
+        filters = page.get_by_role("button", name="Фильтры", exact=True)
+        filters.click()
+        page.locator("#filter").select_option("pending")
+        page.locator("#filters-dialog [data-close]").click()
+        expect(page.locator("#filters-count")).to_have_text("1")
+        expect(page.locator("#filters-count")).to_be_visible()
+        expect(page.get_by_role("button", name="Фильтры: 1")).to_be_visible()
+        page.locator("#filters-open").click()
+        page.locator("#filter-view").select_option("loaded")
+        page.locator("#filters-dialog [data-close]").click()
+        expect(page.locator("#filters-count")).to_have_text("2")
+        expect(page.locator("#active-filters")).to_have_text("Загрузились · ЭТРН требуют внимания")
+        expect(registry).not_to_contain_text(order)
+        page.locator('[data-view="not-unloaded"]').click()
+        expect(page.locator("#filters-count")).to_have_text("1")
+        expect(page.locator("#filter-view")).to_have_value("not-unloaded")
+
+        period = page.locator("#period-open")
+        period.click()
+        page.locator("#period-from").fill("2026-11-09")
+        page.locator("#period-to").fill("2026-11-13")
+        page.get_by_role("button", name="Применить").click()
+        expect(period).to_have_text("09.11–13.11")
+        expect(period).to_have_accessible_name("Период: 2026-11-09 — 2026-11-13")
+        if mobile:
+            assert page.evaluate("""() => ['#search', '#filters-open', '#period-open', '#new', '#import'].every(selector => {
+                const rect = document.querySelector(selector).getBoundingClientRect();
+                return rect.left >= 0 && rect.right <= innerWidth && rect.height >= 44;
+            })""")
+        period.click()
+        page.locator("#period-reset").click()
+        expect(period).to_have_text("Период")
+        page.locator("#filters-open").click()
+        page.locator("#filter").select_option("")
+        page.locator("#filters-dialog [data-close]").click()
+        expect(page.locator("#filters-count")).to_be_hidden()
         for view, selector in marker.items():
             layout.select_option(view)
             expect(registry.locator(selector)).to_be_visible()
@@ -217,6 +269,9 @@ def registry_views(page, number, order_a, mobile):
                 panel = registry.locator(".split-detail")
                 expect(panel).to_be_visible()
                 expect(panel.locator("h2")).to_have_text(f"Заявка {order}")
+                expect(panel.locator(".trip-overview-route")).to_be_visible()
+                expect(panel.locator(".trip-progress li")).to_have_count(4)
+                expect(panel.locator(".trip-progress [aria-current=step]")).to_have_count(1)
                 panel.get_by_role("button", name="Открыть заявку").click()
                 expect(page.locator("#editor")).to_be_visible()
                 page.locator("#editor .dialog-head [data-close]").click()
@@ -285,6 +340,75 @@ def registry_views(page, number, order_a, mobile):
     layout.select_option("table")
 
 
+def contacts_viewport(page, number):
+    prefix = f"CONTACT-{number}-"
+    page.evaluate("""async prefix => {
+        const {csrf} = await (await fetch('/api/me')).json();
+        const headers = {'X-CSRF-Token': csrf, 'Content-Type': 'application/json'};
+        const {revision, orders} = await (await fetch('/api/records', {headers})).json();
+        const fixtures = Array.from({length: 34}, (_, index) => ({
+            number: prefix + String(index + 1).padStart(2, '0'),
+            date: '2026-11-10', points: [], differences: [], trip: {}, payment: {}, etrn: {},
+            contacts: [{role: 'Водитель', values: ['Учебный водитель +70000000001']}],
+        }));
+        const response = await fetch('/api/records', {
+            method: 'PUT', headers, body: JSON.stringify({revision, orders: [...orders, ...fixtures]}),
+        });
+        if (!response.ok) throw new Error('Could not prepare contact fixtures');
+    }""", prefix)
+    page.reload()
+    page.locator("#search").fill(prefix)
+    rows = page.locator("#table .order")
+    expect(rows).to_have_count(34)
+    panel = page.locator("#contact-popover")
+
+    def check_placement(number, edge):
+        row = rows.filter(has=page.get_by_role("button", name=f"№ {prefix}{number}", exact=True))
+        trigger = row.locator(".row-contacts")
+        trigger.evaluate("""(node, edge) => {
+            node.scrollIntoView({block:'center'});
+            const rect = node.getBoundingClientRect();
+            const target = edge === 'top' ? 40 : window.innerHeight - 80;
+            window.scrollBy(0, rect.top - target);
+        }""", edge)
+        trigger.click()
+        expect(panel).to_be_visible()
+        expect(trigger).to_have_attribute("aria-expanded", "true")
+        expect(panel.get_by_role("link")).to_have_attribute("href", "tel:+70000000001")
+        popup, button = panel.bounding_box(), trigger.bounding_box()
+        viewport = page.evaluate("({width: innerWidth, height: innerHeight})")
+        assert popup["x"] >= 0 and popup["x"] + popup["width"] <= viewport["width"]
+        assert popup["y"] >= 0 and popup["y"] + popup["height"] <= viewport["height"]
+        if edge == "top":
+            assert popup["y"] >= button["y"] + button["height"]
+        else:
+            assert popup["y"] + popup["height"] <= button["y"]
+        return trigger
+
+    trigger = check_placement("20", "top")
+    page.keyboard.press("Escape")
+    expect(panel).to_be_hidden()
+    expect(trigger).to_be_focused()
+    trigger = check_placement("20", "top")
+    driver = trigger.locator("..").get_by_role("button", name="Данные водителя")
+    expect(panel.get_by_role("link")).to_be_focused()
+    page.keyboard.press("Tab")
+    expect(panel.get_by_role("button", name="Закрыть")).to_be_focused()
+    page.keyboard.press("Tab")
+    expect(panel).to_be_hidden()
+    expect(driver).to_be_focused()
+
+    trigger = check_placement("20", "top")
+    page.keyboard.press("Shift+Tab")
+    expect(panel).to_be_hidden()
+    expect(trigger).to_be_focused()
+
+    check_placement("02", "bottom")
+    page.evaluate("window.scrollTo(0, 0)")
+    expect(panel).to_be_hidden()
+    page.locator("#search").clear()
+
+
 def smoke(browser_type, origin, chromium, number, report_total, device=None):
     order_a = f"A-{browser_type.name}"
     order_b = f"B-{browser_type.name}"
@@ -300,6 +424,7 @@ def smoke(browser_type, origin, chromium, number, report_total, device=None):
         peer.goto(origin)
         expect(peer.locator("#table")).to_contain_text(order_a)
         order_lifecycle(a, chromium, number, order_a, report_total, device is not None)
+        contacts_viewport(a, number)
         a.get_by_role("button", name=f"№ {order_a}", exact=True).click()
         expect(a.locator("#editor")).to_be_visible()
 

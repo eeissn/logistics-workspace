@@ -42,7 +42,10 @@ const display = readDisplayPreferences();
 display.statusColors = readStatusColors();
 display.themeLayouts = readThemeLayouts();
 let period = {};
-let contactPopup;
+const contactPanel = $('contact-popover');
+let contactAnchor;
+let contactFrame;
+let contactObserver;
 const layoutButtons = new Map();
 const selections = new Map();
 const savingTrips = new Set();
@@ -162,14 +165,21 @@ function contactsCell(order) {
     cell.append(node('span', 'Нет контактов', 'no-contacts'), driver);
     return cell;
   }
-  const list = node('details', null, 'row-contacts');
-  const summary = node('summary', 'Контакты · ' + count);
-  list.append(summary);
-  summary.addEventListener('click', () => {
-    if (contactPopup !== list) closeContacts();
-    contactPopup = list.open ? undefined : list;
-  });
-  const panel = node('div', null, 'contact-panel');
+  const trigger = action('Контакты · ' + count, () => {
+    if (contactAnchor === trigger) closeContacts(true);
+    else openContacts(trigger, entries, driver);
+  }, 'row-contacts');
+  trigger.setAttribute('aria-controls', 'contact-popover');
+  trigger.setAttribute('aria-expanded', 'false');
+  cell.append(trigger, driver);
+  return cell;
+}
+
+function openContacts(trigger, entries, nextControl) {
+  closeContacts();
+  contactAnchor = trigger;
+  trigger.setAttribute('aria-expanded', 'true');
+  contactPanel.append(node('h2', 'Контакты заявки'));
   for (const [role, values] of entries) {
     const item = node('div', null, 'contact-entry');
     item.append(node('strong', role));
@@ -180,20 +190,75 @@ function contactsCell(order) {
       entry.append(phoneLinks(value));
       item.append(entry);
     }
-    panel.append(item);
+    contactPanel.append(item);
   }
-  panel.append(action('Закрыть', () => {
+  const closeButton = action('Закрыть', () => closeContacts(true), 'contact-close');
+  contactPanel.append(closeButton);
+  const controls = [...contactPanel.querySelectorAll('a[href], button')];
+  contactPanel.onkeydown = event => {
+    if (event.key !== 'Tab') return;
+    const index = controls.indexOf(event.target);
+    if (index === -1) return;
+    event.preventDefault();
+    const next = controls[index + (event.shiftKey ? -1 : 1)];
+    if (next) return next.focus();
     closeContacts();
-    summary.focus();
-  }, 'contact-close'));
-  list.append(panel);
-  cell.append(list, driver);
-  return cell;
+    (event.shiftKey ? trigger : nextControl).focus();
+  };
+  contactPanel.hidden = false;
+  positionContacts();
+  if (!contactAnchor) return;
+  controls[0].focus({preventScroll:true});
+  if (typeof IntersectionObserver === 'function') {
+    contactObserver = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting && contactAnchor === trigger) closeContacts();
+    });
+    contactObserver.observe(trigger);
+  }
 }
 
-function closeContacts() {
-  if (contactPopup) contactPopup.open = false;
-  contactPopup = undefined;
+function closeContacts(restoreFocus = false) {
+  if (!contactAnchor) return;
+  const trigger = contactAnchor;
+  contactAnchor = undefined;
+  contactObserver?.disconnect();
+  contactObserver = undefined;
+  if (contactFrame !== undefined) window.cancelAnimationFrame(contactFrame);
+  contactFrame = undefined;
+  trigger.setAttribute('aria-expanded', 'false');
+  contactPanel.hidden = true;
+  contactPanel.onkeydown = null;
+  contactPanel.replaceChildren();
+  if (restoreFocus) trigger.focus({preventScroll:true});
+}
+
+function positionContacts() {
+  contactFrame = undefined;
+  if (!contactAnchor?.isConnected) return closeContacts();
+  const anchor = contactAnchor.getBoundingClientRect();
+  const viewport = window.visualViewport;
+  const inset = 8;
+  const left = (viewport?.offsetLeft ?? 0) + inset;
+  const top = (viewport?.offsetTop ?? 0) + inset;
+  const right = left + (viewport?.width ?? document.documentElement.clientWidth) - inset * 2;
+  const bottom = top + (viewport?.height ?? document.documentElement.clientHeight) - inset * 2;
+  if (anchor.bottom <= top || anchor.top >= bottom || anchor.right <= left || anchor.left >= right) return closeContacts();
+
+  contactPanel.style.width = Math.min(304, right - left) + 'px';
+  const below = Math.max(0, bottom - anchor.bottom - inset);
+  const above = Math.max(0, anchor.top - top - inset);
+  const flip = below < contactPanel.scrollHeight + 2 && above > below;
+  const room = flip ? above : below;
+  const fitsBeside = room >= 84;
+  contactPanel.style.maxHeight = (fitsBeside ? room : bottom - top) + 'px';
+  const panel = contactPanel.getBoundingClientRect();
+  const y = fitsBeside ? (flip ? anchor.top - inset - panel.height : anchor.bottom + inset) : top;
+  contactPanel.style.top = Math.max(top, Math.min(bottom - panel.height, y)) + 'px';
+  contactPanel.style.left = Math.max(left, Math.min(right - panel.width, anchor.right - panel.width)) + 'px';
+}
+
+function queueContactPosition() {
+  if (contactAnchor && contactFrame === undefined) contactFrame = window.requestAnimationFrame(positionContacts);
 }
 
 function openDriver(order) {
@@ -390,10 +455,16 @@ function renderSplit(container, rows) {
     entry.append(orderSummary(item, () => {
       selections.set(container, {number:item.number, expanded:true});
       render();
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        container.querySelector('.split-detail')?.animate?.(
+          [{opacity:.65, transform:'translateY(4px)'}, {opacity:1, transform:'translateY(0)'}],
+          {duration:190, easing:'cubic-bezier(.2,.75,.25,1)'},
+        );
+      }
       if (window.matchMedia('(max-width: 760px)').matches) {
-        container.querySelector('.split-back').focus();
+        container.querySelector('.split-back').focus({preventScroll:inline});
       } else {
-        [...container.querySelectorAll('[data-order]')].find(button => button.dataset.order === item.number)?.focus();
+        [...container.querySelectorAll('[data-order]')].find(button => button.dataset.order === item.number)?.focus({preventScroll:true});
       }
     }, item.number === order.number, grid));
     if (item === order) selectedEntry = entry;
@@ -403,14 +474,29 @@ function renderSplit(container, rows) {
   panel.append(action(inline ? 'Свернуть' : '← К списку', () => {
     selections.set(container, {number:order.number, expanded:false});
     render();
-    container.querySelector('[aria-pressed="true"]')?.focus();
+    container.querySelector('[aria-pressed="true"]')?.focus({preventScroll:inline});
   }, 'split-back'), node('h2', 'Заявка № ' + order.number));
   const status = node('div', null, 'split-status');
   status.append(tripControl(order), etrnAction(order));
-  panel.append(status);
+  const journey = node('div', null, 'trip-overview');
+  journey.append(node('p', routeText(order) || 'Маршрут не указан', 'trip-overview-route'), status);
+  const stage = tripStatus(order);
+  const stageIndex = tripStatuses.findIndex(([key]) => key === stage);
+  if (stageIndex >= 0 && stage !== 'failed') {
+    const progress = node('ol', null, 'trip-progress');
+    progress.setAttribute('aria-label', 'Этапы рейса');
+    for (const [index, [, title]] of tripStatuses.slice(0, -1).entries()) {
+      const item = node('li', title);
+      item.dataset.progress = index < stageIndex ? 'done' : index === stageIndex ? 'current' : 'next';
+      if (index === stageIndex) item.setAttribute('aria-current', 'step');
+      progress.append(item);
+    }
+    journey.append(progress);
+  }
+  panel.append(journey);
   for (const [title, pairs] of [
     ['Основное', [['Дата заявки', order.date?.split('-').reverse().join('.')], ['Заказчик', order.customer], ['Перевозчик', order.carrier]]],
-    ['Маршрут', [['Направление', routeText(order)], ['Груз', order.cargo]]],
+    ['Груз', [['Описание', order.cargo]]],
     ['Водитель и транспорт', [['Водитель', order.driver], ['Транспорт', order.vehicle]]],
   ]) {
     const group = node('section', null, 'split-section');
@@ -424,6 +510,7 @@ function renderSplit(container, rows) {
     panel.append(group);
   }
   if (order.points.length) {
+    const windows = node('section', null, 'split-section split-windows');
     const points = node('ul', null, 'split-points');
     for (const point of order.points) {
       const item = node('li');
@@ -431,7 +518,8 @@ function renderSplit(container, rows) {
       if (point.schedule) item.append(node('small', point.schedule, 'quiet'));
       points.append(item);
     }
-    panel.append(points);
+    windows.append(node('h3', 'Точки и окна'), points);
+    panel.append(windows);
   }
   const actions = node('div', null, 'split-actions');
   actions.append(contactsCell(order),
@@ -455,6 +543,11 @@ function renderRegistry(container, rows) {
     return;
   }
   ({table:renderRows, compact:renderCompact, kanban:renderKanban, split:renderSplit})[display.layout](container, rows, scrollLeft);
+  if (display.layout === 'table' && container.firstElementChild) container.firstElementChild.scrollLeft = scrollLeft;
+}
+
+function shortPeriodDate(value) {
+  return value ? value.slice(5).split('-').reverse().join('.') : '…';
 }
 
 function render() {
@@ -466,8 +559,23 @@ function render() {
     const badge = button.querySelector('.view-count');
     if (badge) badge.textContent = orders.filter(order => matchesTripView(order, button.dataset.view, day)).length;
   }
-  $('filters-open').textContent = $('filter').value ? 'Фильтры · 1' : 'Фильтры';
-  $('period-open').textContent = period.from || period.to ? `Период · ${period.from || '…'} — ${period.to || '…'}` : 'Период';
+  const viewFilter = view !== 'all' && view !== 'not-unloaded';
+  const etrnFilter = $('filter').value;
+  const filterCount = Number(viewFilter) + Number(Boolean(etrnFilter));
+  $('filter-view').value = view;
+  const activeFilters = $('active-filters');
+  const filterLabels = [];
+  if (viewFilter) filterLabels.push($('filter-view').selectedOptions?.[0]?.textContent.trim());
+  if (etrnFilter) filterLabels.push($('filter').selectedOptions?.[0]?.textContent.trim());
+  activeFilters.textContent = filterLabels.filter(Boolean).join(' · ');
+  activeFilters.hidden = !filterCount;
+  const hasPeriod = Boolean(period.from || period.to);
+  $('filters-count').textContent = String(filterCount);
+  $('filters-count').hidden = !filterCount;
+  $('filters-open').setAttribute('aria-label', filterCount ? 'Фильтры: ' + filterCount : 'Фильтры');
+  $('period-label').textContent = hasPeriod ? `${shortPeriodDate(period.from)}–${shortPeriodDate(period.to)}` : 'Период';
+  $('period-open').setAttribute('aria-label', hasPeriod ? `Период: ${period.from || 'без начала'} — ${period.to || 'без окончания'}` : 'Период');
+  $('period-open').dataset.active = String(hasPeriod);
   $('sort').value = sort;
   $('sort-direction').textContent = ascending ? '↑' : '↓';
   $('sort-direction').setAttribute('aria-pressed', String(ascending));
@@ -516,7 +624,9 @@ function readEtrn() {
 }
 
 function refreshEtrn() {
-  $('etrn-fields').hidden = !etrnForm.elements.required.checked;
+  const etrn = readEtrn();
+  $('etrn-fields').hidden = !etrn.required;
+  $('etrn-status').textContent = etrnStatus(etrn);
 }
 
 function openEtrn(number = null) {
@@ -814,14 +924,20 @@ for (const id of ['settings-dialog', 'ledger-dialog', 'report-dialog']) {
   });
 }
 
+window.addEventListener('scroll', queueContactPosition, {capture:true, passive:true});
+window.addEventListener('resize', queueContactPosition);
+window.visualViewport?.addEventListener('resize', queueContactPosition);
+window.visualViewport?.addEventListener('scroll', queueContactPosition);
 document.addEventListener('keydown', event => {
-  if (event.key !== 'Escape' || !contactPopup) return;
-  const summary = contactPopup.querySelector('summary');
-  closeContacts();
-  summary.focus();
+  if (event.key !== 'Escape' || !contactAnchor) return;
+  event.preventDefault();
+  closeContacts(true);
+});
+document.addEventListener('focusin', event => {
+  if (contactAnchor && event.target !== contactAnchor && !contactPanel.contains(event.target)) closeContacts();
 });
 document.addEventListener('pointerdown', event => {
-  if (contactPopup && !contactPopup.contains(event.target)) closeContacts();
+  if (contactAnchor && !contactAnchor.contains(event.target) && !contactPanel.contains(event.target)) closeContacts();
   const menu = $('workspace-menu');
   if (mobileNav?.matches && menu.open && !menu.contains(event.target)) menu.open = false;
 });
@@ -834,6 +950,10 @@ $('sort-direction').addEventListener('click', () => setSort(sort));
 
 for (const button of document.querySelectorAll('[data-close]')) button.addEventListener('click', () => button.closest('dialog').close());
 $('search').addEventListener('input', render);
+$('filter-view').addEventListener('change', event => {
+  view = event.currentTarget.value;
+  render();
+});
 $('filter').addEventListener('change', render);
 $('add-point').addEventListener('click', () => addPoint());
 $('new').addEventListener('click', () => openEditor(blankOrder()));
@@ -923,6 +1043,8 @@ function signInScreen(message = '') {
   for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
   orders = [];
   period = {};
+  view = 'all';
+  $('filter').value = '';
   selections.clear();
   savingTrips.clear();
   $('settings-account').textContent = '';
