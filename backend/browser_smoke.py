@@ -3,6 +3,7 @@
 from contextlib import closing
 from html import escape
 from io import BytesIO
+import os
 from pathlib import Path
 import re
 import socket
@@ -190,6 +191,7 @@ def registry_views(page, number, order_a, mobile):
     expect(row_without_contacts.get_by_text("Нет контактов")).to_be_visible()
     expect(row_without_contacts.locator(".row-contacts")).to_have_count(0)
     expect(layout.locator("option")).to_have_count(4)
+    expect(page.get_by_role("group", name="Виды реестра")).to_have_count(0)
 
     click_workspace_action(page, "#settings", mobile)
     palette = settings.locator("#violet-palette")
@@ -246,6 +248,11 @@ def registry_views(page, number, order_a, mobile):
         page.locator("#filter").select_option("")
         page.locator("#filters-dialog [data-close]").click()
         expect(page.locator("#filters-count")).to_be_hidden()
+        screenshot_folder = os.environ.get("WORKSPACE_SMOKE_SCREENSHOTS")
+        if screenshot_folder:
+            picture = Path(screenshot_folder)
+            picture.mkdir(parents=True, exist_ok=True)
+            profile = "mobile" if mobile else "desktop"
         for view, selector in marker.items():
             layout.select_option(view)
             expect(registry.locator(selector)).to_be_visible()
@@ -263,6 +270,8 @@ def registry_views(page, number, order_a, mobile):
             expect(registry).to_contain_text("Заявки не найдены")
             search.clear()
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+            if screenshot_folder and view == "table":
+                page.screenshot(path=picture / f"{appearance}-{profile}-table.png")
             if view == "split":
                 entry = registry.locator(".order-summary").filter(has_text=order).first
                 entry.click()
@@ -272,6 +281,14 @@ def registry_views(page, number, order_a, mobile):
                 expect(panel.locator(".trip-overview-route")).to_be_visible()
                 expect(panel.locator(".trip-progress li")).to_have_count(4)
                 expect(panel.locator(".trip-progress [aria-current=step]")).to_have_count(1)
+                expect(panel.locator(".split-points li")).to_have_count(2)
+                expect(panel.locator(":scope > .etrn-link")).to_be_visible()
+                assert panel.locator(".split-windows").evaluate(
+                    "element => element.nextElementSibling.querySelector('dt').textContent === 'Заказчик'"
+                )
+                if screenshot_folder:
+                    panel.scroll_into_view_if_needed()
+                    page.screenshot(path=picture / f"{appearance}-{profile}-details.png")
                 panel.get_by_role("button", name="Открыть заявку").click()
                 expect(page.locator("#editor")).to_be_visible()
                 page.locator("#editor .dialog-head [data-close]").click()

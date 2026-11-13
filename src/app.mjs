@@ -46,7 +46,6 @@ const contactPanel = $('contact-popover');
 let contactAnchor;
 let contactFrame;
 let contactObserver;
-const layoutButtons = new Map();
 const selections = new Map();
 const savingTrips = new Set();
 const tripTitles = new Map(tripStatuses);
@@ -477,7 +476,7 @@ function renderSplit(container, rows) {
     container.querySelector('[aria-pressed="true"]')?.focus({preventScroll:inline});
   }, 'split-back'), node('h2', 'Заявка № ' + order.number));
   const status = node('div', null, 'split-status');
-  status.append(tripControl(order), etrnAction(order));
+  status.append(tripControl(order));
   const journey = node('div', null, 'trip-overview');
   journey.append(node('p', routeText(order) || 'Маршрут не указан', 'trip-overview-route'), status);
   const stage = tripStatus(order);
@@ -494,21 +493,6 @@ function renderSplit(container, rows) {
     journey.append(progress);
   }
   panel.append(journey);
-  for (const [title, pairs] of [
-    ['Основное', [['Дата заявки', order.date?.split('-').reverse().join('.')], ['Заказчик', order.customer], ['Перевозчик', order.carrier]]],
-    ['Груз', [['Описание', order.cargo]]],
-    ['Водитель и транспорт', [['Водитель', order.driver], ['Транспорт', order.vehicle]]],
-  ]) {
-    const group = node('section', null, 'split-section');
-    const fields = node('dl', null, 'split-fields');
-    for (const [label, value] of pairs) {
-      const field = node('div');
-      field.append(node('dt', label), node('dd', value || '—'));
-      fields.append(field);
-    }
-    group.append(node('h3', title), fields);
-    panel.append(group);
-  }
   if (order.points.length) {
     const windows = node('section', null, 'split-section split-windows');
     const points = node('ul', null, 'split-points');
@@ -521,6 +505,16 @@ function renderSplit(container, rows) {
     windows.append(node('h3', 'Точки и окна'), points);
     panel.append(windows);
   }
+  panel.append(
+    detailFields('Участники и транспорт', [
+      ['Заказчик', order.customer], ['Перевозчик', order.carrier],
+      ['Водитель', order.driver], ['Транспорт', order.vehicle],
+    ]),
+    etrnAction(order),
+    detailFields('Дата заявки и груз', [
+      ['Дата заявки', order.date?.split('-').reverse().join('.')], ['Груз', order.cargo],
+    ]),
+  );
   const actions = node('div', null, 'split-actions');
   actions.append(contactsCell(order),
     action('Открыть заявку', () => openOrder(order.number), 'primary'));
@@ -530,6 +524,18 @@ function renderSplit(container, rows) {
     if (split.dataset.expanded === 'true') selectedEntry.append(panel);
   } else split.append(panel);
   container.append(split);
+}
+
+function detailFields(title, pairs) {
+  const group = node('section', null, 'split-section');
+  const fields = node('dl', null, 'split-fields');
+  for (const [label, value] of pairs) {
+    const field = node('div');
+    field.append(node('dt', label), node('dd', value || '—'));
+    fields.append(field);
+  }
+  group.append(node('h3', title), fields);
+  return group;
 }
 
 function renderRegistry(container, rows) {
@@ -757,7 +763,6 @@ function applyDisplay() {
   $('layout').value = display.layout;
   $('settings-layout').value = display.layout;
   $('status-palette').hidden = display.theme !== 'violet';
-  for (const [layout, button] of layoutButtons) button.setAttribute('aria-pressed', String(layout === display.layout));
 }
 
 function applyAccent() {
@@ -816,15 +821,6 @@ function setDisplay(key, value) {
   applyDisplay();
   saveDisplay();
   render();
-}
-
-for (const [layout, icon] of [['table','☷'], ['compact','▦'], ['kanban','▥'], ['split','◫']]) {
-  const button = action(null, () => setDisplay('layout', layout));
-  const symbol = node('span', icon);
-  symbol.setAttribute('aria-hidden', 'true');
-  button.append(symbol, node('span', layoutLabels[layout]));
-  layoutButtons.set(layout, button);
-  $('layout-tabs').append(button);
 }
 
 const colorInputs = new Map();
