@@ -698,11 +698,18 @@ $('settings').addEventListener('click', () => {
   $('settings-account').hidden = !email;
   $('settings-dialog').showModal();
 });
-$('settings-dialog').addEventListener('close', () => {
-  if (!mobileNav?.matches) return;
+for (const id of ['settings-dialog', 'ledger-dialog', 'report-dialog']) {
+  $(id).addEventListener('close', () => {
+    if (!mobileNav?.matches) return;
+    const menu = $('workspace-menu');
+    menu.open = false;
+    menu.querySelector('summary').focus();
+  });
+}
+
+document.addEventListener('pointerdown', event => {
   const menu = $('workspace-menu');
-  menu.open = false;
-  menu.querySelector('summary').focus();
+  if (mobileNav?.matches && menu.open && !menu.contains(event.target)) menu.open = false;
 });
 $('sort').addEventListener('change', event => {
   sort = event.currentTarget.value;
