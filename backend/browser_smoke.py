@@ -53,6 +53,26 @@ def create_order(page, number):
     expect(page.locator("#table")).to_contain_text(number)
 
 
+def calculators(page, mobile):
+    click_workspace_action(page, "#calculator", mobile)
+    dialog = page.locator("#calculator-dialog")
+    dialog.locator('[name="income"]').fill("90000")
+    dialog.locator('[name="cost"]').fill("65000")
+    expect(dialog.locator('[data-margin="grossMargin"]')).to_have_text(re.compile(r"25\s*000"))
+    dialog.get_by_text("Сумма с НДС", exact=True).click()
+    dialog.locator('[name="base"]').fill("35000")
+    expect(dialog.locator('[data-vat="22"]')).to_have_text(re.compile(r"43\s*000"))
+    dialog.locator("[data-close]").click()
+    click_workspace_action(page, "#cargo-open", mobile)
+    cargo = page.locator("#cargo-dialog")
+    expect(cargo.locator("#vol")).not_to_have_text("0")
+    cargo.locator("#add").click()
+    cargo.locator("#auto").click()
+    expect(cargo.locator("#autoinfo")).not_to_have_text("")
+    expect(cargo.locator("#pdf")).to_be_enabled()
+    cargo.locator("[data-close]").click()
+
+
 def import_fixtures(chromium, number):
     with closing(chromium.launch()) as browser:
         page = browser.new_page()
@@ -439,6 +459,7 @@ def smoke(browser_type, origin, chromium, number, report_total, device=None):
         a = first.new_page()
         a.goto(origin)
         sign_in(a, "first")
+        calculators(a, device is not None)
         create_order(a, order_a)
 
         peer = first.new_page()

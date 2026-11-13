@@ -1,4 +1,5 @@
 import './style.css';
+import { mountCalculator } from './calculator.mjs';
 import { archived, blankOrder, etrnProgress, etrnStatus, margin, mergeImport, monthReport, orderMargin, tripStatus, tripStatuses, upsert } from './domain.mjs';
 import { importPair, phones } from './import.mjs';
 import { addLedgerOrders, parseLedger } from './ledger.mjs';
@@ -956,7 +957,26 @@ $('settings').addEventListener('click', () => {
   $('settings-account').hidden = !email;
   $('settings-dialog').showModal();
 });
-for (const id of ['settings-dialog', 'ledger-dialog', 'report-dialog']) {
+let calculator;
+$('calculator').addEventListener('click', () => {
+  calculator ??= mountCalculator($('calculator-dialog'));
+  calculator.open();
+});
+let cargoSection;
+$('cargo-open').addEventListener('click', async () => {
+  const generation = accountGeneration;
+  const dialog = $('cargo-dialog');
+  if (dialog.open) return;
+  try {
+    const {createCargoSection} = await import('./cargo/section.mjs');
+    if (generation !== accountGeneration || dialog.open) return;
+    cargoSection ??= createCargoSection(dialog);
+    cargoSection.open();
+  } catch {
+    if (generation === accountGeneration) $('notice').textContent = 'Не удалось открыть размещение груза. Повторите действие.';
+  }
+});
+for (const id of ['settings-dialog', 'ledger-dialog', 'report-dialog', 'calculator-dialog', 'cargo-dialog']) {
   $(id).addEventListener('close', () => {
     if (!mobileNav?.matches) return;
     const menu = $('workspace-menu');
@@ -1081,6 +1101,8 @@ function signInScreen(message = '') {
   saveFailure = refreshFailure = undefined;
   serverConfirmed = false;
   auth.clear();
+  calculator?.reset();
+  cargoSection?.reset();
   $('sign-out').disabled = false;
   setWorkspaceMenu();
   for (const reset of pendingImports.values()) reset();

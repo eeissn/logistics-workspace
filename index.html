@@ -28,6 +28,8 @@
     <summary aria-label="Меню рабочего пространства">⋯</summary>
     <div class="workspace-menu-body">
       <div class="nav-tools">
+        <button type="button" id="calculator" aria-haspopup="dialog">Калькулятор</button>
+        <button type="button" id="cargo-open" aria-haspopup="dialog">Размещение груза</button>
         <button type="button" id="ledger">Импорт Excel</button>
         <button type="button" id="report">Отчёт по марже</button>
       </div>
@@ -82,6 +84,43 @@
   </section>
   <p id="notice" role="status" aria-live="polite"></p>
 </main>
+
+<dialog id="cargo-dialog" aria-labelledby="cargo-title">
+  <div class="dialog-body">
+    <header class="dialog-head"><h2 id="cargo-title">Размещение груза</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <div class="cargo-host"></div>
+  </div>
+</dialog>
+
+<dialog id="calculator-dialog" aria-labelledby="calculator-title">
+  <form>
+    <header class="dialog-head"><h2 id="calculator-title">Калькулятор</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <details open>
+      <summary>Маржа</summary>
+      <div class="fields">
+        <label>Ставка заказчика, ₽<input name="income" type="number" step="0.01" inputmode="decimal"></label>
+        <label>НДС заказчика<select name="incomeTax"><option value="22">22%</option><option value="5">5%</option><option value="0">Без НДС</option></select></label>
+        <label>Ставка перевозчика, ₽<input name="cost" type="number" step="0.01" inputmode="decimal"></label>
+        <label>НДС перевозчика<select name="costTax"><option value="22">22%</option><option value="5">5%</option><option value="0">Без НДС</option></select></label>
+      </div>
+      <dl class="split-fields">
+        <div><dt>Реальная прибыль</dt><dd data-margin="realProfit"></dd></div>
+        <div><dt>Валовая маржа</dt><dd data-margin="grossMargin"></dd></div>
+        <div><dt>НДС к уплате</dt><dd data-margin="vatPayable"></dd></div>
+        <div><dt>Налог на прибыль</dt><dd data-margin="profitTax"></dd></div>
+      </dl>
+    </details>
+    <details>
+      <summary>Сумма с НДС</summary>
+      <label>Сумма без НДС, ₽<input name="base" type="number" step="0.01" inputmode="decimal"></label>
+      <dl class="split-fields">
+        <div><dt>С НДС 5%</dt><dd><output aria-label="С НДС 5%" data-vat="5"></output> <small></small> <button type="button" data-copy="" aria-label="Копировать сумму с НДС 5%">Копировать</button></dd></div>
+        <div><dt>С НДС 22%</dt><dd><output aria-label="С НДС 22%" data-vat="22"></output> <small></small> <button type="button" data-copy="" aria-label="Копировать сумму с НДС 22%">Копировать</button></dd></div>
+      </dl>
+      <p role="status"></p>
+    </details>
+  </form>
+</dialog>
 
 <dialog id="filters-dialog" class="compact-dialog" aria-labelledby="filters-title">
   <div class="dialog-body">
