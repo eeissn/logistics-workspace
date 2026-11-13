@@ -509,3 +509,104 @@ dialog details[open] summary { margin-bottom: .55rem; }
   [data-theme=sand] .registry-command { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .35rem; }
   [data-theme=sand] .registry-search, [data-theme=sand] .registry-command .actions { grid-column: 1/-1; }
 }
+
+/* UI/UX 2.0 — плавность */
+button, input, select, textarea {
+  transition: background-color .18s ease,
+              border-color .18s ease,
+              box-shadow .18s ease,
+              color .18s ease;
+}
+
+button:not(:disabled):active {
+  transform: scale(.98);
+}
+
+button:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button, input, select, textarea {
+    transition: none;
+  }
+  button:active { transform: none; }
+}
+
+/* UI/UX 2.0 — карточки и панели */
+.registry,
+.split-detail,
+.compact-card {
+  border-radius: 14px;
+}
+
+.split-detail,
+.compact-card {
+  box-shadow: 0 2px 10px rgb(20 20 40 / 4%);
+}
+
+.split-detail {
+  transition: box-shadow .2s ease;
+}
+
+.split-detail:hover {
+  box-shadow: 0 6px 22px rgb(20 20 40 / 8%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .split-detail {
+    transition: none;
+  }
+}
+
+/* UI/UX 2.0 — таблица */
+.order {
+  transition: background-color .18s ease;
+}
+
+.order:hover {
+  background: var(--hover);
+}
+
+.order:focus-within {
+  background: color-mix(in srgb, var(--accent) 5%, var(--paper));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .order {
+    transition: none;
+  }
+}
+
+/* UI/UX 2.0 — типографика */
+:root {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.intro h1 {
+  font-weight: 700;
+  letter-spacing: -0.045em;
+}
+
+.order {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.order-link {
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.table-head {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+input,
+select,
+button {
+  letter-spacing: -0.01em;
+}
