@@ -5,7 +5,7 @@ import { addLedgerOrders, parseLedger } from './ledger.mjs';
 import { checkImportFile, readExcelArchive } from './import-files.mjs';
 import { auth, demo, localOrders, sessionChangeKey, store } from './storage.mjs';
 import { driverMessage } from './driver.mjs';
-import { demoOrder } from './demo.mjs';
+import { demoOrders } from './demo.mjs';
 import { defaultAccents, displayKey, layoutLabels, pendingEtrn, readDisplayPreferences, routeText, selectOrders, themeLabels, validAccent } from './registry.mjs';
 
 const $ = id => document.getElementById(id);
@@ -950,7 +950,7 @@ if (demo) {
   $('demo-note').hidden = false;
   showWorkspace(true);
   store.list().then(async saved => {
-    orders = saved.length ? saved : await store.save([demoOrder(today())]);
+    orders = saved.length ? saved : await store.save(demoOrders(today()));
     render();
   }).catch(error => { $('notice').textContent = error.message; });
 } else {
