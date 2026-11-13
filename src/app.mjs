@@ -455,6 +455,12 @@ function renderSplit(container, rows) {
     entry.append(orderSummary(item, () => {
       selections.set(container, {number:item.number, expanded:true});
       render();
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        container.querySelector('.split-detail')?.animate?.(
+          [{opacity:.65, transform:'translateY(4px)'}, {opacity:1, transform:'translateY(0)'}],
+          {duration:190, easing:'cubic-bezier(.2,.75,.25,1)'},
+        );
+      }
       if (window.matchMedia('(max-width: 760px)').matches) {
         container.querySelector('.split-back').focus({preventScroll:inline});
       } else {
@@ -472,10 +478,25 @@ function renderSplit(container, rows) {
   }, 'split-back'), node('h2', 'Заявка № ' + order.number));
   const status = node('div', null, 'split-status');
   status.append(tripControl(order), etrnAction(order));
-  panel.append(status);
+  const journey = node('div', null, 'trip-overview');
+  journey.append(node('p', routeText(order) || 'Маршрут не указан', 'trip-overview-route'), status);
+  const stage = tripStatus(order);
+  const stageIndex = tripStatuses.findIndex(([key]) => key === stage);
+  if (stageIndex >= 0 && stage !== 'failed') {
+    const progress = node('ol', null, 'trip-progress');
+    progress.setAttribute('aria-label', 'Этапы рейса');
+    for (const [index, [, title]] of tripStatuses.slice(0, -1).entries()) {
+      const item = node('li', title);
+      item.dataset.progress = index < stageIndex ? 'done' : index === stageIndex ? 'current' : 'next';
+      if (index === stageIndex) item.setAttribute('aria-current', 'step');
+      progress.append(item);
+    }
+    journey.append(progress);
+  }
+  panel.append(journey);
   for (const [title, pairs] of [
     ['Основное', [['Дата заявки', order.date?.split('-').reverse().join('.')], ['Заказчик', order.customer], ['Перевозчик', order.carrier]]],
-    ['Маршрут', [['Направление', routeText(order)], ['Груз', order.cargo]]],
+    ['Груз', [['Описание', order.cargo]]],
     ['Водитель и транспорт', [['Водитель', order.driver], ['Транспорт', order.vehicle]]],
   ]) {
     const group = node('section', null, 'split-section');
@@ -538,10 +559,20 @@ function render() {
     const badge = button.querySelector('.view-count');
     if (badge) badge.textContent = orders.filter(order => matchesTripView(order, button.dataset.view, day)).length;
   }
-  const hasFilter = Boolean($('filter').value);
+  const viewFilter = view !== 'all' && view !== 'not-unloaded';
+  const etrnFilter = $('filter').value;
+  const filterCount = Number(viewFilter) + Number(Boolean(etrnFilter));
+  $('filter-view').value = view;
+  const activeFilters = $('active-filters');
+  const filterLabels = [];
+  if (viewFilter) filterLabels.push($('filter-view').selectedOptions?.[0]?.textContent.trim());
+  if (etrnFilter) filterLabels.push($('filter').selectedOptions?.[0]?.textContent.trim());
+  activeFilters.textContent = filterLabels.filter(Boolean).join(' · ');
+  activeFilters.hidden = !filterCount;
   const hasPeriod = Boolean(period.from || period.to);
-  $('filters-count').hidden = !hasFilter;
-  $('filters-open').setAttribute('aria-label', hasFilter ? 'Фильтры: 1 активный' : 'Фильтры');
+  $('filters-count').textContent = String(filterCount);
+  $('filters-count').hidden = !filterCount;
+  $('filters-open').setAttribute('aria-label', filterCount ? 'Фильтры: ' + filterCount : 'Фильтры');
   $('period-label').textContent = hasPeriod ? `${shortPeriodDate(period.from)}–${shortPeriodDate(period.to)}` : 'Период';
   $('period-open').setAttribute('aria-label', hasPeriod ? `Период: ${period.from || 'без начала'} — ${period.to || 'без окончания'}` : 'Период');
   $('period-open').dataset.active = String(hasPeriod);
@@ -919,6 +950,10 @@ $('sort-direction').addEventListener('click', () => setSort(sort));
 
 for (const button of document.querySelectorAll('[data-close]')) button.addEventListener('click', () => button.closest('dialog').close());
 $('search').addEventListener('input', render);
+$('filter-view').addEventListener('change', event => {
+  view = event.currentTarget.value;
+  render();
+});
 $('filter').addEventListener('change', render);
 $('add-point').addEventListener('click', () => addPoint());
 $('new').addEventListener('click', () => openEditor(blankOrder()));
@@ -1008,6 +1043,8 @@ function signInScreen(message = '') {
   for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
   orders = [];
   period = {};
+  view = 'all';
+  $('filter').value = '';
   selections.clear();
   savingTrips.clear();
   $('settings-account').textContent = '';

@@ -206,6 +206,7 @@ def registry_views(page, number, order_a, mobile):
     expect(root).to_have_attribute("data-violet-palette", "blue")
     assert root.evaluate("(root) => root.style.getPropertyValue('--status-signed')") == "#ee9911"
 
+    expect(page.locator(".registry-tabs button")).to_have_count(2)
     page.locator('[data-view="not-unloaded"]').click()
     for appearance in ("violet", "sand"):
         theme(appearance)
@@ -215,7 +216,16 @@ def registry_views(page, number, order_a, mobile):
         page.locator("#filters-dialog [data-close]").click()
         expect(page.locator("#filters-count")).to_have_text("1")
         expect(page.locator("#filters-count")).to_be_visible()
-        expect(page.get_by_role("button", name="Фильтры: 1 активный")).to_be_visible()
+        expect(page.get_by_role("button", name="Фильтры: 1")).to_be_visible()
+        page.locator("#filters-open").click()
+        page.locator("#filter-view").select_option("loaded")
+        page.locator("#filters-dialog [data-close]").click()
+        expect(page.locator("#filters-count")).to_have_text("2")
+        expect(page.locator("#active-filters")).to_have_text("Загрузились · ЭТРН требуют внимания")
+        expect(registry).not_to_contain_text(order)
+        page.locator('[data-view="not-unloaded"]').click()
+        expect(page.locator("#filters-count")).to_have_text("1")
+        expect(page.locator("#filter-view")).to_have_value("not-unloaded")
 
         period = page.locator("#period-open")
         period.click()
@@ -259,6 +269,9 @@ def registry_views(page, number, order_a, mobile):
                 panel = registry.locator(".split-detail")
                 expect(panel).to_be_visible()
                 expect(panel.locator("h2")).to_have_text(f"Заявка {order}")
+                expect(panel.locator(".trip-overview-route")).to_be_visible()
+                expect(panel.locator(".trip-progress li")).to_have_count(4)
+                expect(panel.locator(".trip-progress [aria-current=step]")).to_have_count(1)
                 panel.get_by_role("button", name="Открыть заявку").click()
                 expect(page.locator("#editor")).to_be_visible()
                 page.locator("#editor .dialog-head [data-close]").click()

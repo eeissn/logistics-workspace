@@ -284,6 +284,45 @@ dialog details[open] summary { margin-bottom: .55rem; }
 .split-points li { display: grid; border-top: 1px solid var(--line); padding-top: .4rem; }
 .split-actions { display: flex; flex-wrap: wrap; align-items: start; gap: .45rem; margin-top: 1rem; }
 .split-status { display: flex; flex-wrap: wrap; gap: .45rem; margin-bottom: .65rem; }
+.trip-overview {
+  padding: .85rem;
+  margin-bottom: .85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--panel-radius);
+  background: var(--surface);
+}
+.trip-overview-route {
+  margin: 0 0 .5rem;
+  font-size: clamp(1.05rem, 1.7vw, 1.3rem);
+  line-height: 1.25;
+  font-weight: 700;
+}
+.trip-progress {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.trip-progress li {
+  display: grid;
+  gap: .3rem;
+  color: var(--muted);
+  font-size: .72rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.trip-progress li::before {
+  content: '';
+  height: 4px;
+  border-radius: 4px;
+  background: #c7cdd7;
+}
+.trip-progress [data-progress=done]::before,
+.trip-progress [aria-current=step]:last-child::before { background: #278153; }
+.trip-progress [aria-current=step] { color: var(--ink); font-weight: 750; }
+.trip-progress [aria-current=step]:not(:last-child)::before { background: #2468a6; }
 .split-status .trip-status { width: auto; max-width: 100%; }
 .split-back { display: none; margin-bottom: .6rem; }
 @media (max-width: 760px) {
@@ -349,14 +388,14 @@ dialog details[open] summary { margin-bottom: .55rem; }
 
 /* Violet uses an operational toolbar and denser rows. Sand emphasizes the detail panel. */
 :root[data-theme=violet] {
-  --canvas: #faf9fd;
-  --surface: #f4f2fb;
-  --hover: #f0ecfa;
-  --line: #e4e0ef;
-  --nav-active: #eae2fb;
-  --violet-sidebar: #f3effb;
-  --violet-table-head: #f5f2fb;
-  --violet-table-row: #fdfcff;
+  --canvas: #f7f8fa;
+  --surface: #f0f2f6;
+  --hover: #edf0f5;
+  --line: #dfe3ec;
+  --nav-active: #ece8f8;
+  --violet-sidebar: #f2f4f8;
+  --violet-table-head: #eef1f6;
+  --violet-table-row: #fafbfd;
 }
 :root[data-theme=violet][data-violet-palette]:not([data-violet-palette=violet]) {
   --canvas: color-mix(in srgb, var(--palette-tone) 6%, white);
@@ -397,6 +436,12 @@ dialog details[open] summary { margin-bottom: .55rem; }
   font-size: .72rem; font-weight: 650;
 }
 #period-open[data-active=true] { background: var(--nav-active); font-variant-numeric: tabular-nums; }
+.active-filters {
+  margin: -.3rem 0 .65rem;
+  color: var(--muted);
+  font-size: .8rem;
+  overflow-wrap: anywhere;
+}
 .view-count { margin-inline-start: .35rem; padding: .05rem .34rem; border-radius: 20px; background: var(--surface); color: var(--ink); font-size: .74rem; font-weight: 600; }
 .favorite-views { display: grid; border-top: 1px solid var(--line); margin-top: .65rem; padding-top: .65rem; }
 .favorite-views strong { padding: .3rem .65rem; font-size: .82rem; }
@@ -518,10 +563,6 @@ button, input, select, textarea {
               color .18s ease;
 }
 
-button:not(:disabled):active {
-  transform: scale(.98);
-}
-
 button:focus-visible, input:focus-visible,
 select:focus-visible, textarea:focus-visible {
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent);
@@ -630,10 +671,6 @@ button {
 
 .registry-command {
   padding: .65rem;
-}
-
-:root[data-theme="violet"] {
-  --hover: #f0ebfc;
 }
 
 :root[data-theme="sand"] {
@@ -897,7 +934,7 @@ button {
 @keyframes dialog-appear {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(.985);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -906,7 +943,7 @@ button {
 }
 
 dialog[open] {
-  animation: dialog-appear .2s ease-out;
+  animation: dialog-appear .2s cubic-bezier(.2,.75,.25,1);
 }
 
 dialog::backdrop {
@@ -1090,22 +1127,6 @@ textarea:focus {
 
 [data-theme="sand"] button.primary {
   box-shadow: 0 3px 10px rgb(0 0 0 / 10%);
-}
-
-/* UI/UX 3.0 — Violet */
-:root[data-theme="violet"] {
-  --canvas: #faf8ff;
-  --surface: #f3effd;
-  --hover: #ede7fc;
-  --line: #e5def4;
-  --nav-active: #e9defc;
-  --violet-sidebar: #f0ebfa;
-  --violet-table-head: #f0eafb;
-  --violet-table-row: #fdfbff;
-}
-
-[data-theme="violet"] .workspace-nav {
-  border-right: 1px solid #ded4f2;
 }
 
 [data-theme="violet"] .registry-link {

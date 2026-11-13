@@ -60,16 +60,13 @@
     <button id="period-open" type="button" aria-haspopup="dialog"><svg class="command-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="14" rx="2"/><path d="M8 4v4m8-4v4M4 10h16"/></svg><span id="period-label">Период</span></button>
     <div class="actions"><button id="new" type="button"><span aria-hidden="true">+</span> <span class="action-label">Новая заявка</span></button><button id="import" class="primary" type="button"><span aria-hidden="true">↑</span> <span class="action-label">Загрузить два PDF</span></button></div>
   </div>
+  <p id="active-filters" class="active-filters" hidden></p>
   <p id="sync-status" class="quiet" role="status"></p>
   <p id="demo-note" class="demo-note" hidden>Демоверсия · заявка и контакты вымышлены. Для проверки используй тестовые документы.</p>
   <section class="registry" aria-label="Реестр заявок">
     <nav class="registry-tabs" aria-label="Разделы заявок">
       <button type="button" data-view="all" aria-pressed="true">Все</button>
       <button type="button" data-view="not-unloaded" aria-pressed="false">Не выгружены</button>
-      <button type="button" data-view="planned" aria-pressed="false">Планируются</button>
-      <button type="button" data-view="loaded" aria-pressed="false">Загрузились</button>
-      <button type="button" data-view="completed" aria-pressed="false">Выгрузились</button>
-      <button type="button" data-view="failed" aria-pressed="false">Проблемные</button>
 
     </nav>
     <div class="registry-toolbar">
@@ -90,6 +87,16 @@
 <dialog id="filters-dialog" class="compact-dialog" aria-labelledby="filters-title">
   <div class="dialog-body">
     <header class="dialog-head"><h2 id="filters-title">Фильтры</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <label>Рейсы<select id="filter-view">
+      <option value="all">Все</option>
+      <option value="not-unloaded">Не выгружены</option>
+      <option value="planned">Планируются</option>
+      <option value="loaded">Загрузились</option>
+      <option value="completed">Выгрузились</option>
+      <option value="failed">Проблемные</option>
+      <option value="pickup">Загрузка сегодня</option>
+      <option value="delivery">Выгрузка сегодня</option>
+    </select></label>
     <label>ЭТРН<select id="filter" aria-label="Фильтр ЭТРН"><option value="">Все ЭТРН</option><option value="pending">ЭТРН требуют внимания</option><option value="Подписана">ЭТРН подписана</option><option value="Закрыта вручную">ЭТРН закрыта вручную</option><option value="Не требуется">ЭТРН не требуется</option></select></label>
   </div>
 </dialog>
