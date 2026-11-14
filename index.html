@@ -23,7 +23,8 @@
 </section>
 <aside id="workspace-nav" class="workspace-nav" hidden>
   <a class="brand" href="./"><img src="%BASE_URL%favicon-32.png" alt="" width="22" height="22">Sputnik Workspace</a>
-  <a class="registry-link" href="#view-title" aria-current="page">Заявки</a>
+  <a class="registry-link" href="#view-title" id="active-nav" aria-current="page">Актуальные</a>
+  <button type="button" id="history-nav" class="registry-link history-link" aria-current="false">История</button>
   <details class="workspace-menu" id="workspace-menu">
     <summary aria-label="Меню рабочего пространства">⋯</summary>
     <div class="workspace-menu-body">
@@ -54,7 +55,7 @@
 </aside>
 <main id="workspace" hidden>
   <header class="intro">
-    <h1 id="view-title">Заявки</h1>
+    <h1 id="view-title">Актуальные заявки</h1>
     <p id="sync-status" class="quiet" role="status"></p>
   </header>
   <div class="registry-command">
@@ -68,10 +69,14 @@
   <p id="demo-note" class="demo-note" hidden>Демоверсия · заявка и контакты вымышлены. Для проверки используй тестовые документы.</p>
   <section class="registry" aria-label="Реестр заявок">
     <nav class="registry-tabs" aria-label="Разделы заявок">
-      <button type="button" data-view="all" aria-pressed="true">Все</button>
-      <button type="button" data-view="not-unloaded" aria-pressed="false">Не выгружены</button>
+      <button type="button" data-scope="active" aria-pressed="true">Актуальные <span id="active-count"></span></button>
+      <button type="button" data-scope="history" aria-pressed="false">История <span id="history-count"></span></button>
 
     </nav>
+    <div id="history-browser" class="history-browser" hidden>
+      <label for="history-month">Период <select id="history-month" aria-label="Месяц истории"></select></label>
+      <span id="history-description" class="quiet"></span>
+    </div>
     <div class="registry-toolbar">
       <div class="registry-tools">
         <label class="view-picker"><span aria-hidden="true">▤</span> Вид <select id="layout" aria-label="Вид реестра"></select></label>
