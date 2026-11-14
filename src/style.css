@@ -1611,3 +1611,47 @@ dialog .check label {
   #editor :is(input:not([type=checkbox]), textarea, select), #etrn-fields input:not([type=checkbox]) { font-size: 1rem; }
   .contact-panel .contact-close { min-height: 44px; }
 }
+
+
+/* Active queue and all-period history */
+.workspace-nav .history-link {
+  width: 100%;
+  text-align: left;
+  font-weight: 550;
+  padding: .55rem .8rem;
+  min-height: 38px;
+}
+.workspace-nav .history-link[aria-current="page"],
+.workspace-nav .registry-link[aria-current="page"] {
+  background: var(--nav-active);
+  color: var(--theme-outline);
+}
+.workspace-nav .registry-link[aria-current="false"] {
+  background: transparent;
+  color: var(--muted);
+}
+.history-browser {
+  display: flex;
+  gap: .75rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 0 0 .75rem;
+  padding: .65rem .8rem;
+  background: var(--surface);
+  border-radius: var(--panel-radius);
+}
+.history-browser label {
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+  font-size: .875rem;
+  font-weight: 550;
+}
+.history-browser select { max-width: min(20rem, 75vw); }
+.history-browser .quiet { font-size: .8rem; color: var(--muted); }
+.registry-tabs button span[id$="-count"] { 
+  font-size: .8em; opacity: .8; margin-inline-start: .25rem;
+}
+@media (max-width: 850px) {
+  .workspace-nav .history-link { display: none; }
+}
