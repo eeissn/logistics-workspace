@@ -7,6 +7,7 @@ import { addLedgerOrders, previewLedgerWorkbook } from './ledger.mjs';
 import { checkImportFile, readExcelArchive } from './import-files.mjs';
 import { auth, demo, localOrders, sessionChangeKey, store } from './storage.mjs';
 import { driverMessage } from './driver.mjs';
+import { isActionable, monthGroups, scopeOrders } from './order-history.mjs';
 import { demoOrders } from './demo.mjs';
 import { defaultAccents, displayKey, layoutLabels, matchesTripView, pendingEtrn, readDisplayPreferences, readStatusColors, readThemeLayouts, routeText, selectOrders, statusColors, themeLabels, validAccent, violetPalettes } from './registry.mjs';
 
@@ -45,6 +46,8 @@ let ledgerPreview;
 let accountGeneration = 0;
 const pendingImports = new Map();
 let view = 'all';
+let registryScope = 'active';
+let historyMonth = 'all';
 let sort = 'delivery';
 let ascending = true;
 const display = readDisplayPreferences();
@@ -642,20 +645,47 @@ function render() {
   const matches = selectOrders(orders, {
     query:$('search').value, filter:$('filter').value, view, today:day, sort, ascending, ...period,
   });
-  const active = matches.filter(order => !archived(order));
-  const past = matches.filter(archived);
+  const scoped = scopeOrders(matches, {scope:registryScope, month:historyMonth, search:$('search').value});
+  const groups = monthGroups(orders);
+  $('view-title').textContent = registryScope === 'active' ? 'Актуальные заявки' : 'История заявок';
+  $('active-nav').setAttribute('aria-current', registryScope === 'active' ? 'page' : 'false');
+  $('history-nav').setAttribute('aria-current', registryScope === 'history' ? 'page' : 'false');
+  for (const button of document.querySelectorAll('[data-scope]')) {
+    button.setAttribute('aria-pressed', String(button.dataset.scope === registryScope));
+  }
+  $('active-count').textContent = String(orders.filter(isActionable).length);
+  $('history-count').textContent = String(orders.length);
+  $('history-browser').hidden = registryScope !== 'history';
+  if (registryScope === 'history') {
+    const chooser = $('history-month');
+    chooser.replaceChildren();
+    const all = node('option', 'Все периоды · ' + orders.length);
+    all.value = 'all';
+    chooser.append(all);
+    for (const {month, count} of groups) {
+      const label = month ? new Date(month + '-01T12:00:00').toLocaleDateString('ru-RU', {month:'long', year:'numeric'}) : 'Без даты';
+      const option = node('option', label + ' · ' + count);
+      option.value = month || 'undated';
+      chooser.append(option);
+    }
+    if (![...chooser.options].some(option => option.value === historyMonth)) historyMonth = 'all';
+    chooser.value = historyMonth;
+    $('history-description').textContent = $('search').value.trim()
+      ? 'Поиск по всем периодам · найдено ' + scoped.length
+      : 'Найдено ' + scoped.length + ' из ' + orders.length;
+  }
+  const active = scoped.filter(order => !archived(order));
+  const past = scoped.filter(archived);
   const primary = $('table');
   const archive = $('archive-table');
   const selected = selections.get(primary);
   if (selected && !active.some(order => order.number === selected.number) && past.some(order => order.number === selected.number)) {
     selections.set(archive, selected);
   }
-  const archiveView = view === 'completed' || view === 'failed';
-  renderRegistry(primary, archiveView ? matches : active);
-  $('archive').hidden = archiveView || !past.length;
-  $('archive-title').textContent = 'Архив · ' + past.length;
-  if (!archiveView && past.length) renderRegistry(archive, past);
-  else archive.replaceChildren();
+  // The home queue depends solely on the trip stage; history includes every record.
+  renderRegistry(primary, scoped);
+  $('archive').hidden = true;
+  archive.replaceChildren();
 }
 
 function profit(order) {
@@ -1054,6 +1084,10 @@ for (const button of document.querySelectorAll('[data-close]')) button.addEventL
 $('search').addEventListener('input', render);
 $('filter-view').addEventListener('change', event => {
   view = event.currentTarget.value;
+  if (view === 'completed' || view === 'failed') {
+    registryScope = 'history';
+    historyMonth = 'all';
+  }
   render();
 });
 $('filter').addEventListener('change', render);
@@ -1376,10 +1410,33 @@ if (demo) {
   setInterval(() => { if (!document.hidden) refresh(); }, 15000);
 }
 
+function changeRegistryScope(next) {
+  if (next !== 'active' && next !== 'history') return;
+  registryScope = next;
+  view = 'all';
+  period = {};
+  if (next === 'history') historyMonth = monthGroups(orders).find(group => group.month)?.month || 'all';
+  $('filter').value = '';
+  if (mobileNav?.matches) $('workspace-menu').open = false;
+  render();
+}
+for (const button of document.querySelectorAll('[data-scope]')) {
+  button.addEventListener('click', () => changeRegistryScope(button.dataset.scope));
+}
+$('active-nav').addEventListener('click', () => changeRegistryScope('active'));
+$('history-nav').addEventListener('click', () => changeRegistryScope('history'));
+$('history-month').addEventListener('change', event => {
+  historyMonth = event.currentTarget.value;
+  render();
+});
 for (const button of document.querySelectorAll('[data-view]')) {
   button.append(node('span', null, 'view-count'));
   button.addEventListener('click', () => {
     view = button.dataset.view;
+    if (view === 'failed' || view === 'completed') {
+      registryScope = 'history';
+      historyMonth = 'all';
+    }
     if (mobileNav?.matches) $('workspace-menu').open = false;
     render();
   });
