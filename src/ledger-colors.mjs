@@ -1,7 +1,7 @@
 import { unzipSync, strFromU8 } from 'fflate';
 
 const stages = {
-  FFFFE599:'signed',
+  FFA2C4C9:'unloaded', FFFFE599:'signed',
   FFB4A7D6:'loaded', FFEA9999:'failed',
 };
 

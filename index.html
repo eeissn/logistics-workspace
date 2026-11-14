@@ -284,7 +284,7 @@
     <header class="dialog-head"><h2 id="ledger-title">Импорт заявок из Excel</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
     <p>Выберите реестр с листом «Ноябрь». Будут предложены заявки за ноябрь 2026 года. Совпадающие номера пропускаются.</p>
     <label>Реестр Excel<input id="ledger-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></label>
-    <p class="quiet">Жёлтая, фиолетовая и красная заливки определяют статус. Бирюзовая заливка требует ручной проверки.</p>
+    <p class="quiet">Бирюзовая заливка означает «Выгрузился», жёлтая — «Подписана», фиолетовая — «Загрузился», красная — «Срыв заявки».</p>
     <p class="error" id="ledger-error" role="alert"></p>
     <div id="ledger-preview" role="status"></div>
     <footer class="dialog-foot"><button class="primary" type="submit" id="ledger-submit">Проверить файл</button></footer>
