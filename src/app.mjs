@@ -423,7 +423,7 @@ function renderRows(container, rows) {
   container.append(table);
 }
 
-function orderSummary(order, open, selected, showParties = false) {
+function orderSummary(order, open, selected, showParties = false, showDates = true) {
   const button = action(null, open, 'order-summary');
   button.dataset.order = order.number;
   button.dataset.stage = tripStatus(order);
@@ -437,7 +437,7 @@ function orderSummary(order, open, selected, showParties = false) {
     parties.append(node('span', order.customer || '—'), node('small', order.carrier || '—'));
     button.append(parties);
   }
-  if (dates || showParties) button.append(node('small', dates || '—', 'quiet summary-dates'));
+  if (showDates && (dates || showParties)) button.append(node('small', dates || '—', 'quiet summary-dates'));
   return button;
 }
 
@@ -445,7 +445,8 @@ function renderCompact(container, rows) {
   const list = node('ul', null, 'compact-list');
   for (const order of rows) {
     const item = node('li');
-    item.append(orderSummary(order, () => openOrder(order.number)));
+    item.append(orderSummary(order, () => openOrder(order.number), undefined, false,
+      !window.matchMedia?.('(max-width: 760px)')?.matches));
     list.append(item);
   }
   container.append(list);
@@ -484,7 +485,7 @@ function renderSplit(container, rows) {
   const split = node('div', null, 'split-view');
   split.dataset.expanded = String(Boolean(matched && selection.expanded));
   const list = node('ul', null, 'split-list');
-  const inline = display.theme === 'sand' && window.matchMedia('(max-width: 760px)').matches;
+  const inline = window.matchMedia('(max-width: 760px)').matches;
   split.dataset.inline = String(inline);
   const grid = display.theme === 'sand' && !inline;
   if (grid) {
@@ -501,8 +502,13 @@ function renderSplit(container, rows) {
   for (const item of rows) {
     const entry = node('li');
     entry.append(orderSummary(item, () => {
-      selections.set(container, {number:item.number, expanded:true});
+      const expanded = !(inline && matched === item && selection.expanded);
+      selections.set(container, {number:item.number, expanded});
       render();
+      if (!expanded) {
+        [...container.querySelectorAll('[data-order]')].find(button => button.dataset.order === item.number)?.focus({preventScroll:true});
+        return;
+      }
       if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         container.querySelector('.split-detail')?.animate?.(
           [{opacity:.65, transform:'translateY(4px)'}, {opacity:1, transform:'translateY(0)'}],
@@ -515,6 +521,11 @@ function renderSplit(container, rows) {
         [...container.querySelectorAll('[data-order]')].find(button => button.dataset.order === item.number)?.focus({preventScroll:true});
       }
     }, item.number === order.number, grid));
+    if (inline) {
+      const trigger = entry.firstElementChild;
+      trigger.removeAttribute('aria-pressed');
+      trigger.setAttribute('aria-expanded', String(item === matched && selection.expanded));
+    }
     if (item === order) selectedEntry = entry;
     list.append(entry);
   }
@@ -522,7 +533,7 @@ function renderSplit(container, rows) {
   panel.append(action(inline ? 'Свернуть' : '← К списку', () => {
     selections.set(container, {number:order.number, expanded:false});
     render();
-    container.querySelector('[aria-pressed="true"]')?.focus({preventScroll:inline});
+    [...container.querySelectorAll('[data-order]')].find(button => button.dataset.order === order.number)?.focus({preventScroll:true});
   }, 'split-back'), node('h2', 'Заявка № ' + order.number));
   const status = node('div', null, 'split-status');
   status.append(tripControl(order));
@@ -952,8 +963,19 @@ setWorkspaceMenu();
 mobileNav?.addEventListener('change', setWorkspaceMenu);
 
 window.matchMedia?.('(max-width: 760px)')?.addEventListener('change', () => {
-  if (display.layout === 'split') render();
+  if (display.layout === 'split' || display.layout === 'compact') render();
 });
+
+function sizeMobileDialogs() {
+  const viewport = window.visualViewport;
+  if (!viewport || viewport.scale !== 1) return;
+  const root = document.documentElement;
+  root.style.setProperty('--visible-height', viewport.height + 'px');
+  root.style.setProperty('--visible-top', viewport.offsetTop + 'px');
+}
+sizeMobileDialogs();
+window.visualViewport?.addEventListener('resize', sizeMobileDialogs);
+window.visualViewport?.addEventListener('scroll', sizeMobileDialogs);
 
 $('settings').addEventListener('click', () => {
   const email = $('account-email').textContent;

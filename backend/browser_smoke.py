@@ -84,6 +84,30 @@ def calculators(page, mobile):
     cargo.locator("[data-close]").click()
 
 
+def mobile_long_order(page):
+    number = "SPUTNIK-2026-REGIONAL-123456789012345678"
+    route = "Санкт-Петербург, логистический парк Шушары → Нижний Новгород, распределительный терминал"
+    company = "ООО «Северо-Западная транспортно-экспедиционная компания»"
+    page.locator("#new").click()
+    editor = page.locator("#editor")
+    for field, value in (("number", number), ("route", route), ("customer", company), ("carrier", company)):
+        editor.locator(f'[name="{field}"]').fill(value)
+    editor.locator('[type="submit"]').click()
+    expect(editor).to_be_hidden()
+    for view in ("table", "compact", "kanban", "split"):
+        page.locator("#layout").select_option(view)
+        registry = page.locator("#table")
+        expect(registry).to_contain_text(route)
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    page.locator("#table .order-summary").filter(has_text=number).click()
+    details = page.locator("#table .split-detail")
+    expect(details).to_contain_text(number)
+    expect(details).to_contain_text(company)
+    expect(details).to_contain_text(route)
+    details.locator(".split-back").click()
+    page.locator("#layout").select_option("table")
+
+
 def sheet_preview(page, actor, number):
     if os.environ.get("WORKSPACE_TEST_SHEET") != "1":
         return
@@ -253,7 +277,7 @@ def registry_views(page, number, order_a, mobile):
         page.locator('#table [data-sort="pickup"]').click()
     expect(page.locator("#sort")).to_have_value("pickup")
     row_without_contacts = registry.locator(".order").filter(has=page.get_by_text(undated, exact=True))
-    expect(row_without_contacts.get_by_text("Нет контактов")).to_be_visible()
+    expect(row_without_contacts.get_by_text("Нет контактов")).to_have_count(1)
     expect(row_without_contacts.locator(".row-contacts")).to_have_count(0)
     expect(layout.locator("option")).to_have_count(4)
     expect(page.get_by_role("group", name="Виды реестра")).to_have_count(0)
@@ -281,6 +305,8 @@ def registry_views(page, number, order_a, mobile):
         theme(appearance)
         filters = page.get_by_role("button", name="Фильтры", exact=True)
         filters.click()
+        if mobile and os.environ.get("WORKSPACE_SMOKE_SCREENSHOTS"):
+            page.screenshot(animations="disabled", path=Path(os.environ["WORKSPACE_SMOKE_SCREENSHOTS"]) / f"{appearance}-mobile-filters.png")
         page.locator("#filter").select_option("pending")
         page.locator("#filters-dialog [data-close]").click()
         expect(page.locator("#filters-count")).to_have_text("1")
@@ -298,6 +324,14 @@ def registry_views(page, number, order_a, mobile):
 
         period = page.locator("#period-open")
         period.click()
+        if mobile:
+            assert page.locator("#period-form").evaluate("""form => {
+                const [a,b] = Array.from(form.querySelectorAll('input')).map(e => e.getBoundingClientRect());
+                const bounds = form.getBoundingClientRect();
+                return a.right <= bounds.right && b.right <= bounds.right && a.bottom <= b.top;
+            }""")
+            if os.environ.get("WORKSPACE_SMOKE_SCREENSHOTS"):
+                page.screenshot(animations="disabled", path=Path(os.environ["WORKSPACE_SMOKE_SCREENSHOTS"]) / "mobile-period.png")
         page.locator("#period-from").fill("2026-11-09")
         page.locator("#period-to").fill("2026-11-13")
         page.get_by_role("button", name="Применить").click()
@@ -337,8 +371,8 @@ def registry_views(page, number, order_a, mobile):
             expect(registry).to_contain_text("Заявки не найдены")
             search.clear()
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
-            if screenshot_folder and view == "table":
-                page.screenshot(path=picture / f"{appearance}-{profile}-table.png")
+            if screenshot_folder:
+                page.screenshot(animations="disabled", path=picture / f"{appearance}-{profile}-{view}.png")
             if view == "split":
                 entry = registry.locator(".order-summary").filter(has_text=order).first
                 entry.click()
@@ -355,16 +389,15 @@ def registry_views(page, number, order_a, mobile):
                 )
                 if screenshot_folder:
                     panel.scroll_into_view_if_needed()
-                    page.screenshot(path=picture / f"{appearance}-{profile}-details.png")
+                    page.screenshot(animations="disabled", path=picture / f"{appearance}-{profile}-details.png")
                 panel.get_by_role("button", name="Открыть заявку").click()
                 expect(page.locator("#editor")).to_be_visible()
+                if mobile and screenshot_folder:
+                    page.screenshot(animations="disabled", path=picture / f"{appearance}-mobile-editor.png")
                 page.locator("#editor .dialog-head [data-close]").click()
                 if mobile:
-                    if appearance == "sand":
-                        expect(registry.locator(".split-list")).to_be_visible()
-                        expect(registry.locator(".split-list li .split-detail")).to_be_visible()
-                    else:
-                        expect(registry.locator(".split-list")).to_be_hidden()
+                    expect(registry.locator(".split-list")).to_be_visible()
+                    expect(registry.locator(".split-list li .split-detail")).to_be_visible()
                     panel.locator(".split-back").click()
                     expect(registry.locator(".split-list")).to_be_visible()
 
@@ -513,6 +546,8 @@ def smoke(browser_type, origin, chromium, number, report_total, device=None):
         expect(peer.locator("#table")).to_contain_text(order_a)
         order_lifecycle(a, chromium, number, order_a, report_total, device is not None)
         contacts_viewport(a, number)
+        if device is not None:
+            mobile_long_order(a)
         a.get_by_role("button", name=f"№ {order_a}", exact=True).click()
         expect(a.locator("#editor")).to_be_visible()
 
@@ -564,7 +599,8 @@ def main():
                     sleep(0.2)
             with sync_playwright() as playwright:
                 smoke(playwright.chromium, origin, playwright.chromium, 41001, r"22\s*000")
-                smoke(playwright.webkit, origin, playwright.chromium, 41002, r"44\s*000", playwright.devices["iPhone 13"])
+                smoke(playwright.webkit, origin, playwright.chromium, 41002, r"44\s*000",
+                      {**playwright.devices["iPhone 13"], "viewport": {"width": 393, "height": 852}})
         finally:
             server.terminate()
             server.wait(timeout=10)
