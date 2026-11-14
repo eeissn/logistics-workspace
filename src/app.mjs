@@ -3,7 +3,7 @@ import { mountCalculator } from './calculator.mjs';
 import { parseSheetText } from './sheet-preview.mjs';
 import { archived, blankOrder, etrnProgress, etrnStatus, margin, mergeImport, monthReport, orderMargin, tripStatus, tripStatuses, upsert } from './domain.mjs';
 import { importPair, phones } from './import.mjs';
-import { addLedgerOrders, previewLedger } from './ledger.mjs';
+import { addLedgerOrders, previewLedgerWorkbook } from './ledger.mjs';
 import { checkImportFile, readExcelArchive } from './import-files.mjs';
 import { auth, demo, localOrders, sessionChangeKey, store } from './storage.mjs';
 import { driverMessage } from './driver.mjs';
@@ -1496,20 +1496,26 @@ $('ledger-form').addEventListener('submit', async event => {
     if (ledgerPreview?.file !== file || !ledgerPreview) {
       const archive = await readExcelArchive(file);
       if (!operation.active()) return;
-      const {readSheet} = await import('read-excel-file/browser');
+      $('ledger-preview').textContent = 'Проверяем листы книги…';
+      const {default: readWorkbook} = await import('read-excel-file/browser');
       if (!operation.active()) return;
-      const rows = await readSheet(archive, 'Ноябрь');
+      const sheets = await readWorkbook(archive);
       if (!operation.active()) return;
       const current = await store.list();
       if (!operation.active() || $('ledger-file').files[0] !== file) return;
-      let colors;
+      let readColors;
       if (typeof DOMParser === 'function') {
-        const {readLedgerColors} = await import('./ledger-colors.mjs');
+        const {createLedgerColorReader} = await import('./ledger-colors.mjs');
         if (!operation.active() || $('ledger-file').files[0] !== file) return;
-        colors = readLedgerColors(archive, 'Ноябрь', rows);
+        readColors = createLedgerColorReader(archive);
       }
-      const preview = previewLedger(rows, '2026-11', current, colors);
+      const preview = previewLedgerWorkbook(sheets.map(sheet => ({
+        ...sheet, colors:readColors?.(sheet.sheet, sheet.data),
+      })), current);
       $('ledger-preview').replaceChildren(node('p', `Найдено: ${preview.found}. К импорту: ${preview.orders.length}. Дубли: ${preview.duplicates}. Ошибки: ${preview.invalid}.`));
+      $('ledger-preview').append(node('p', 'Проверены листы: ' + preview.included.join(', '), 'quiet'));
+      if (preview.skipped.length) $('ledger-preview').append(node('p', 'Пропущены листы без колонок реестра: ' + preview.skipped.join(', '), 'quiet'));
+      if (!preview.orders.length) $('ledger-preview').append(node('p', 'Новых заявок для импорта нет.'));
       if (preview.missing.size) {
         $('ledger-preview').append(node('p', 'Пустые или нераспознанные поля: ' +
           [...preview.missing].map(([label, count]) => `${label} (${count})`).join(', '), 'quiet'));
@@ -1541,7 +1547,12 @@ $('ledger-form').addEventListener('submit', async event => {
     render();
     clearLedgerPreview();
     $('notice').textContent = `Добавлено: ${added}. Уже в реестре: ${preview.duplicates + preview.orders.length - added}.`;
-  } catch (error) { if (operation.active()) $('ledger-error').textContent = error.message; }
+  } catch (error) {
+    if (operation.active()) {
+      if (!ledgerPreview) $('ledger-preview').replaceChildren();
+      $('ledger-error').textContent = error.message;
+    }
+  }
   finally { operation.finish(); }
 });
 

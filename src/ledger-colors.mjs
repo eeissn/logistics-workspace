@@ -5,7 +5,7 @@ const stages = {
   FFB4A7D6:'loaded', FFEA9999:'failed',
 };
 
-export function readLedgerColors(buffer, sheetName, rows) {
+export function createLedgerColorReader(buffer) {
   const files = unzipSync(new Uint8Array(buffer), {
     filter: entry => /^xl\/(?:workbook\.xml|styles\.xml|_rels\/workbook\.xml\.rels|worksheets\/[^/]+\.xml)$/.test(entry.name),
   });
@@ -13,6 +13,10 @@ export function readLedgerColors(buffer, sheetName, rows) {
   const styles = xml('xl/styles.xml');
   const book = xml('xl/workbook.xml');
   const rels = xml('xl/_rels/workbook.xml.rels');
+  return (sheetName, rows) => readLedgerColors(xml, styles, book, rels, sheetName, rows);
+}
+
+function readLedgerColors(xml, styles, book, rels, sheetName, rows) {
   const sheet = [...(book?.getElementsByTagNameNS('*','sheet') ?? [])].find(item => item.getAttribute('name') === sheetName);
   const relation = [...(rels?.getElementsByTagNameNS('*','Relationship') ?? [])]
     .find(item => item.getAttribute('Id') === sheet?.getAttribute('r:id'));

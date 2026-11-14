@@ -2,6 +2,8 @@
 
 ## Sputnik Workspace · новый цикл
 
+- [x] Годовой предпросмотр Excel по всем листам реестра и исключение формульных строк шаблона из ошибок. Покрыто `test/ledger-workbook.test.mjs` и проверено на агрегатах книги за 2026 год. Выкладка исправления отдельным шагом.
+
 - [x] Установить и сверить выпуск Sputnik на VPS. SHA `e82ea4dc170dff043c59d7047e3d7c9cfe09631f`, [CI](https://github.com/eeissn/logistics-workspace/actions/runs/43566332543), HTTPS 200 и API 401 без сессии. Предрелизная SQLite прошла проверку. Детали отката в AGENT_STATE.
 
 - [x] Убрать дублирование заголовка мобильных деталей, сократить панель команд до одного ряда и проверить прямые действия на ПК. [Демо и визуальная проверка](https://eeissn.github.io/logistics-workspace/sputnik-mobile-final/), Pages `5b27fcf`. Сквозные Chromium и WebKit прошли.

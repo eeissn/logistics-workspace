@@ -295,7 +295,7 @@
 <dialog id="ledger-dialog" aria-labelledby="ledger-title">
   <form id="ledger-form">
     <header class="dialog-head"><h2 id="ledger-title">Импорт заявок из Excel</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
-    <p>Выберите реестр с листом «Ноябрь». Будут предложены заявки за ноябрь 2026 года. Совпадающие номера пропускаются.</p>
+    <p>Выберите файл XLSX. Проверка охватит все листы с колонками реестра. Совпадающие номера пропускаются.</p>
     <label>Реестр Excel<input id="ledger-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></label>
     <p class="quiet">Бирюзовая заливка означает «Выгрузился», жёлтая — «Подписана», фиолетовая — «Загрузился», красная — «Срыв заявки».</p>
     <p class="error" id="ledger-error" role="alert"></p>

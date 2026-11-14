@@ -52,7 +52,7 @@ async function workspace(t, restore = deferred()) {
   const hooks = registerHooks({
     resolve(specifier, context, next) {
       if (specifier === 'read-excel-file/browser') {
-        return {url:'data:text/javascript,export const readSheet = (file, name) => file.read(name)', shortCircuit:true};
+        return {url:'data:text/javascript,export default async file => [{sheet:"Ноябрь",data:await file.read("Ноябрь")}]', shortCircuit:true};
       }
       return next(specifier, context);
     },
