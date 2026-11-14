@@ -223,11 +223,14 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     expect(page.locator("#ledger-preview")).to_contain_text("Выгрузился (1)")
     page.locator('#ledger-form [type="submit"]').click()
     expect(page.locator("#ledger-dialog")).to_be_hidden()
+    page.locator('[data-scope="history"]').click()
+    page.locator("#history-month").select_option("all")
     excel_row = page.locator("#table .order").filter(has_text=f"EXCEL-{number}")
     expect(excel_row.locator(".trip-status")).to_have_value("unloaded")
     excel_row.locator(".trip-status").select_option("new")
     expect(page.locator("#notice")).to_have_text("Статус рейса сохранён.")
     expect(page.locator("#table")).to_contain_text(f"EXCEL-{number}")
+    page.locator('[data-scope="active"]').click()
 
     registry_views(page, number, order_a, mobile)
 
@@ -253,9 +256,11 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     expect(page.locator("#etrn-dialog")).to_be_hidden()
     expect(row.locator(".etrn-link")).to_have_text("Закрыта вручную")
     row.locator(".trip-status").select_option("unloaded")
-    expect(page.locator("#archive")).to_be_visible()
-    page.locator("#archive-title").click()
-    expect(page.locator("#archive-table")).to_contain_text(str(number))
+    expect(page.locator("#table")).not_to_contain_text(f"№ {number}")
+    page.locator('[data-scope="history"]').click()
+    page.locator("#history-month").select_option("all")
+    expect(page.locator("#table")).to_contain_text(str(number))
+    page.locator('[data-scope="active"]').click()
 
     click_workspace_action(page, "#report", mobile)
     page.locator("#report-month").fill("2026-11")
@@ -323,7 +328,8 @@ def registry_views(page, number, order_a, mobile):
     assert root.evaluate("(root) => root.style.getPropertyValue('--status-signed')") == "#ee9911"
 
     expect(page.locator(".registry-tabs button")).to_have_count(2)
-    page.locator('[data-view="not-unloaded"]').click()
+    page.locator('#filter-view').select_option("not-unloaded")
+    # Check the active-only view across themes
     for appearance in ("sputnik", "violet", "sand"):
         theme(appearance)
         filters = page.get_by_role("button", name="Фильтры", exact=True)
@@ -341,7 +347,7 @@ def registry_views(page, number, order_a, mobile):
         expect(page.locator("#filters-count")).to_have_text("2")
         expect(page.locator("#active-filters")).to_have_text("Загрузились · ЭТРН требуют внимания")
         expect(registry).not_to_contain_text(order)
-        page.locator('[data-view="not-unloaded"]').click()
+        page.locator('#filter-view').select_option("not-unloaded")
         expect(page.locator("#filters-count")).to_have_text("1")
         expect(page.locator("#filter-view")).to_have_value("not-unloaded")
 
@@ -439,7 +445,7 @@ def registry_views(page, number, order_a, mobile):
     expect(page.locator("html")).to_have_attribute("data-theme", "sand")
     expect(page.locator("html")).to_have_attribute("style", re.compile("--custom-accent: #226650"))
     expect(registry).to_contain_text(order)
-    page.locator('[data-view="not-unloaded"]').click()
+    page.locator('#filter-view').select_option("not-unloaded")
 
     card = registry.locator(".kanban-card").filter(has_text=f"№ EXCEL-{number}")
     trip = card.locator(".trip-status")
@@ -467,13 +473,15 @@ def registry_views(page, number, order_a, mobile):
     expect(page.locator("#notice")).to_have_text("Статус рейса сохранён.")
     expect(page.locator("#sync-status")).to_have_text("Сохранено")
     expect(card).to_have_count(0)
-    page.locator('[data-view="all"]').click()
+    page.locator('[data-scope="history"]').click()
+    page.locator("#history-month").select_option("all")
     expect(card.locator(".trip-status")).to_have_value("unloaded")
     expect(card.locator(".etrn-link")).to_have_text("К созданию")
     page.once("dialog", lambda dialog: dialog.accept())
     card.locator(".trip-status").select_option(original)
     expect(card.locator(".trip-status")).to_have_value(original)
     expect(page.locator("#notice")).to_have_text("Статус рейса сохранён.")
+    page.locator('[data-scope="active"]').click()
     layout.select_option("table")
     theme("violet")
     assert page.locator("html").evaluate("(root) => root.style.getPropertyValue('--custom-accent')") == ""
