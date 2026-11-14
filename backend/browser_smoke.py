@@ -101,10 +101,11 @@ def mobile_long_order(page):
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     page.locator("#table .order-summary").filter(has_text=number).click()
     details = page.locator("#table .split-detail")
-    expect(details).to_contain_text(number)
+    expect(page.locator("#table [aria-expanded=true].order-summary")).to_contain_text(number)
     expect(details).to_contain_text(company)
-    expect(details).to_contain_text(route)
-    details.locator(".split-back").click()
+    expect(page.locator("#table [aria-expanded=true].order-summary")).to_contain_text(route)
+    assert route not in details.inner_text()
+    page.locator("#table [aria-expanded=true].order-summary").click()
     page.locator("#layout").select_option("table")
 
 
@@ -182,9 +183,15 @@ def click_workspace_action(page, button, mobile):
     page.locator(button).click()
 
 
+def click_registry_action(page, selector, mobile):
+    if mobile and page.locator("#registry-more").get_attribute("open") is None:
+        page.locator("#registry-more summary").click()
+    page.locator(selector).click()
+
+
 def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     pdfs, workbook = import_fixtures(chromium, number)
-    page.locator("#import").click()
+    click_registry_action(page, "#import", mobile)
     page.locator("#customer-pdf").set_input_files(pdfs[0])
     page.locator("#carrier-pdf").set_input_files(pdfs[1])
     page.locator('#import-form [type="submit"]').click()
@@ -323,7 +330,7 @@ def registry_views(page, number, order_a, mobile):
         expect(page.locator("#filter-view")).to_have_value("not-unloaded")
 
         period = page.locator("#period-open")
-        period.click()
+        click_registry_action(page, "#period-open", mobile)
         if mobile:
             assert page.locator("#period-form").evaluate("""form => {
                 const [a,b] = Array.from(form.querySelectorAll('input')).map(e => e.getBoundingClientRect());
@@ -336,13 +343,13 @@ def registry_views(page, number, order_a, mobile):
         page.locator("#period-to").fill("2026-11-13")
         page.get_by_role("button", name="Применить").click()
         expect(period).to_have_text("09.11–13.11")
-        expect(period).to_have_accessible_name("Период: 2026-11-09 — 2026-11-13")
+        expect(period).to_have_attribute("aria-label", "Период: 2026-11-09 — 2026-11-13")
         if mobile:
-            assert page.evaluate("""() => ['#search', '#filters-open', '#period-open', '#new', '#import'].every(selector => {
+            assert page.evaluate("""() => ['#search', '#filters-open', '#registry-more summary', '#new'].every(selector => {
                 const rect = document.querySelector(selector).getBoundingClientRect();
                 return rect.left >= 0 && rect.right <= innerWidth && rect.height >= 44;
             })""")
-        period.click()
+        click_registry_action(page, "#period-open", mobile)
         page.locator("#period-reset").click()
         expect(period).to_have_text("Период")
         page.locator("#filters-open").click()
@@ -378,8 +385,11 @@ def registry_views(page, number, order_a, mobile):
                 entry.click()
                 panel = registry.locator(".split-detail")
                 expect(panel).to_be_visible()
-                expect(panel.locator("h2")).to_have_text(f"Заявка {order}")
-                expect(panel.locator(".trip-overview-route")).to_be_visible()
+                if mobile:
+                    expect(panel.locator("h2, .trip-overview-route")).to_have_count(0)
+                else:
+                    expect(panel.locator("h2")).to_have_text(f"Заявка {order}")
+                    expect(panel.locator(".trip-overview-route")).to_be_visible()
                 expect(panel.locator(".trip-progress li")).to_have_count(4)
                 expect(panel.locator(".trip-progress [aria-current=step]")).to_have_count(1)
                 expect(panel.locator(".split-points li")).to_have_count(2)
@@ -398,7 +408,8 @@ def registry_views(page, number, order_a, mobile):
                 if mobile:
                     expect(registry.locator(".split-list")).to_be_visible()
                     expect(registry.locator(".split-list li .split-detail")).to_be_visible()
-                    panel.locator(".split-back").click()
+                    entry.click()
+                    expect(panel).to_have_count(0)
                     expect(registry.locator(".split-list")).to_be_visible()
 
     click_workspace_action(page, "#settings", mobile)

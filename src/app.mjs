@@ -515,11 +515,7 @@ function renderSplit(container, rows) {
           {duration:190, easing:'cubic-bezier(.2,.75,.25,1)'},
         );
       }
-      if (window.matchMedia('(max-width: 760px)').matches) {
-        container.querySelector('.split-back').focus({preventScroll:inline});
-      } else {
-        [...container.querySelectorAll('[data-order]')].find(button => button.dataset.order === item.number)?.focus({preventScroll:true});
-      }
+      [...container.querySelectorAll('[data-order]')].find(button => button.dataset.order === item.number)?.focus({preventScroll:true});
     }, item.number === order.number, grid));
     if (inline) {
       const trigger = entry.firstElementChild;
@@ -530,15 +526,12 @@ function renderSplit(container, rows) {
     list.append(entry);
   }
 
-  panel.append(action(inline ? 'Свернуть' : '← К списку', () => {
-    selections.set(container, {number:order.number, expanded:false});
-    render();
-    [...container.querySelectorAll('[data-order]')].find(button => button.dataset.order === order.number)?.focus({preventScroll:true});
-  }, 'split-back'), node('h2', 'Заявка № ' + order.number));
+  if (!inline) panel.append(node('h2', 'Заявка № ' + order.number));
   const status = node('div', null, 'split-status');
   status.append(tripControl(order));
   const journey = node('div', null, 'trip-overview');
-  journey.append(node('p', routeText(order) || 'Маршрут не указан', 'trip-overview-route'), status);
+  if (!inline) journey.append(node('p', routeText(order) || 'Маршрут не указан', 'trip-overview-route'));
+  journey.append(status);
   const stage = tripStatus(order);
   const stageIndex = tripStatuses.findIndex(([key]) => key === stage);
   if (stageIndex >= 0 && stage !== 'failed') {
@@ -956,6 +949,27 @@ for (const [id, labels] of [['theme', themeLabels], ['layout', layoutLabels], ['
 }
 applyDisplay();
 const mobileNav = window.matchMedia?.('(max-width: 850px)');
+const mobileCommands = window.matchMedia?.('(max-width: 740px)');
+function placeRegistryCommands() {
+  if (!mobileCommands) return;
+  const menu = $('registry-more');
+  if (mobileCommands.matches) {
+    $('registry-more-actions').append($('period-open'), $('import'));
+  } else {
+    menu.open = false;
+    $('period-slot').append($('period-open'));
+    $('registry-actions').append($('import'));
+  }
+}
+placeRegistryCommands();
+mobileCommands?.addEventListener('change', placeRegistryCommands);
+for (const id of ['period-dialog', 'import-dialog']) {
+  $(id).addEventListener('close', () => {
+    if (!mobileCommands?.matches || !$('registry-more').open) return;
+    $('registry-more').open = false;
+    $('registry-more').querySelector('summary').focus({preventScroll:true});
+  });
+}
 function setWorkspaceMenu() {
   $('workspace-menu').open = !mobileNav?.matches;
 }

@@ -2,6 +2,8 @@
 
 ## Sputnik Workspace · новый цикл
 
+- [x] Убрать дублирование заголовка мобильных деталей, сократить панель команд до одного ряда и проверить прямые действия на ПК. [Демо и визуальная проверка](https://eeissn.github.io/logistics-workspace/sputnik-mobile-final/), Pages `5b27fcf`. Сквозные Chromium и WebKit прошли.
+
 - [x] Исправить мобильные режимы и формы по шести снимкам владельца. Chromium, WebKit 393 × 852 и проверка длинных значений прошли, 54 JS-теста, 11 API, тест CMS и сборка. [Мобильное демо](https://eeissn.github.io/logistics-workspace/sputnik-mobile/).
 
 - [x] Зафиксировать дизайн-систему, добавить тему Sputnik с сохранением Violet/Sand, упорядочить навигацию и показать подтверждение сохранения. `df4f25c4faddfb296f9ddd5b46306cfd861544aa`. Доказательства — `DESIGN_SYSTEM.md`, тесты API и браузерная матрица 3 × 4 на Chromium и профиле iPhone 13 в WebKit.
