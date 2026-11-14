@@ -289,14 +289,15 @@ def create_app(path, origin, sheet_preview=None):
 
         @app.post("/api/sheet-preview")
         async def preview_sheet_row(request: Request):
-            user = session(request, mutate=True)
+            session(request, mutate=True)
             data = await read_json(request, 4096)
             keys = ("number", "title", "amount", "requested", "promised")
             if not isinstance(data, dict) or set(data) != set(keys):
                 raise HTTPException(422, "Invalid row")
             if not all(isinstance(data[key], str) and 0 < len(data[key].strip()) <= 200 for key in keys):
                 raise HTTPException(422, "Invalid row")
-            if len(data["number"]) > 48 or not re.fullmatch(r"\d{1,12}(?:\.\d{1,2})?", data["amount"]):
+            data = {key: value.strip() for key, value in data.items()}
+            if len(data["number"]) > 48 or not re.fullmatch(r"[0-9]{1,12}(?:\.[0-9]{1,2})?", data["amount"]):
                 raise HTTPException(422, "Invalid amount or order number")
             try:
                 for key in ("requested", "promised"):
@@ -305,7 +306,7 @@ def create_app(path, origin, sheet_preview=None):
             except ValueError:
                 raise HTTPException(422, "Invalid dates") from None
             user = session(request, mutate=True)
-            return sheet_preview(user["email"], data)
+            return await run_in_threadpool(sheet_preview, user["email"], data)
 
     @app.post("/api/login")
     async def login(request: Request, response: Response):
@@ -372,7 +373,15 @@ def create_app(path, origin, sheet_preview=None):
 
 
 def from_env():
-    return create_app(os.environ["DATABASE_PATH"], os.environ["APP_ORIGIN"])
+    path = os.environ["DATABASE_PATH"]
+    writer = None
+    if os.getenv("WORKSPACE_SHEETS_ENABLED") == "true":
+        from backend.sheets import SheetWriter
+        config = json.loads(Path(os.environ["WORKSPACE_SHEETS_CONFIG"]).read_text(encoding="utf-8"))
+        token_file = Path(config["token_file"])
+        writer = SheetWriter(path, config["spreadsheet"], config["tab"], config["headers"],
+                             config["actors"], lambda: token_file.read_text(encoding="utf-8").strip())
+    return create_app(path, os.environ["APP_ORIGIN"], writer)
 
 
 def backup(path, target):
