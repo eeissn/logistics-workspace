@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Logistics Workspace</title>
+<link rel="icon" href="./favicon-16.png" type="image/png" sizes="16x16">
+<link rel="icon" href="./favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml" sizes="any">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png" sizes="180x180">
+<link rel="manifest" href="./site.webmanifest">
+  <script type="module" crossorigin src="./assets/index-DL-n-W41.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-BiQ3Sef6.css">
+</head>
+<body>
+<section id="sign-in" hidden>
+  <form id="sign-in-form">
+    <h1>Logistics Workspace</h1>
+    <label>Почта<input name="email" type="email" autocomplete="username" maxlength="254" required></label>
+    <label>Пароль<input name="password" type="password" autocomplete="current-password" maxlength="256" required></label>
+    <button class="primary" type="submit">Войти</button>
+    <p id="sign-in-error" role="alert"></p>
+  </form>
+</section>
+<aside id="workspace-nav" class="workspace-nav" hidden>
+  <a class="brand" href="./"><img src="./favicon-32.png" alt="" width="22" height="22">Sputnik Workspace</a>
+  <a class="registry-link" href="#view-title" aria-current="page">Заявки</a>
+  <details class="workspace-menu" id="workspace-menu">
+    <summary aria-label="Меню рабочего пространства">⋯</summary>
+    <div class="workspace-menu-body">
+      <div class="nav-tools">
+        <button type="button" id="calculator" aria-haspopup="dialog">Калькулятор</button>
+        <button type="button" id="cargo-open" aria-haspopup="dialog">Размещение груза</button>
+        <button type="button" id="ledger">Импорт Excel</button>
+        <button type="button" id="report">Отчёт по марже</button>
+      </div>
+      <nav class="favorite-views" aria-label="Избранные фильтры">
+        <strong>☆ Избранное</strong>
+        <button type="button" data-view="pickup" aria-pressed="false">Загрузка сегодня</button>
+        <button type="button" data-view="delivery" aria-pressed="false">Выгрузка сегодня</button>
+        <button type="button" data-view="failed" aria-pressed="false">Проблемные</button>
+      </nav>
+      <div class="account-tools">
+        <div id="sync-tools" class="sync-tools" hidden>
+          <span id="account-email"></span>
+          <button id="sync-refresh" type="button">Обновить</button>
+          <button id="local-import" type="button" hidden>Перенести заявки с устройства</button>
+        </div>
+        <button type="button" id="settings" aria-haspopup="dialog">Настройки</button>
+        <button id="sign-out" type="button" hidden>Выйти</button>
+      </div>
+    </div>
+  </details>
+</aside>
+<main id="workspace" hidden>
+  <header class="intro">
+    <h1 id="view-title">Заявки</h1>
+    <p id="sync-status" class="quiet" role="status"></p>
+  </header>
+  <div class="registry-command">
+    <label class="registry-search"><svg class="command-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input id="search" type="search" aria-label="Поиск по заявкам" placeholder="Номер, компания, маршрут"></label>
+    <button id="filters-open" type="button" aria-haspopup="dialog"><svg class="command-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-6 7v5l-4 2v-7z"/></svg><span>Фильтры</span><span id="filters-count" class="command-count" hidden>1</span></button>
+    <button id="period-open" type="button" aria-haspopup="dialog"><svg class="command-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="14" rx="2"/><path d="M8 4v4m8-4v4M4 10h16"/></svg><span id="period-label">Период</span></button>
+    <div class="actions"><button id="new" class="primary" type="button"><span aria-hidden="true">+</span> <span class="action-label">Новая заявка</span></button><button id="import" type="button"><span aria-hidden="true">↑</span> <span class="action-label">Загрузить два PDF</span></button></div>
+  </div>
+  <p id="active-filters" class="active-filters" hidden></p>
+  <p id="demo-note" class="demo-note" hidden>Демоверсия · заявка и контакты вымышлены. Для проверки используй тестовые документы.</p>
+  <section class="registry" aria-label="Реестр заявок">
+    <nav class="registry-tabs" aria-label="Разделы заявок">
+      <button type="button" data-view="all" aria-pressed="true">Все</button>
+      <button type="button" data-view="not-unloaded" aria-pressed="false">Не выгружены</button>
+
+    </nav>
+    <div class="registry-toolbar">
+      <div class="registry-tools">
+        <label class="view-picker"><span aria-hidden="true">▤</span> Вид <select id="layout" aria-label="Вид реестра"></select></label>
+        <div class="sort-tools">
+          <label>Сортировка <select id="sort" aria-label="Сортировка заявок"><option value="delivery">Выгрузка</option><option value="pickup">Загрузка</option><option value="date">Дата заявки</option><option value="number">Номер</option><option value="customer">Заказчик</option><option value="carrier">Перевозчик</option><option value="route">Маршрут</option><option value="trip">Статус рейса</option><option value="etrn">ЭТРН</option></select></label>
+          <button type="button" id="sort-direction" aria-label="Изменить порядок сортировки" aria-pressed="false">↑</button>
+        </div>
+      </div>
+    </div>
+    <div id="table"></div>
+    <details class="archive" id="archive" hidden><summary id="archive-title">Архив</summary><div id="archive-table"></div></details>
+  </section>
+  <p id="notice" role="status" aria-live="polite"></p>
+</main>
+
+<dialog id="sheet-dialog" aria-labelledby="sheet-title">
+  <form id="sheet-form">
+    <header class="dialog-head"><h2 id="sheet-title">Google-таблица · тестовый предпросмотр</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <label>Текст заявки<textarea id="sheet-paste" rows="2"></textarea></label>
+    <button type="button" id="sheet-parse">Распознать</button>
+    <p class="quiet">Даты без года заполните вручную. Данные отправляются в тестовый получатель.</p>
+    <div class="fields">
+      <label>Номер заявки<input name="number" required maxlength="48"></label>
+      <label>Наименование<input name="title" required maxlength="200"></label>
+      <label>Сумма, ₽<input name="amount" type="number" required min="0" step="0.01"></label>
+      <label>Кто обратился<input id="sheet-actor" readonly></label>
+      <label>Дата обращения<input name="requested" required type="date"></label>
+      <label>Дата, когда пообещали<input name="promised" required type="date"></label>
+    </div>
+    <p id="sheet-status" role="status"></p>
+    <footer class="dialog-foot"><button type="submit" class="primary">Подтвердить тестовую запись</button></footer>
+  </form>
+</dialog>
+
+<dialog id="cargo-dialog" aria-labelledby="cargo-title">
+  <div class="dialog-body">
+    <header class="dialog-head"><h2 id="cargo-title">Размещение груза</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <div class="cargo-host"></div>
+  </div>
+</dialog>
+
+<dialog id="calculator-dialog" aria-labelledby="calculator-title">
+  <form>
+    <header class="dialog-head"><h2 id="calculator-title">Калькулятор</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <details open>
+      <summary>Маржа</summary>
+      <div class="fields">
+        <label>Ставка заказчика, ₽<input name="income" type="number" step="0.01" inputmode="decimal"></label>
+        <label>НДС заказчика<select name="incomeTax"><option value="22">22%</option><option value="5">5%</option><option value="0">Без НДС</option></select></label>
+        <label>Ставка перевозчика, ₽<input name="cost" type="number" step="0.01" inputmode="decimal"></label>
+        <label>НДС перевозчика<select name="costTax"><option value="22">22%</option><option value="5">5%</option><option value="0">Без НДС</option></select></label>
+      </div>
+      <dl class="split-fields">
+        <div><dt>Реальная прибыль</dt><dd data-margin="realProfit"></dd></div>
+        <div><dt>Валовая маржа</dt><dd data-margin="grossMargin"></dd></div>
+        <div><dt>НДС к уплате</dt><dd data-margin="vatPayable"></dd></div>
+        <div><dt>Налог на прибыль</dt><dd data-margin="profitTax"></dd></div>
+      </dl>
+    </details>
+    <details>
+      <summary>Сумма с НДС</summary>
+      <label>Сумма без НДС, ₽<input name="base" type="number" step="0.01" inputmode="decimal"></label>
+      <dl class="split-fields">
+        <div><dt>С НДС 5%</dt><dd><output aria-label="С НДС 5%" data-vat="5"></output> <small></small> <button type="button" data-copy="" aria-label="Копировать сумму с НДС 5%">Копировать</button></dd></div>
+        <div><dt>С НДС 22%</dt><dd><output aria-label="С НДС 22%" data-vat="22"></output> <small></small> <button type="button" data-copy="" aria-label="Копировать сумму с НДС 22%">Копировать</button></dd></div>
+      </dl>
+      <p role="status"></p>
+    </details>
+  </form>
+</dialog>
+
+<dialog id="filters-dialog" class="compact-dialog" aria-labelledby="filters-title">
+  <div class="dialog-body">
+    <header class="dialog-head"><h2 id="filters-title">Фильтры</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <label>Рейсы<select id="filter-view">
+      <option value="all">Все</option>
+      <option value="not-unloaded">Не выгружены</option>
+      <option value="planned">Планируются</option>
+      <option value="loaded">Загрузились</option>
+      <option value="completed">Выгрузились</option>
+      <option value="failed">Проблемные</option>
+      <option value="pickup">Загрузка сегодня</option>
+      <option value="delivery">Выгрузка сегодня</option>
+    </select></label>
+    <label>ЭТРН<select id="filter" aria-label="Фильтр ЭТРН"><option value="">Все ЭТРН</option><option value="pending">ЭТРН требуют внимания</option><option value="Подписана">ЭТРН подписана</option><option value="Закрыта вручную">ЭТРН закрыта вручную</option><option value="Не требуется">ЭТРН не требуется</option></select></label>
+  </div>
+</dialog>
+<dialog id="period-dialog" class="compact-dialog" aria-labelledby="period-title">
+  <form id="period-form">
+    <header class="dialog-head"><h2 id="period-title">Период по дате заявки</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <div class="fields"><label>С<input id="period-from" type="date"></label><label>По<input id="period-to" type="date"></label></div>
+    <footer class="dialog-foot"><button type="button" id="period-reset">Сбросить</button><button class="primary" type="submit">Применить</button></footer>
+  </form>
+</dialog>
+
+<dialog id="settings-dialog" class="compact-dialog" aria-labelledby="settings-title">
+  <div class="dialog-body">
+    <header class="dialog-head"><h2 id="settings-title">Настройки</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <div class="display-settings">
+      <label>Внешний вид<select id="theme"></select></label>
+      <label id="violet-palette-setting" hidden>Палитра фона и таблицы<select id="violet-palette"></select></label>
+      <div class="accent-settings">
+        <label for="accent-color">Цвет акцента</label>
+        <input id="accent-color" type="color" value="#6035c6">
+        <button type="button" id="reset-accent">Цвет темы</button>
+      </div>
+      <details id="status-palette" hidden><summary>Цвета статусов</summary>
+        <div id="status-colors"></div>
+        <button type="button" id="reset-status-colors">Вернуть цвета</button>
+      </details>
+      <label>Отображение заявок<select id="settings-layout"></select></label>
+      <p class="quiet" id="settings-account" hidden></p>
+      <p class="quiet" id="settings-status" role="status">Настройки сохраняются в этом браузере.</p>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="import-dialog" aria-labelledby="import-title">
+  <form id="import-form">
+    <header class="dialog-head"><h2 id="import-title">Импорт заявок Логистора</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <p>Выбери два PDF с одним номером заявки. Каждый файл можно открыть из своей папки.</p>
+    <div class="upload-fields">
+      <label>Заявка заказчика<input id="customer-pdf" type="file" accept=".pdf,application/pdf" required></label>
+      <label>Заявка перевозчика<input id="carrier-pdf" type="file" accept=".pdf,application/pdf" required></label>
+    </div>
+    <p class="error" id="import-error" role="alert"></p>
+    <footer class="dialog-foot"><button class="primary" type="submit">Проверить и открыть заявку</button></footer>
+  </form>
+</dialog>
+
+<dialog id="editor" aria-labelledby="editor-title">
+  <form id="editor-form">
+    <header class="dialog-head"><h2 id="editor-title">Заявка</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <fieldset class="editor-section"><legend>Заявка и участники</legend>
+      <div class="fields">
+        <label>Номер заявки<input name="number" required maxlength="48"></label>
+        <label>Дата заявки<input name="date" type="date"></label>
+        <label>Заказчик<input name="customer"></label>
+        <label>Перевозчик<input name="carrier"></label>
+      </div>
+    </fieldset>
+    <fieldset class="editor-section"><legend>Перевозка</legend>
+      <div class="fields">
+        <label>Водитель<input name="driver"></label>
+        <label>Транспорт<input name="vehicle"></label>
+        <label class="wide">Паспорт водителя<textarea name="passport" rows="2" autocomplete="off" spellcheck="false"></textarea></label>
+        <label>Направление<input name="route"></label>
+        <label>Груз<input name="cargo"></label>
+      </div>
+    </fieldset>
+    <fieldset><legend>Ставки и маржа</legend>
+      <div class="fields">
+        <label>Ставка заказчика, ₽<input name="customerAmount" type="number" min="0" step="0.01"></label>
+        <label>НДС заказчика<select name="customerTax"><option value="">Укажи НДС</option><option value="0">Без НДС</option><option value="5">5%</option><option value="22">22%</option></select></label>
+        <label>Ставка перевозчика, ₽<input name="carrierAmount" type="number" min="0" step="0.01"></label>
+        <label>НДС перевозчика<select name="carrierTax"><option value="">Укажи НДС</option><option value="0">Без НДС</option><option value="5">5%</option><option value="22">22%</option></select></label>
+      </div>
+      <div id="margin-detail" class="margin-detail"></div>
+    </fieldset>
+    <details open><summary>Маршрут и окна</summary><div id="points"></div><button type="button" id="add-point">Добавить точку</button></details>
+    <details><summary>Контакты участников</summary><div id="contacts" class="fields"></div></details>
+    <details><summary>Оплата перевозчику</summary>
+      <div class="fields">
+        <label>По оригиналам, дней<input name="originals" type="number" min="0" step="1"></label>
+        <label>По ЭДО, дней<input name="edo" type="number" min="0" step="1"></label>
+        <label>Вид дней<select name="unit"><option value="">Не указано</option><option>банковских дней</option><option>календарных дней</option></select></label>
+        <label class="wide">Условия<textarea name="conditions" rows="2"></textarea></label>
+      </div>
+      <p id="payment-source"></p>
+    </details>
+    <div class="editor-etrn"><strong>ЭТРН</strong><button type="button" id="editor-etrn">Открыть ЭТРН</button></div>
+    <button id="sheet-open" type="button" hidden>Добавить в Google-таблицу</button>
+    <details id="differences"><summary>Расхождения PDF</summary><div id="difference-list"></div></details>
+    <p id="editor-error" class="error" role="alert"></p>
+    <footer class="dialog-foot"><button type="button" data-close>Отмена</button><button class="primary" type="submit">Сохранить заявку</button></footer>
+  </form>
+</dialog>
+<dialog id="etrn-dialog" aria-labelledby="etrn-title">
+  <form id="etrn-form">
+    <header class="dialog-head">
+      <div><h2 id="etrn-title">ЭТРН</h2><p id="etrn-status" role="status" class="etrn-status"></p></div>
+      <button type="button" data-close aria-label="Закрыть">×</button>
+    </header>
+    <div class="etrn-body">
+      <label class="check etrn-required"><input type="checkbox" name="required"> Требуется ЭТРН</label>
+      <div id="etrn-fields">
+        <label>Номер ЭТРН<input name="etrnNumber" spellcheck="false"></label>
+        <ol class="etrn-stages" aria-label="Этапы ЭТРН">
+          <li><label><span aria-hidden="true">1</span><strong>Создана заказ-заявка</strong><input type="checkbox" name="orderForm"></label></li>
+          <li><label><span aria-hidden="true">2</span><strong>Создана ЭТРН</strong><input type="checkbox" name="created"></label></li>
+          <li><label><span aria-hidden="true">3</span><strong>Подписана всеми</strong><input type="checkbox" name="allSigned"></label></li>
+        </ol>
+      </div>
+      <label class="check etrn-manual"><input type="checkbox" name="manualComplete"> Закрыть вручную</label>
+      <p id="etrn-error" class="error" role="alert"></p>
+    </div>
+    <footer class="dialog-foot">
+      <button type="button" data-close>Отмена</button><button class="primary" id="etrn-save" type="submit">Сохранить</button>
+    </footer>
+  </form>
+</dialog>
+<dialog id="review-dialog" aria-labelledby="review-title">
+  <div class="dialog-body">
+    <header class="dialog-head"><h2 id="review-title">Результат распознавания</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <div id="review-card" class="review-card"></div>
+    <p class="error" id="review-error" role="alert"></p>
+    <footer class="dialog-foot"><button id="review-edit" type="button">Проверить и изменить</button><button id="review-save" class="primary" type="button">Сохранить заявку</button></footer>
+  </div>
+</dialog>
+<dialog id="ledger-dialog" aria-labelledby="ledger-title">
+  <form id="ledger-form">
+    <header class="dialog-head"><h2 id="ledger-title">Импорт заявок из Excel</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <p>Выберите реестр с листом «Ноябрь». Будут предложены заявки за ноябрь 2026 года. Совпадающие номера пропускаются.</p>
+    <label>Реестр Excel<input id="ledger-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></label>
+    <p class="quiet">Бирюзовая заливка означает «Выгрузился», жёлтая — «Подписана», фиолетовая — «Загрузился», красная — «Срыв заявки».</p>
+    <p class="error" id="ledger-error" role="alert"></p>
+    <div id="ledger-preview" role="status"></div>
+    <footer class="dialog-foot"><button class="primary" type="submit" id="ledger-submit">Проверить файл</button></footer>
+  </form>
+</dialog>
+<dialog id="report-dialog" aria-labelledby="report-title">
+  <form id="report-form">
+    <header class="dialog-head"><h2 id="report-title">Маржа за месяц</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <label>Календарный месяц<input id="report-month" type="month" pattern="[0-9]{4}-[0-9]{2}" placeholder="ГГГГ-ММ" required></label>
+    <div id="report-preview"></div>
+    <footer class="dialog-foot"><button class="primary" type="submit">Печать / сохранить PDF</button></footer>
+  </form>
+</dialog>
+<dialog id="driver-dialog" aria-labelledby="driver-title">
+  <div class="dialog-body">
+    <header class="dialog-head"><h2 id="driver-title">Данные водителя</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <label for="driver-message">Текст для заказчика или погрузки</label>
+    <textarea id="driver-message" rows="7" readonly spellcheck="false"></textarea>
+    <p id="driver-copy-status" class="quiet" role="status"></p>
+    <footer class="dialog-foot"><button type="button" id="driver-edit">Изменить данные</button><button type="button" class="primary" id="driver-copy">Копировать текст</button></footer>
+  </div>
+</dialog>
+<section id="print-report" hidden></section>
+<div id="contact-popover" class="contact-panel" role="region" aria-label="Контакты заявки" hidden></div>
+</body>
+</html>
