@@ -205,6 +205,12 @@ def click_registry_action(page, selector, mobile):
     page.locator(selector).click()
 
 
+def set_trip_view(page, value):
+    page.locator("#filters-open").click()
+    page.locator("#filter-view").select_option(value)
+    page.locator("#filters-dialog [data-close]").click()
+
+
 def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     pdfs, workbook = import_fixtures(chromium, number)
     click_registry_action(page, "#import", mobile)
@@ -328,7 +334,7 @@ def registry_views(page, number, order_a, mobile):
     assert root.evaluate("(root) => root.style.getPropertyValue('--status-signed')") == "#ee9911"
 
     expect(page.locator(".registry-tabs button")).to_have_count(2)
-    page.locator('#filter-view').select_option("not-unloaded")
+    set_trip_view(page, "not-unloaded")
     # Check the active-only view across themes
     for appearance in ("sputnik", "violet", "sand"):
         theme(appearance)
@@ -347,7 +353,7 @@ def registry_views(page, number, order_a, mobile):
         expect(page.locator("#filters-count")).to_have_text("2")
         expect(page.locator("#active-filters")).to_have_text("Загрузились · ЭТРН требуют внимания")
         expect(registry).not_to_contain_text(order)
-        page.locator('#filter-view').select_option("not-unloaded")
+        set_trip_view(page, "not-unloaded")
         expect(page.locator("#filters-count")).to_have_text("1")
         expect(page.locator("#filter-view")).to_have_value("not-unloaded")
 
@@ -445,7 +451,7 @@ def registry_views(page, number, order_a, mobile):
     expect(page.locator("html")).to_have_attribute("data-theme", "sand")
     expect(page.locator("html")).to_have_attribute("style", re.compile("--custom-accent: #226650"))
     expect(registry).to_contain_text(order)
-    page.locator('#filter-view').select_option("not-unloaded")
+    set_trip_view(page, "not-unloaded")
 
     card = registry.locator(".kanban-card").filter(has_text=f"№ EXCEL-{number}")
     trip = card.locator(".trip-status")
