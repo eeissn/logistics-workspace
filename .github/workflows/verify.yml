@@ -2,7 +2,7 @@ name: Verify Logistics Workspace
 
 on:
   push:
-    branches: [feature/two-user-sync, 'feature/two-user-sync-*', feature/ui-polish-agent-next, codex/release-candidate, codex/sputnik-workspace, codex/sputnik-mobile-review]
+    branches: [feature/two-user-sync, 'feature/two-user-sync-*', feature/ui-polish-agent-next, codex/release-candidate, codex/sputnik-workspace, codex/sputnik-mobile-review, codex/active-queue-monthly-history]
   pull_request:
     branches: [feature/two-user-sync]
 
