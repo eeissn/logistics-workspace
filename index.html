@@ -31,6 +31,7 @@
         <button type="button" id="calculator" aria-haspopup="dialog">Калькулятор</button>
         <button type="button" id="cargo-open" aria-haspopup="dialog">Размещение груза</button>
         <button type="button" id="ledger">Импорт Excel</button>
+        <button type="button" id="ledger-export" aria-haspopup="dialog">Экспорт Excel</button>
         <button type="button" id="report">Отчёт по марже</button>
       </div>
       <nav class="favorite-views" aria-label="Избранные фильтры">
@@ -91,7 +92,7 @@
     <header class="dialog-head"><h2 id="sheet-title">Google-таблица · тестовый предпросмотр</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
     <label>Текст заявки<textarea id="sheet-paste" rows="2"></textarea></label>
     <button type="button" id="sheet-parse">Распознать</button>
-    <p class="quiet">Даты без года заполните вручную. Данные отправляются в тестовый получатель.</p>
+    <p class="quiet" id="sheet-hint">Даты без года заполните вручную. Данные отправляются в тестовый получатель.</p>
     <div class="fields">
       <label>Номер заявки<input name="number" required maxlength="48"></label>
       <label>Наименование<input name="title" required maxlength="200"></label>
@@ -101,7 +102,7 @@
       <label>Дата, когда пообещали<input name="promised" required type="date"></label>
     </div>
     <p id="sheet-status" role="status"></p>
-    <footer class="dialog-foot"><button type="submit" class="primary">Подтвердить тестовую запись</button></footer>
+    <footer class="dialog-foot"><button id="sheet-submit" type="submit" class="primary">Подтвердить тестовую запись</button></footer>
   </form>
 </dialog>
 
@@ -279,6 +280,17 @@
     <p class="error" id="review-error" role="alert"></p>
     <footer class="dialog-foot"><button id="review-edit" type="button">Проверить и изменить</button><button id="review-save" class="primary" type="button">Сохранить заявку</button></footer>
   </div>
+</dialog>
+<dialog id="export-dialog" class="compact-dialog" aria-labelledby="export-title">
+  <form id="export-form">
+    <header class="dialog-head"><h2 id="export-title">Экспорт Excel</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <label>Заявки<select name="scope"><option value="filtered">По текущим фильтрам</option><option value="active">Все активные</option><option value="archive">Архив</option></select></label>
+    <label class="check"><input type="checkbox" name="parties"> Заказчик и перевозчик</label>
+    <label class="check"><input type="checkbox" name="money"> Ставки и маржа</label>
+    <p class="quiet">Номер, дата, маршрут, статус и ЭТРН включены.</p>
+    <p id="export-status" role="status"></p>
+    <footer class="dialog-foot"><button class="primary" type="submit">Скачать XLSX</button></footer>
+  </form>
 </dialog>
 <dialog id="ledger-dialog" aria-labelledby="ledger-title">
   <form id="ledger-form">

@@ -84,6 +84,22 @@ def calculators(page, mobile):
     cargo.locator("[data-close]").click()
 
 
+def ledger_export(page, mobile):
+    click_workspace_action(page, "#ledger-export", mobile)
+    dialog = page.locator("#export-dialog")
+    expect(dialog).to_be_visible()
+    expect(dialog.locator('[name="money"]')).not_to_be_checked()
+    with page.expect_download() as download:
+        dialog.get_by_role("button", name="Скачать XLSX").click()
+    with ZipFile(download.value.path()) as workbook:
+        sheet = workbook.read("xl/worksheets/sheet1.xml").decode()
+        assert "Synthetic shipper" not in sheet
+        assert "<f>" not in sheet
+    screenshots = os.environ.get("WORKSPACE_SMOKE_SCREENSHOTS")
+    if screenshots:
+        page.screenshot(animations="disabled", path=Path(screenshots) / f"{'mobile' if mobile else 'desktop'}-export.png")
+    dialog.locator("[data-close]").click()
+
 def mobile_long_order(page):
     number = "SPUTNIK-2026-REGIONAL-123456789012345678"
     route = "Санкт-Петербург, логистический парк Шушары → Нижний Новгород, распределительный терминал"
@@ -551,6 +567,7 @@ def smoke(browser_type, origin, chromium, number, report_total, device=None):
         sheet_preview(a, "Герман", number)
         calculators(a, device is not None)
         create_order(a, order_a)
+        ledger_export(a, device is not None)
 
         peer = first.new_page()
         peer.goto(origin)

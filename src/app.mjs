@@ -40,6 +40,7 @@ let saveFailure;
 let refreshFailure;
 let serverConfirmed = false;
 let sheetActor;
+let liveSheet = false;
 let ledgerPreview;
 let accountGeneration = 0;
 const pendingImports = new Map();
@@ -1016,7 +1017,7 @@ $('cargo-open').addEventListener('click', async () => {
     if (generation === accountGeneration) $('notice').textContent = 'Не удалось открыть размещение груза. Повторите действие.';
   }
 });
-for (const id of ['settings-dialog', 'ledger-dialog', 'report-dialog', 'calculator-dialog', 'cargo-dialog']) {
+for (const id of ['settings-dialog', 'ledger-dialog', 'export-dialog', 'report-dialog', 'calculator-dialog', 'cargo-dialog']) {
   $(id).addEventListener('close', () => {
     if (!mobileNav?.matches) return;
     const menu = $('workspace-menu');
@@ -1141,6 +1142,7 @@ function signInScreen(message = '') {
   saveFailure = refreshFailure = undefined;
   serverConfirmed = false;
   sheetActor = undefined;
+  liveSheet = false;
   $('sheet-actor').value = '';
   $('sheet-form').reset();
   auth.clear();
@@ -1236,6 +1238,10 @@ async function showAccount(account) {
     auth.sheetPreview().then(result => {
       if (generation !== accountGeneration) return;
       sheetActor = result.actor;
+      liveSheet = result.mode === 'live';
+      $('sheet-title').textContent = liveSheet ? 'Добавить в Google-таблицу' : 'Google-таблица · тестовый предпросмотр';
+      $('sheet-hint').textContent = liveSheet ? 'Даты без года заполните вручную.' : 'Даты без года заполните вручную. Данные отправляются в тестовый получатель.';
+      $('sheet-submit').textContent = liveSheet ? 'Добавить строку' : 'Подтвердить тестовую запись';
       $('sheet-open').hidden = !sheetActor;
     }).catch(() => {});
   }
@@ -1270,7 +1276,8 @@ $('sheet-form').addEventListener('submit', async event => {
   try {
     const result = await auth.sheetPreview(data);
     if (operation.active()) $('sheet-status').textContent = result.duplicate
-      ? 'Эта строка уже принята тестовым получателем.' : 'Тестовая строка принята.';
+      ? (liveSheet ? 'Эта строка уже была отправлена.' : 'Эта строка уже принята тестовым получателем.')
+      : (liveSheet ? 'Строка добавлена в Google-таблицу.' : 'Тестовая строка принята.');
   } catch (error) {
     if (operation.active()) $('sheet-status').textContent = error.message;
   } finally {
@@ -1437,6 +1444,41 @@ $('ledger').addEventListener('click', () => {
   clearLedgerPreview();
   $('ledger-error').textContent = '';
   $('ledger-dialog').showModal();
+});
+$('ledger-export').addEventListener('click', () => {
+  $('export-form').reset();
+  $('export-status').textContent = '';
+  $('export-dialog').showModal();
+});
+$('export-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const operation = startImport(event.submitter, event.currentTarget);
+  if (!operation) return;
+  const {scope, parties, money} = event.currentTarget.elements;
+  const selection = scope.value === 'filtered' ? selectOrders(orders, {
+    query:$('search').value, filter:$('filter').value, view, today:today(), sort, ascending, ...period,
+  }) : orders.filter(order => archived(order) === (scope.value === 'archive'));
+  const columns = {parties:parties.checked, money:money.checked};
+  const dialog = $('export-dialog');
+  try {
+    if (!selection.length) throw new Error('Нет заявок для выбранной выгрузки.');
+    const {exportLedger} = await import('./ledger-export.mjs');
+    if (!operation.active() || !dialog.open) return;
+    const bytes = exportLedger(selection, columns);
+    const url = URL.createObjectURL(new Blob([bytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+    const link = node('a');
+    link.href = url;
+    link.download = `sputnik-${today()}.xlsx`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    $('export-status').textContent = `Заявок в файле: ${selection.length}.`;
+  } catch (error) {
+    if (operation.active()) $('export-status').textContent = error.message;
+  } finally {
+    operation.finish();
+  }
 });
 $('ledger-file').addEventListener('change', clearLedgerPreview);
 function clearLedgerPreview() {
