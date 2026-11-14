@@ -2,6 +2,8 @@
 
 ## Sputnik Workspace · новый цикл
 
+- [x] Установить и сверить выпуск Sputnik на VPS. SHA `e82ea4dc170dff043c59d7047e3d7c9cfe09631f`, [CI](https://github.com/eeissn/logistics-workspace/actions/runs/43566332543), HTTPS 200 и API 401 без сессии. Предрелизная SQLite прошла проверку. Детали отката в AGENT_STATE.
+
 - [x] Убрать дублирование заголовка мобильных деталей, сократить панель команд до одного ряда и проверить прямые действия на ПК. [Демо и визуальная проверка](https://eeissn.github.io/logistics-workspace/sputnik-mobile-final/), Pages `5b27fcf`. Сквозные Chromium и WebKit прошли.
 
 - [x] Исправить мобильные режимы и формы по шести снимкам владельца. Chromium, WebKit 393 × 852 и проверка длинных значений прошли, 54 JS-теста, 11 API, тест CMS и сборка. [Мобильное демо](https://eeissn.github.io/logistics-workspace/sputnik-mobile/).
