@@ -17,6 +17,7 @@ from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from starlette.concurrency import run_in_threadpool
+from backend.bulk_etrn import apply_bulk_etrn, CHOICES
 
 COOKIE = "__Host-logistics"
 SESSION_AGE = 12 * 3600
@@ -368,6 +369,78 @@ def create_app(path, origin, sheet_preview=None):
                 return replace_orders(db, active["email"], revision, orders)
 
         return await run_in_threadpool(save)
+
+    @app.post("/api/etrn/bulk")
+    async def bulk_etrn(request: Request):
+        active = session(request, mutate=True)
+        data = await read_json(request, 65536)
+        if not isinstance(data, dict):
+            raise HTTPException(422, "Invalid request")
+        choice, items = data.get("choice"), data.get("items")
+        preview = data.get("preview", True)
+        revision = data.get("revision")
+        if choice not in CHOICES or type(preview) is not bool:
+            raise HTTPException(422, "Invalid ETRN status")
+        if type(revision) is not int or not 0 <= revision < 2**63 - 1:
+            raise HTTPException(422, "Invalid revision")
+        if not isinstance(items, list) or not 1 <= len(items) <= 200:
+            raise HTTPException(422, "Select between 1 and 200 orders")
+        numbers = set()
+        for item in items:
+            if not isinstance(item, dict) or set(item) != {"number", "updatedAt"}:
+                raise HTTPException(422, "Invalid selection")
+            number, stamp = item["number"], item["updatedAt"]
+            if (not isinstance(number, str) or not 1 <= len(number) <= 48 or
+                number in numbers or not isinstance(stamp, str) or len(stamp) > 80):
+                raise HTTPException(422, "Invalid or repeated selection")
+            numbers.add(number)
+
+        def run():
+            with database(path, write=not preview) as db:
+                current = db.execute(
+                    "SELECT 1 FROM sessions WHERE token=? AND email=? AND expires>?",
+                    (active["token"], active["email"], int(time.time())),
+                ).fetchone()
+                if current is None:
+                    raise HTTPException(401, "Sign in required")
+                state = snapshot(db, active["email"])
+                if state["revision"] != revision:
+                    raise HTTPException(409, "Registry changed")
+                owned = {entry["number"]: entry for entry in state["orders"]}
+                modifications, results = {}, []
+                for item in items:
+                    number = item["number"]
+                    original = owned.get(number)
+                    if original is None:
+                        results.append({"number": number, "result": "not-found"})
+                        continue
+                    if original.get("updatedAt") != item["updatedAt"]:
+                        results.append({"number": number, "result": "conflict"})
+                        continue
+                    try:
+                        updated = apply_bulk_etrn(original, choice)
+                    except ValueError as exc:
+                        results.append({"number": number, "result": "skipped", "reason": str(exc)})
+                        continue
+                    if updated["etrn"] == original["etrn"]:
+                        results.append({"number": number, "result": "unchanged"})
+                        continue
+                    modifications[number] = updated
+                    results.append({"number": number, "result": "ready" if preview else "updated"})
+                if preview or not modifications:
+                    return {"results": results, "updated": 0 if preview else 0,
+                            "ready": len(modifications), "preview": preview}
+                updated_orders = [
+                    modifications.get(entry["number"], entry).copy()
+                    for entry in state["orders"]
+                ]
+                # validate_orders removes client-managed updatedAt and never edits the originals.
+                validate_orders(updated_orders)
+                saved = replace_orders(db, active["email"], revision, updated_orders)
+                return {"results": results, "updated": len(modifications),
+                        "ready": len(modifications), "preview": False,
+                        "revision": saved["revision"]}
+        return await run_in_threadpool(run)
 
     return app
 
