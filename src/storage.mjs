@@ -150,6 +150,14 @@ export const store = demo ? offlineStore : {
     if (!account) throw new Error('Сеанс завершён.');
     return inSession(() => request('records', 'GET', undefined, account.csrf), acceptSnapshot);
   },
+  async bulkEtrn(items, choice, preview = true) {
+    if (!account) throw new Error('Сеанс завершён.');
+    const latest = await this.list();
+    const revision = revisions.get(latest);
+    if (revision === undefined) throw new Error('Не удалось получить текущую версию реестра.');
+    return inSession(() => request('etrn/bulk', 'POST',
+      {items, choice, preview, revision}, account.csrf), result => result);
+  },
   async save(orders, base) {
     const revision = revisions.get(base);
     if (revision === undefined || !account) throw new Error('Обновите реестр перед сохранением.');
