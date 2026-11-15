@@ -86,11 +86,38 @@
         </div>
       </div>
     </div>
+    <div class="bulk-controls">
+      <button id="bulk-mode" type="button" aria-pressed="false">Выбрать заявки</button>
+      <div id="bulk-actions" class="bulk-actions" hidden>
+        <span id="bulk-selected" role="status">Выбрано: 0</span>
+        <button id="bulk-select-visible" type="button">Выбрать видимые</button>
+        <button id="bulk-clear" type="button">Снять выбор</button>
+        <button id="bulk-open" type="button" class="primary" disabled>Изменить ЭТРН</button>
+      </div>
+    </div>
     <div id="table"></div>
     <details class="archive" id="archive" hidden><summary id="archive-title">Архив</summary><div id="archive-table"></div></details>
   </section>
   <p id="notice" role="status" aria-live="polite"></p>
 </main>
+
+<dialog id="bulk-dialog" aria-labelledby="bulk-title" class="compact-dialog">
+  <form id="bulk-form">
+    <header class="dialog-head"><h2 id="bulk-title">Массовое изменение ЭТРН</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <p id="bulk-summary" class="quiet"></p>
+    <label>Установить статус ЭТРН
+      <select id="bulk-choice" required>
+        <option value="created">Создана ЭТРН</option>
+        <option value="signed">Подписана</option>
+        <option value="not-required">Не требуется</option>
+        <option value="manual">Закрыта вручную</option>
+      </select>
+    </label>
+    <p class="quiet">«Подписана» — только для уже созданной ЭТРН с номером. Существующие подписи и документы не удаляются.</p>
+    <div id="bulk-preview" role="status" aria-live="polite"></div>
+    <footer class="dialog-foot"><button type="button" data-close>Отмена</button><button type="submit" id="bulk-apply" class="primary" disabled>Подтвердить изменения</button></footer>
+  </form>
+</dialog>
 
 <dialog id="sheet-dialog" aria-labelledby="sheet-title">
   <form id="sheet-form">
