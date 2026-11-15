@@ -47,6 +47,10 @@ let accountGeneration = 0;
 const pendingImports = new Map();
 let view = 'all';
 let registryScope = 'active';
+let bulkMode = false;
+const bulkNumbers = new Set();
+let bulkVisible = [];
+let bulkPreview = null;
 let historyMonth = 'all';
 let sort = 'delivery';
 let ascending = true;
@@ -366,6 +370,33 @@ function setSort(column) {
   render();
 }
 
+function bulkCheckbox(order) {
+  if (!bulkMode) return null;
+  const label = node('label', null, 'bulk-checkbox');
+  const input = node('input');
+  input.type = 'checkbox';
+  input.value = order.number;
+  input.checked = bulkNumbers.has(order.number);
+  input.setAttribute('aria-label', 'Выбрать заявку № ' + order.number);
+  input.addEventListener('change', () => {
+    if (input.checked) bulkNumbers.add(order.number);
+    else bulkNumbers.delete(order.number);
+    updateBulkControls();
+  });
+  label.append(input);
+  label.addEventListener('click', event => event.stopPropagation());
+  return label;
+}
+
+function updateBulkControls() {
+  $('bulk-mode').setAttribute('aria-pressed', String(bulkMode));
+  $('bulk-mode').textContent = bulkMode ? 'Готово' : 'Выбрать заявки';
+  $('bulk-actions').hidden = !bulkMode;
+  $('bulk-selected').textContent = 'Выбрано: ' + bulkNumbers.size;
+  $('bulk-open').disabled = bulkNumbers.size === 0 || bulkNumbers.size > 200;
+  $('bulk-select-visible').disabled = bulkVisible.length === 0;
+}
+
 function renderRows(container, rows) {
   const table = node('div', null, 'order-table');
   table.setAttribute('role', 'table');
@@ -397,6 +428,8 @@ function renderRows(container, rows) {
     row.setAttribute('role', 'row');
     row.dataset.stage = tripStatus(order);
     const label = node('div', null, 'order-id');
+    const selector = bulkCheckbox(order);
+    if (selector) label.append(selector);
     label.append(action('№ ' + order.number, () => openOrder(order.number), 'order-link'));
     const date = node('div', order.date ? order.date.slice(5).split('-').reverse().join('.') : '—', 'order-date');
     const customer = node('div', order.customer || '—', 'customer-cell');
@@ -449,6 +482,8 @@ function renderCompact(container, rows) {
   const list = node('ul', null, 'compact-list');
   for (const order of rows) {
     const item = node('li');
+    const selector = bulkCheckbox(order);
+    if (selector) item.append(selector);
     item.append(orderSummary(order, () => openOrder(order.number), undefined, false,
       !window.matchMedia?.('(max-width: 760px)')?.matches));
     list.append(item);
@@ -473,6 +508,8 @@ function renderKanban(container, rows, scrollLeft) {
     column.append(node('h3', title + ' · ' + group.length));
     for (const order of group) {
       const card = node('article', null, 'kanban-card');
+      const selector = bulkCheckbox(order);
+      if (selector) card.append(selector);
       card.append(orderSummary(order, () => openOrder(order.number)), tripControl(order, true), etrnAction(order));
       column.append(card);
     }
@@ -505,6 +542,8 @@ function renderSplit(container, rows) {
   panel.setAttribute('aria-label', 'Детали заявки');
   for (const item of rows) {
     const entry = node('li');
+    const selector = bulkCheckbox(item);
+    if (selector) entry.append(selector);
     entry.append(orderSummary(item, () => {
       const expanded = !(inline && matched === item && selection.expanded);
       selections.set(container, {number:item.number, expanded});
@@ -522,7 +561,7 @@ function renderSplit(container, rows) {
       [...container.querySelectorAll('[data-order]')].find(button => button.dataset.order === item.number)?.focus({preventScroll:true});
     }, item.number === order.number, grid));
     if (inline) {
-      const trigger = entry.firstElementChild;
+      const trigger = entry.querySelector('.order-summary');
       trigger.removeAttribute('aria-pressed');
       trigger.setAttribute('aria-expanded', String(item === matched && selection.expanded));
     }
@@ -683,7 +722,12 @@ function render() {
     selections.set(archive, selected);
   }
   // The home queue depends solely on the trip stage; history includes every record.
+  bulkVisible = scoped;
+  // Selection survives switching layouts, but never changes any data automatically.
+  const known = new Set(orders.map(order => order.number));
+  for (const number of bulkNumbers) if (!known.has(number)) bulkNumbers.delete(number);
   renderRegistry(primary, scoped);
+  updateBulkControls();
   $('archive').hidden = true;
   archive.replaceChildren();
 }
@@ -1410,6 +1454,95 @@ if (demo) {
   setInterval(() => { if (!document.hidden) refresh(); }, 15000);
 }
 
+$('bulk-mode').addEventListener('click', () => {
+  bulkMode = !bulkMode;
+  bulkNumbers.clear();
+  bulkPreview = null;
+  render();
+});
+$('bulk-clear').addEventListener('click', () => {
+  bulkNumbers.clear();
+  render();
+});
+$('bulk-select-visible').addEventListener('click', () => {
+  const visible = bulkVisible.slice(0, 200);
+  for (const order of visible) bulkNumbers.add(order.number);
+  if (bulkVisible.length > 200) $('notice').textContent = 'Можно выбрать не более 200 заявок за операцию.';
+  render();
+});
+function selectedEtrnItems() {
+  return orders.filter(order => bulkNumbers.has(order.number)).map(order => ({
+    number: order.number, updatedAt: order.updatedAt || '',
+  }));
+}
+function drawBulkPreview(result) {
+  const box = $('bulk-preview');
+  box.replaceChildren();
+  const ready = result.results.filter(item => item.result === 'ready');
+  const skipped = result.results.filter(item => item.result !== 'ready');
+  box.append(node('p', 'Готово к изменению: ' + ready.length + ' · без изменений/пропущено: ' + skipped.length));
+  if (skipped.length) {
+    const details = node('details');
+    details.append(node('summary', 'Показать пропущенные заявки'));
+    const list = node('ul');
+    for (const item of skipped) list.append(node('li', '№ ' + item.number + ' — ' + (item.reason || item.result)));
+    details.append(list);
+    box.append(details);
+  }
+  $('bulk-apply').disabled = ready.length === 0;
+}
+async function previewBulkEtrn() {
+  bulkPreview = null;
+  $('bulk-apply').disabled = true;
+  $('bulk-preview').textContent = 'Проверяем выбранные заявки…';
+  if (demo) {
+    $('bulk-preview').textContent = 'Массовые изменения доступны после входа.';
+    return;
+  }
+  try {
+    const items = selectedEtrnItems();
+    const choice = $('bulk-choice').value;
+    const response = await store.bulkEtrn(items, choice, true);
+    bulkPreview = {items, choice};
+    drawBulkPreview(response);
+  } catch (error) {
+    $('bulk-preview').textContent = error.message;
+  }
+}
+$('bulk-open').addEventListener('click', () => {
+  if (!bulkNumbers.size || bulkNumbers.size > 200) return;
+  $('bulk-summary').textContent = 'Выбрано заявок: ' + bulkNumbers.size;
+  $('bulk-dialog').showModal();
+  previewBulkEtrn();
+});
+$('bulk-choice').addEventListener('change', previewBulkEtrn);
+$('bulk-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!bulkPreview || $('bulk-apply').disabled) return;
+  const button = $('bulk-apply');
+  const operation = startImport(button, button, 'Сохраняем…');
+  if (!operation) return;
+  try {
+    if (bulkPreview.choice !== $('bulk-choice').value) throw new Error('Повтори предпросмотр.');
+    const result = await store.bulkEtrn(bulkPreview.items, bulkPreview.choice, false);
+    if (!operation.active()) return;
+    bulkPreview = null;
+    $('bulk-dialog').close();
+    bulkNumbers.clear();
+    bulkMode = false;
+    await refresh();
+    $('notice').textContent = 'Изменено ЭТРН: ' + result.updated +
+      ' · пропущено: ' + result.results.filter(item => item.result !== 'updated').length;
+    render();
+  } catch (error) {
+    if (operation.active()) {
+      $('bulk-preview').textContent = error.message;
+      bulkPreview = null;
+    }
+  } finally {
+    operation.finish();
+  }
+});
 function changeRegistryScope(next) {
   if (next !== 'active' && next !== 'history') return;
   registryScope = next;
