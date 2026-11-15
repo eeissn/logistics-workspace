@@ -2,7 +2,7 @@ name: Verify Logistics Workspace
 
 on:
   push:
-    branches: [feature/two-user-sync, 'feature/two-user-sync-*', feature/ui-polish-agent-next, codex/release-candidate, codex/sputnik-workspace, codex/sputnik-mobile-review, codex/active-queue-monthly-history]
+    branches: [feature/two-user-sync, 'feature/two-user-sync-*', feature/ui-polish-agent-next, codex/release-candidate, codex/sputnik-workspace, codex/sputnik-mobile-review, codex/active-queue-monthly-history, codex/bulk-etrn-safe]
   pull_request:
     branches: [feature/two-user-sync]
 
@@ -26,7 +26,7 @@ jobs:
       - name: Test API and SQLite
         run: |
           python -m pip install -r backend/requirements-test.txt
-          python -m unittest backend.test_app -v
+          python -m unittest backend.test_app backend.test_bulk_etrn -v
           python -m unittest backend.test_sheets -v
           python -m unittest deploy.test_backup_delivery -v
       - name: Validate release check
