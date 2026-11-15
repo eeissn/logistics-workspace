@@ -217,6 +217,34 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(self.first.get("/api/me").status_code, 401)
         self.assertEqual(self.login(self.first).status_code, 429)
 
+    def test_bulk_etrn_preview_write_isolation_conflicts(self):
+        h1 = self.writer(self.first)
+        h2 = self.writer(self.second, "second")
+        initial = self.put(self.first, h1, 0, [order("A"), order("B")]).json()
+        self.put(self.second, h2, 0, [order("A")])
+        items = [{"number": row["number"], "updatedAt": row["updatedAt"]} for row in initial["orders"]]
+        payload = {"choice": "manual", "items": items, "revision": initial["revision"]}
+        path = "/api/etrn/bulk"
+        self.assertEqual(self.first.post(path, json={**payload, "preview": False}).status_code, 403)
+        self.assertEqual(self.first.post(path, headers={"Origin": ORIGIN}, json=payload).status_code, 403)
+        preview = self.first.post(path, headers=h1, json={**payload, "preview": True})
+        self.assertEqual(preview.status_code, 200)
+        self.assertEqual(preview.json()["ready"], 2)
+        self.assertFalse(self.first.get("/api/records", headers=h1).json()["orders"][0]["etrn"].get("manualComplete"))
+        changed = self.first.post(path, headers=h1, json={**payload, "preview": False})
+        self.assertEqual(changed.status_code, 200)
+        self.assertEqual(changed.json()["updated"], 2)
+        owned = self.first.get("/api/records", headers=h1).json()
+        self.assertTrue(all(row["etrn"]["manualComplete"] for row in owned["orders"]))
+        self.assertFalse(self.second.get("/api/records", headers=h2).json()["orders"][0]["etrn"].get("manualComplete"))
+        self.assertEqual(self.first.post(path, headers=h1, json=payload).status_code, 409)
+        bad = {**payload, "revision": owned["revision"], "choice": "not-required"}
+        self.assertEqual(self.first.post(path, headers=h1, json=bad).json()["ready"], 0)
+        self.assertEqual(self.first.post(path, headers=h1, json={**payload, "items": items + items}).status_code, 422)
+        self.assertEqual(self.second.post(path, headers=h2, json={
+            "choice": "created", "revision": 1, "items": [items[0]], "preview": False
+        }).json()["results"][0]["result"], "conflict")
+
     def test_schema_backup_and_reopen(self):
         headers = self.writer(self.first)
         second = self.writer(self.second, "second")
