@@ -21,10 +21,13 @@ def apply_bulk_etrn(order, choice):
     if choice == "created":
         if etrn.get("manualComplete"):
             raise ValueError("ЭТРН уже закрыта вручную.")
-        if etrn.get("allSigned"):
-            raise ValueError("ЭТРН уже подписана; нельзя откатить этап.")
+        # allSigned can be a manually selected summary, not evidence of signatures.
+        # Preserve each actual signature field; disallow overriding four recorded signatures.
+        if all(etrn.get(key) for key in ("sender", "pickupCarrier", "recipient", "deliveryCarrier")):
+            raise ValueError("Зафиксированы все четыре подписи; проверьте документ вручную.")
         etrn["required"] = True
         etrn["created"] = True
+        etrn["allSigned"] = False
         etrn["manualComplete"] = False
     elif choice == "signed":
         if etrn.get("manualComplete"):
