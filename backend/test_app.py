@@ -245,6 +245,25 @@ class WorkspaceTests(unittest.TestCase):
             "choice": "created", "revision": 1, "items": [items[0]], "preview": False
         }).json()["results"][0]["result"], "conflict")
 
+    def test_bulk_etrn_can_correct_accidental_signed_status(self):
+        headers = self.writer(self.first)
+        original = order("TEST-CORRECTION")
+        original["etrn"]["allSigned"] = True
+        snapshot = self.put(self.first, headers, 0, [original]).json()
+        item = snapshot["orders"][0]
+        request = {"choice": "created", "revision": snapshot["revision"],
+                   "items": [{"number": item["number"], "updatedAt": item["updatedAt"]}]}
+        preview = self.first.post("/api/etrn/bulk", headers=headers, json=request)
+        self.assertEqual(preview.status_code, 200)
+        self.assertEqual(preview.json()["ready"], 1)
+        result = self.first.post("/api/etrn/bulk", headers=headers, json={**request, "preview": False})
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json()["updated"], 1)
+        saved = self.first.get("/api/records", headers=headers).json()["orders"][0]
+        self.assertFalse(saved["etrn"]["allSigned"])
+        self.assertTrue(saved["etrn"]["created"])
+        self.assertEqual(saved["etrn"]["number"], original["etrn"]["number"])
+
     def test_schema_backup_and_reopen(self):
         headers = self.writer(self.first)
         second = self.writer(self.second, "second")
