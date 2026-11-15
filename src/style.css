@@ -1655,3 +1655,29 @@ dialog .check label {
 @media (max-width: 850px) {
   .workspace-nav .history-link { display: none; }
 }
+
+/* Bulk ETRN tools stay unobtrusive until explicitly enabled. */
+.bulk-controls { display:flex; align-items:center; gap:.55rem; flex-wrap:wrap; margin:.3rem 0 .7rem; }
+#bulk-mode { background:transparent; border-color:var(--line); font-size:.8rem; min-height:34px; padding:.3rem .6rem; }
+#bulk-mode[aria-pressed=true] { background:var(--nav-active); }
+.bulk-actions { display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; font-size:.8rem; }
+.bulk-actions button { min-height:34px; padding:.3rem .6rem; font-size:.8rem; }
+.bulk-checkbox { display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; padding:.18rem .25rem; }
+.bulk-checkbox input { min-height:0; width:18px; height:18px; margin:0; accent-color:var(--accent); cursor:pointer; }
+.bulk-checkbox input:focus-visible { outline:2px solid var(--outline); }
+.order-id .bulk-checkbox { margin-inline-end:.3rem; }
+.compact-list li, .split-list li, .kanban-card { position:relative; }
+.compact-list li > .bulk-checkbox, .split-list li > .bulk-checkbox, .kanban-card > .bulk-checkbox {
+  position:absolute; z-index:1; top:.62rem; left:.38rem; 
+}
+.compact-list li:has(> .bulk-checkbox) > .order-summary,
+.split-list li:has(> .bulk-checkbox) > .order-summary,
+.kanban-card:has(> .bulk-checkbox) > .order-summary { padding-left:2.2rem; }
+#bulk-dialog .dialog-foot { margin-top:1rem; }
+#bulk-preview { max-height:30vh; overflow:auto; font-size:.85rem; }
+#bulk-preview li { margin-block:.28rem; overflow-wrap:anywhere; }
+@media (max-width: 740px) {
+  .bulk-actions { width:100%; }
+  .bulk-actions button { min-height:44px; }
+  .bulk-checkbox input { width:20px; height:20px; }
+}
