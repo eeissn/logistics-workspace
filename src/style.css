@@ -1681,3 +1681,34 @@ dialog .check label {
   .bulk-actions button { min-height:44px; }
   .bulk-checkbox input { width:20px; height:20px; }
 }
+
+
+/* Finance figures visible without opening an order, in every theme and layout. */
+.finance-summary {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .18rem .95rem;
+  min-width: 0;
+  font-size: .75rem;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+.finance-metric { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: .25rem; min-width: 0; }
+.finance-label { color: var(--muted); font-weight: 400; }
+.finance-value { color: var(--ink); font-weight: 650; white-space: nowrap; }
+.finance-margin .finance-value { color: var(--theme-outline); font-weight: 730; }
+.finance-margin[data-negative=true] .finance-value { color: #b43e39; }
+.order-table .order > .finance-summary {
+  padding: .24rem 0 0;
+  border-top: 1px solid var(--line);
+}
+.order-summary > .finance-summary { padding-top: .24rem; }
+.kanban-card .finance-summary { gap: .18rem .55rem; }
+@media (max-width: 740px) {
+  .finance-summary { gap: .12rem .65rem; font-size: .73rem; }
+  .order-table .order > .finance-summary { grid-row: 4; }
+  .order-table .etrn-cell,
+  .order-table .order > .contact-actions { grid-row: 5; }
+}
