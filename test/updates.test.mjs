@@ -24,3 +24,13 @@ test('история объясняет основные функции и не 
   assert.match(all, /Google Sheets ещё требует отдельной настройки/);
   assert.match(all, /Автоматическая доставка копий на домашний компьютер ещё не завершена/);
 });
+
+
+test('проверенное резервное копирование отображается в обновлениях без раскрытия закрытых данных', () => {
+  const latest = updates[0];
+  assert.equal(latest.title, '16 ноября 2026');
+  assert.ok(latest.items.some(item => /зашифрованных резервных копий/.test(item)
+    && /восстановление базы/.test(item)));
+  const text = latest.items.join(' ');
+  assert.doesNotMatch(text, /backup-private\\.pem|170\\.168\\.18\\.148|JARVIS|парол[ья]/i);
+});
