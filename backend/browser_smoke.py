@@ -290,7 +290,7 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     expect(page.locator("#review-dialog")).to_be_hidden()
 
     # Re-importing an existing order must announce an update, not create a duplicate.
-    click_workspace_action(page, "#import", mobile)
+    click_registry_action(page, "#import", mobile)
     page.locator("#customer-pdf").set_input_files(pdfs[0])
     page.locator("#carrier-pdf").set_input_files(pdfs[1])
     page.locator('#import-form [type="submit"]').click()
