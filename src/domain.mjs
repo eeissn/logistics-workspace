@@ -118,11 +118,9 @@ export function orderMargin(order) {
 }
 
 // Count all requests for the period; margin follows the established report (failed trips excluded).
-export function monthSnapshot(orders, month) {
-  return {
-    count: orders.filter(order => order.date?.startsWith(month + '-')).length,
-    total: monthReport(orders, month).total,
-  };
+export function monthSnapshot(orders, month, asOf = month + '-31') {
+  const elapsed = orders.filter(order => order.date?.startsWith(month + '-') && order.date <= asOf);
+  return {count: elapsed.length, total: monthReport(elapsed, month).total};
 }
 
 export function monthReport(orders, month) {
