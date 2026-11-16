@@ -5,6 +5,19 @@ const unique = values => [...new Set(values.filter(Boolean))];
 const trim = value => value?.replace(/\s+/g, ' ').trim() || '';
 const phonePattern = /(?:\+7|8)[ \t(-]*\d{3}[ \t)-]*\d{3}[ \t-]*\d{2}[ \t-]*\d{2}/g;
 
+export function normalizePassport(value = '', issueDate = '') {
+  let passport = trim(value);
+  if (!passport) return '';
+  // "К.П." is the issuing office subdivision code, not needed in the driver message.
+  passport = passport.replace(/(?:[,;]?\s*к\.?\s*п\.?\s*[:№]?\s*\d{3}[-–]\d{3})\s*$/i, '').trim();
+  const dated = passport.match(/(?:^|\s)(?:от\s+)?(\d{2}\.\d{2}\.\d{4})\s*$/);
+  if (dated) {
+    passport = passport.slice(0, dated.index).trim();
+    issueDate = dated[1];
+  }
+  return issueDate ? passport + ' от ' + issueDate : passport;
+}
+
 export function phones(value = '') {
   return unique([...value.matchAll(phonePattern)].map(([phone]) => '+7' + phone.replace(/\D/g, '').slice(-10)));
 }
@@ -39,9 +52,8 @@ export function parseLogistor(text) {
   const tax = /без\s+НДС/i.test(paymentLine) ? '0' : paymentLine.match(/НДС\s*(22|5)\s*%/i)?.[1] ?? '';
   const [day, month, year] = (heading?.[2] || '').split('.');
   const passport = trim(clean.match(/^[ \t]*Паспорт:[ \t]*(.*?)(?:[ \t]+Номер тягача:|$)/mi)?.[1]);
-  const issueDate = clean.match(/^[ \t]*(?:Дата выдачи(?: паспорта)?|Паспорт выдан):[ \t]*(\d{2}\.\d{2}\.\d{4})/mi)?.[1];
-  const passportWithDate = passport && issueDate && !passport.includes(issueDate)
-    ? passport + ' от ' + issueDate : passport;
+  const issueDate = clean.match(/^[ \t]*(?:Дата выдачи(?: паспорта)?|Паспорт выдан)[ \t]*:?[ \t]*(\d{2}\.\d{2}\.\d{4})/mi)?.[1];
+  const passportWithDate = normalizePassport(passport, issueDate);
   const fields = {
     number: heading?.[1] || '', date: heading ? `${year}-${month}-${day}` : '',
     customer: party(head, 'Заказчик'), performer: party(head, 'Исполнитель'),
