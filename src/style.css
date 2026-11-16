@@ -1738,3 +1738,83 @@ dialog .check label {
   .month-metrics { font-size: .73rem; }
   .updates-link { min-height: 44px; }
 }
+
+/* iPhone Safari / Home Screen: resolve competing mobile table grid rules.
+   Keep intentional horizontal scrolling inside kanban, never on the page. */
+@media (max-width: 740px) {
+  html, body, #workspace, main, #table,
+  .registry, .registry-toolbar, .registry-command,
+  .registry-tools, .order-table, .split-view,
+  .compact-list, .split-list, .split-detail {
+    max-width: 100%;
+    min-width: 0;
+  }
+  main { width: 100%; }
+  .intro { min-width: 0; }
+  .intro h1 { min-width: 0; overflow-wrap: break-word; }
+  .intro-metrics { min-width: 0; max-width: 100%; }
+  .registry-command { width: 100%; min-width: 0; }
+  .registry-command .registry-search { min-width: 0; width: 100%; }
+  .registry-search input { width: 100%; min-width: 0; }
+  .registry-tools { min-width: 0; width: 100%; }
+  .registry-tools > *, .registry-tools label, .sort-tools, .sort-tools label {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .registry-tools select { min-width: 0; width: 100%; max-width: 100%; }
+  .order-table { min-width: 0; width: 100%; overflow-x: visible; }
+  .order-table .row.order {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+    column-gap: .55rem;
+  }
+  .order-table .order > .order-id {
+    grid-area: 1 / 1;
+    min-width: 0;
+  }
+  .order-table .order > .status-cell {
+    grid-area: 1 / 2;
+    min-width: 0;
+    width: auto;
+    max-width: min(43vw, 10rem);
+    justify-self: end;
+  }
+  .order-table .order > .destination {
+    grid-area: 2 / 1 / 3 / -1;
+    min-width: 0;
+    width: 100%;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+  .order-table .order > .route-window {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    min-width: 0;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+  .order-table .order > .finance-summary {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    min-width: 0;
+  }
+  .order-table .order > .etrn-cell,
+  .order-table .order > .contact-actions {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    min-width: 0;
+  }
+  .order-table .order > :is(.order-id, .status-cell, .destination,
+    .route-window, .etrn-cell, .contact-actions, .finance-summary) {
+    max-width: 100%;
+  }
+  .split-view, .split-list, .compact-list { width: 100%; }
+  .split-list > li, .compact-list > li, .order-summary, .split-detail {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .order-summary .summary-route { overflow-wrap: break-word; word-break: normal; }
+  .kanban { max-width: 100%; }
+}
