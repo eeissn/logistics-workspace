@@ -101,7 +101,7 @@ export function dateRange(schedule, reference = '') {
   const fallback = /^\d{4}-/.test(reference) ? Number(reference.slice(0, 4)) : null;
   // Both PDF's DD.MM.YYYY and ISO YYYY-MM-DD / YYYY-MM-DDTHH:MM
   // windows must participate in today's pickup/delivery filters.
-  const parts = [...String(schedule || '').matchAll(/\b(?:(\d{4})-(\d{2})-(\d{2})|(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?)\b/g)]
+  const parts = [...String(schedule || '').matchAll(/\b(?:(\d{4})-(\d{2})-(\d{2})|(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?)(?!\d)/g)]
     .map(([, isoYear, isoMonth, isoDay, day, month, year]) => ({
       day: Number(isoDay || day), month: Number(isoMonth || month),
       year: isoYear || year ? Number(isoYear || year) : null,
