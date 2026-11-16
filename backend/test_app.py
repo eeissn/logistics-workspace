@@ -201,6 +201,71 @@ class WorkspaceTests(unittest.TestCase):
         winner = a.result() if a.result().status_code == 200 else b.result()
         self.assertEqual(self.first.get("/api/records", headers=first).json(), winner.json())
 
+    def test_full_year_515_orders_round_trip_and_account_isolation(self):
+        """A realistic yearly registry must remain complete through sync and edits."""
+        first = self.writer(self.first)
+        second = self.writer(self.second, "second")
+        yearly = [
+            {
+                **order(f"2026-{index:04d}"),
+                "date": f"2026-{index % 12 + 1:02d}-{index % 28 + 1:02d}",
+                "customer": f"Customer {index}",
+                "trip": {"stage": "unloaded" if index % 3 else "loaded"},
+            }
+            for index in range(515)
+        ]
+        saved = self.put(self.first, first, 0, yearly)
+        self.assertEqual(saved.status_code, 200, saved.text)
+        initial = saved.json()
+        self.assertEqual(initial["revision"], 1)
+        self.assertEqual(len(initial["orders"]), 515)
+        self.assertEqual(len({item["number"] for item in initial["orders"]}), 515)
+        self.assertEqual(initial["orders"][0]["number"], "2026-0000")
+        self.assertEqual(initial["orders"][-1]["number"], "2026-0514")
+        self.assertEqual(self.first.get("/api/records", headers=first).json(), initial)
+
+        # Equal numbers must not make different users share one owner's records.
+        peer = self.put(self.second, second, 0, [
+            {**order("2026-0000"), "customer": "Second account only"},
+        ])
+        self.assertEqual(peer.status_code, 200, peer.text)
+        self.assertEqual(len(peer.json()["orders"]), 1)
+        self.assertEqual(self.first.get("/api/records", headers=first).json(), initial)
+
+        edited = [dict(item) for item in initial["orders"]]
+        edited[257] = {**edited[257], "customer": "Updated customer"}
+        changed = self.put(self.first, first, initial["revision"], edited)
+        self.assertEqual(changed.status_code, 200, changed.text)
+        result = changed.json()
+        self.assertEqual(result["revision"], 2)
+        self.assertEqual(len(result["orders"]), 515)
+        self.assertEqual(result["orders"][257]["customer"], "Updated customer")
+        self.assertNotEqual(result["orders"][257]["updatedAt"], initial["orders"][257]["updatedAt"])
+        self.assertEqual(result["orders"][0]["updatedAt"], initial["orders"][0]["updatedAt"])
+        self.assertEqual(result["orders"][-1]["updatedAt"], initial["orders"][-1]["updatedAt"])
+
+        stale = self.put(self.first, first, initial["revision"], initial["orders"])
+        self.assertEqual(stale.status_code, 409)
+        self.assertEqual(self.first.get("/api/records", headers=first).json(), result)
+        self.assertEqual(self.second.get("/api/records", headers=second).json(), peer.json())
+
+        with TemporaryDirectory() as directory:
+            restored_path = Path(directory) / "yearly.sqlite3"
+            backup(self.path, restored_path)
+            with database(restored_path) as db:
+                self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM orders").fetchone()[0], 516)
+            restored = create_app(restored_path, ORIGIN)
+            with TestClient(restored, base_url=ORIGIN) as client:
+                first_after_restore = self.writer(client)
+                self.assertEqual(
+                    client.get("/api/records", headers=first_after_restore).json(), result
+                )
+                second_after_restore = self.writer(client, "second")
+                self.assertEqual(
+                    client.get("/api/records", headers=second_after_restore).json(), peer.json()
+                )
+
     def test_bad_data_size_and_duplicate_numbers(self):
         headers = self.writer(self.first)
         for invalid in ([order(), order()], [{**order(), "contacts": [{"role": "x", "values": "x"}]}], [{"number": "1"}]):
