@@ -1629,6 +1629,11 @@ function openReview(order, previous, stamp) {
   reviewPrevious = previous;
   $('review-title').textContent = 'Результат распознавания · № ' + order.number;
   $('review-error').textContent = '';
+  const existing = $('review-existing');
+  existing.hidden = previous == null;
+  existing.textContent = previous == null ? '' :
+    `Заявка № ${order.number} уже существует. Новая запись не будет создана. Проверьте данные перед обновлением существующей заявки.`;
+  $('review-save').textContent = previous == null ? 'Сохранить заявку' : 'Обновить заявку';
   const card = $('review-card');
   card.replaceChildren(node('h3', routeText(order) || 'Маршрут не указан'));
   if (routeDates(order)) card.append(node('p', routeDates(order), 'quiet'));
