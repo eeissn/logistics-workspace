@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { margin, etrnSteps, etrnStatus, etrnProgress, markTrip, mergeImport, upsert, archived, monthReport, monthSnapshot, scheduledToday } from '../src/domain.mjs';
 import { parseLedger, addLedgerOrders } from '../src/ledger.mjs';
 import { driverMessage } from '../src/driver.mjs';
-import { importPair, phones } from '../src/import.mjs';
+import { importPair, phones, normalizePassport } from '../src/import.mjs';
 import { linesFromItems } from '../src/pdf-lines.mjs';
 
 const client = `Заявка № 1234 от 09.11.2026
@@ -201,4 +201,27 @@ test('месячная сводка считает все заявки, но м�
   assert.deepEqual(monthSnapshot(data,'2026-12'), {count:1,total:70});
   assert.deepEqual(monthSnapshot(data,'2027-01'), {count:0,total:0});
   assert.deepEqual(monthSnapshot(data,'2026-11','2026-11-01'), {count:1,total:100});
+});
+
+test('паспорт с датой и кодом подразделения нормализуется при импорте', () => {
+  const modified = carrier.replace('ФИО: Водитель Тестовый    Марка тягача: КАМАЗ',
+    'ФИО: Водитель Тестовый    Марка тягача: SCANIA\nПаспорт: 3419 285118 УМВД России по Костромской области 25.06.2019 к.п. 440-021    Номер тягача: О749КВ 44');
+  const order = importPair(client, modified);
+  assert.equal(order.passport, '3419 285118 УМВД России по Костромской области от 25.06.2019');
+  assert.match(driverMessage(order), /Паспорт: 3419 285118 УМВД России по Костромской области от 25\\.06\\.2019/);
+  assert.doesNotMatch(driverMessage(order), /к\\.п\\./i);
+});
+
+test('ранее сохранённый паспорт исправляется при показе, без изменения заявки', () => {
+  const saved = {driver:'Тестовый', passport:'3419 285118 УМВД России по Костромской области 25.06.2019 к.п. 440-021'};
+  assert.match(driverMessage(saved), /области от 25\\.06\\.2019/);
+  assert.equal(saved.passport, '3419 285118 УМВД России по Костромской области 25.06.2019 к.п. 440-021');
+  assert.equal(normalizePassport('4022 388621 ГУ МВД России по г. Санкт-Петербургу и Ленинградской области'),
+    '4022 388621 ГУ МВД России по г. Санкт-Петербургу и Ленинградской области');
+});
+
+test('дата выдачи без двоеточия подхватывается из отдельного реквизита', () => {
+  const modified = carrier.replace('ФИО: Водитель Тестовый    Марка тягача: КАМАЗ',
+    'ФИО: Водитель Тестовый    Марка тягача: КАМАЗ\nПаспорт: 0000 000000 Учебный отдел    Номер тягача: А000АА 00\nДата выдачи паспорта 16.06.2006');
+  assert.equal(importPair(client, modified).passport, '0000 000000 Учебный отдел от 16.06.2006');
 });
