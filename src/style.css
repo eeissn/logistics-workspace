@@ -1818,3 +1818,16 @@ dialog .check label {
   .order-summary .summary-route { overflow-wrap: break-word; word-break: normal; }
   .kanban { max-width: 100%; }
 }
+
+/* Clear, non-destructive duplicate-order warning during PDF import review. */
+.review-existing {
+  margin: 0 0 .75rem;
+  padding: .7rem .85rem;
+  border: 1px solid var(--line);
+  border-inline-start: 3px solid var(--theme-outline);
+  border-radius: var(--control-radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: .88rem;
+  line-height: 1.5;
+}
