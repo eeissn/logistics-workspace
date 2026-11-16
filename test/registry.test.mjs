@@ -82,3 +82,20 @@ test('pickup and delivery sort by the earliest valid window and put missing date
   assert.deepEqual(numbers('delivery', false), ['A', 'E', 'B', 'D', 'C']);
   assert.deepEqual(numbers('pickup', true), ['D', 'A', 'E', 'B', 'C']);
 });
+
+
+test('sort dates use the explicitly stated destination year, not the order year', () => {
+  const records = [
+    ['next-year', '13.11–14.11.2027'],
+    ['this-year', '13.12.2026'],
+    ['new-year', '31.12–01.01.2027'],
+    ['invalid', '31.04.2027'],
+  ].map(([number, schedule]) => ({
+    ...makeOrder(number, '2026-11-01', {}),
+    points: [{kind: 'Выгрузка', address: 'Тест', schedule}],
+  }));
+  assert.deepEqual(
+    selectOrders(records, {...query, sort: 'delivery', ascending: true}).map(o => o.number),
+    ['this-year', 'new-year', 'next-year', 'invalid'],
+  );
+});
