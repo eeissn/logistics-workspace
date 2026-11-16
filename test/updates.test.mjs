@@ -51,3 +51,9 @@ test('17 ноября: исправление ISO-дат отражено в и�
   assert.ok(newest.items.some(item => item.includes('Погрузки/выгрузки сегодня')
     && item.includes('ГГГГ-ММ-ДД')));
 });
+
+test('17 ноября: тестирование 515 заявок отражено в истории', () => {
+  const entry = updates.find(group => group.title === '17 ноября 2026');
+  assert.ok(entry?.items.some(text => text.includes('515 заявками')
+    && text.includes('восстановление из резервной копии')));
+});
