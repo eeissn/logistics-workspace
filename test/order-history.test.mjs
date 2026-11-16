@@ -43,3 +43,19 @@ test('a large imported year remains accessible without truncation', () => {
   assert.equal(monthGroups(orders).reduce((n,x)=>n+x.count,0), 515);
   assert.equal(scopeOrders(orders).length, 172);
 });
+
+test('515 orders remain searchable across archived months without hiding active old trips', () => {
+  const orders = Array.from({length:515}, (_, i) => order(
+    'YR-' + String(i).padStart(4, '0'),
+    i < 200 ? '2025-12-15' : i < 400 ? '2026-01-15' : '2026-11-15',
+    i % 7 === 0 ? 'loaded' : 'unloaded',
+  ));
+  assert.equal(scopeOrders(orders, {scope:'history', month:'2025-12'}).length, 200);
+  assert.equal(scopeOrders(orders, {scope:'history', month:'2026-01'}).length, 200);
+  assert.equal(scopeOrders(orders, {scope:'history', month:'2026-11'}).length, 115);
+  assert.equal(scopeOrders(orders, {scope:'history', month:'all'}).length, 515);
+  assert.equal(scopeOrders(orders, {scope:'history', month:'2025-12', search:'YR-0514'}).length, 515);
+  assert.equal(scopeOrders(orders).length, 74);
+  assert.ok(scopeOrders(orders).some(item => item.number === 'YR-0000'));
+  assert.equal(monthGroups(orders).reduce((sum, month) => sum + month.count, 0), 515);
+});
