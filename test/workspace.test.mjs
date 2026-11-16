@@ -200,4 +200,5 @@ test('месячная сводка считает все заявки, но м�
   assert.deepEqual(monthSnapshot(data,'2026-11'), {count:3,total:100});
   assert.deepEqual(monthSnapshot(data,'2026-12'), {count:1,total:70});
   assert.deepEqual(monthSnapshot(data,'2027-01'), {count:0,total:0});
+  assert.deepEqual(monthSnapshot(data,'2026-11','2026-11-01'), {count:1,total:100});
 });
