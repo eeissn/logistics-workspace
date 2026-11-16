@@ -231,7 +231,7 @@ test('дата выдачи на следующей строке PDF: без п�
     'ФИО: Водитель Тестовый    Марка тягача: MAN\nПаспорт: 0000 000000 Учебное управление    Номер тягача: А000АА 00\n12.01.2023 к.п. 780-039');
   const order = importPair(client, modified);
   assert.equal(order.passport, '0000 000000 Учебное управление от 12.01.2023');
-  assert.match(driverMessage(order), /Управление от 12\.01\.2023/);
+  assert.match(driverMessage(order), /управление от 12\.01\.2023/);
   assert.doesNotMatch(driverMessage(order), /780-039/);
 });
 
