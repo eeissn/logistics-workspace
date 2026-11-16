@@ -397,6 +397,23 @@ function updateBulkControls() {
   $('bulk-select-visible').disabled = bulkVisible.length === 0;
 }
 
+function financeSummary(order) {
+  const rates = [
+    ['Заказчик', order.customerAmount],
+    ['Перевозчик', order.carrierAmount],
+    ['Маржа', orderMargin(order)],
+  ];
+  const summary = node('span', null, 'finance-summary');
+  for (const [label, value] of rates) {
+    const metric = node('span', null, 'finance-metric' + (label === 'Маржа' ? ' finance-margin' : ''));
+    metric.append(node('span', label + ':', 'finance-label'),
+      node('strong', value == null || value === '' ? '—' : money(value), 'finance-value'));
+    if (label === 'Маржа' && value != null && value < 0) metric.dataset.negative = 'true';
+    summary.append(metric);
+  }
+  return summary;
+}
+
 function renderRows(container, rows) {
   const table = node('div', null, 'order-table');
   table.setAttribute('role', 'table');
@@ -453,7 +470,7 @@ function renderRows(container, rows) {
     stage.append(tripControl(order));
     const etrn = node('div', null, 'etrn-cell');
     etrn.append(etrnAction(order));
-    row.append(label, date, customer, carrier, direction, ...windows, etrn, stage, contactsCell(order));
+    row.append(label, date, customer, carrier, direction, ...windows, etrn, stage, contactsCell(order), financeSummary(order));
     for (const cell of row.children) cell.setAttribute('role', 'cell');
     table.append(row);
   }
@@ -475,6 +492,7 @@ function orderSummary(order, open, selected, showParties = false, showDates = tr
     button.append(parties);
   }
   if (showDates && (dates || showParties)) button.append(node('small', dates || '—', 'quiet summary-dates'));
+  button.append(financeSummary(order));
   return button;
 }
 
