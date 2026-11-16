@@ -37,7 +37,7 @@ class BackupDeliveryTest(unittest.TestCase):
             source = root / "snapshot.sqlite3"
             with sqlite3.connect(source) as db:
                 db.execute("CREATE TABLE example (value TEXT)")
-                db.execute("INSERT INTO example VALUES ('synthetic')")
+                db.execute("INSERT INTO example VALUES (?)", ("synthetic\\r\\n",))
             db.close()
             subprocess.run(
                 ["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
@@ -63,9 +63,14 @@ class BackupDeliveryTest(unittest.TestCase):
                  "-recip", str(certificate), "-inkey", str(key), "-out", str(restored)],
                 check=True, capture_output=True,
             )
+            # An encrypted SQLite can decrypt without -binary yet silently change bytes
+            # due to CRLF conversion. Require exact equality, not only a SQLite header.
+            self.assertEqual(restored.stat().st_size, source.stat().st_size)
+            self.assertEqual(hashlib.sha256(restored.read_bytes()).digest(),
+                             hashlib.sha256(source.read_bytes()).digest())
             with sqlite3.connect(restored) as db:
                 self.assertEqual(db.execute("PRAGMA integrity_check").fetchall(), [("ok",)])
-                self.assertEqual(db.execute("SELECT value FROM example").fetchall(), [("synthetic",)])
+                self.assertEqual(db.execute("SELECT value FROM example").fetchall(), [("synthetic\\r\\n",)])
             db.close()
             with self.assertRaisesRegex(ValueError, "freshness"):
                 retrieve(remote, destination, now + timedelta(days=2), fresh, retention)

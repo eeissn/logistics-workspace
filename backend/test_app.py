@@ -281,8 +281,27 @@ class WorkspaceTests(unittest.TestCase):
             restored = create_app(path, ORIGIN)
             with TestClient(restored, base_url=ORIGIN) as first, TestClient(restored, base_url=ORIGIN) as other:
                 self.assertEqual(first.get("/api/records", headers=headers).status_code, 401)
-                self.assertEqual(first.get("/api/records", headers=self.writer(first)).json(), first_snapshot)
-                self.assertEqual(other.get("/api/records", headers=self.writer(other, "second")).json(), second_snapshot)
+                restored_first = self.writer(first)
+                restored_second = self.writer(other, "second")
+                self.assertEqual(first.get("/api/records", headers=restored_first).json(), first_snapshot)
+                self.assertEqual(other.get("/api/records", headers=restored_second).json(), second_snapshot)
+                # Restoring a snapshot must preserve server-side tenancy on writes,
+                # even when both owners have exactly the same order number.
+                self.assertEqual(first.get("/api/records?owner=second%40example.test",
+                                           headers=restored_first).json(), first_snapshot)
+                self.assertEqual(other.get("/api/records?owner=first%40example.test",
+                                           headers=restored_second).json(), second_snapshot)
+                updated_second = self.put(other, restored_second, second_snapshot["revision"], [
+                    {**second_snapshot["orders"][0], "customer": "Second after restore"},
+                ])
+                self.assertEqual(updated_second.status_code, 200)
+                self.assertEqual(first.get("/api/records", headers=restored_first).json(), first_snapshot)
+                self.assertEqual(self.put(first, restored_first, first_snapshot["revision"],
+                                          []).status_code, 200)
+                self.assertEqual(other.get("/api/records", headers=restored_second).json(),
+                                 updated_second.json())
+                self.assertEqual(self.put(other, restored_first, updated_second.json()["revision"],
+                                          []).status_code, 403)
             if os.name == "posix":
                 self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             with self.assertRaises(FileExistsError):
