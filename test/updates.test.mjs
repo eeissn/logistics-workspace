@@ -10,7 +10,7 @@ test('обновления охватывают всю известную ист
   ]);
   assert.ok(updates.every(group => group.items.length >= 5));
   assert.ok(updates.every(group => group.items.every(item => item.trim().length > 15)));
-  assert.ok(updates.every(group => !/\\b\\d{1,2}:\\d{2}\\b/.test(group.title)));
+  assert.ok(updates.every(group => !/\d{1,2}:\d{2}/.test(group.title)));
 });
 
 test('история объясняет основные функции и не выдаёт планы за готовые возможности', () => {
