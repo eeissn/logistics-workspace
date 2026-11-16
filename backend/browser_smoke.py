@@ -84,6 +84,23 @@ def calculators(page, mobile):
     cargo.locator("[data-close]").click()
 
 
+def updates_history(page, mobile):
+    click_workspace_action(page, "#settings", mobile)
+    expect(page.locator("#settings-dialog")).to_be_visible()
+    page.locator("#updates-open").click()
+    dialog = page.locator("#updates-dialog")
+    expect(dialog).to_be_visible()
+    expect(dialog.locator(".updates-group")).to_have_count(8)
+    expect(dialog).to_contain_text("16 сентября 2026")
+    expect(dialog).to_contain_text("16 ноября 2026")
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
+    if mobile:
+        bounds = dialog.bounding_box()
+        assert bounds["x"] >= -1
+        assert bounds["x"] + bounds["width"] <= 394
+    dialog.locator("[data-close]").click()
+
+
 def ledger_export(page, mobile):
     click_workspace_action(page, "#ledger-export", mobile)
     dialog = page.locator("#export-dialog")
@@ -642,6 +659,7 @@ def smoke(browser_type, origin, chromium, number, report_total, device=None):
         sign_in(a, "first")
         sheet_preview(a, "Герман", number)
         calculators(a, device is not None)
+        updates_history(a, device is not None)
         create_order(a, order_a)
         ledger_export(a, device is not None)
 
