@@ -1712,3 +1712,27 @@ dialog .check label {
   .order-table .etrn-cell,
   .order-table .order > .contact-actions { grid-row: 5; }
 }
+
+
+/* Quiet monthly dashboard next to synchronization, without a large headline. */
+.intro-metrics { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: .25rem .75rem; min-width: 0; }
+.month-metrics { margin: 0; font-size: .77rem; font-weight: 560; color: var(--muted); font-variant-numeric: tabular-nums; }
+.month-metrics[hidden] { display: none; }
+.intro-metrics #sync-status { flex: 0 0 auto; }
+.updates-link {
+  justify-self: start; border: 0; padding: .3rem .2rem;
+  background: transparent; color: var(--muted); font-size: .78rem;
+  text-align: left; text-decoration: underline; text-underline-offset: .2rem;
+}
+.updates-list { padding: 0; margin: .4rem 0 .2rem; list-style: none; }
+.updates-group { padding: .65rem 0; border-bottom: 1px solid var(--line); }
+.updates-group:last-child { border-bottom: 0; }
+.updates-group h3 { margin: 0 0 .3rem; color: var(--ink); font-size: .85rem; font-weight: 650; }
+.updates-group ul { padding-left: 1.05rem; margin: 0; }
+.updates-group li { margin: .2rem 0; line-height: 1.4; font-size: .81rem; color: var(--muted); }
+@media (max-width: 760px) {
+  .intro { align-items: flex-start; }
+  .intro-metrics { width: 100%; justify-content: flex-start; gap: .2rem .65rem; }
+  .month-metrics { font-size: .73rem; }
+  .updates-link { min-height: 44px; }
+}
