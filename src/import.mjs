@@ -53,7 +53,12 @@ export function parseLogistor(text) {
   const [day, month, year] = (heading?.[2] || '').split('.');
   const passport = trim(clean.match(/^[ \t]*Паспорт:[ \t]*(.*?)(?:[ \t]+Номер тягача:|$)/mi)?.[1]);
   const issueDate = clean.match(/^[ \t]*(?:Дата выдачи(?: паспорта)?|Паспорт выдан)[ \t]*:?[ \t]*(\d{2}\.\d{2}\.\d{4})/mi)?.[1];
-  const passportWithDate = normalizePassport(passport, issueDate);
+  // Logistor sometimes wraps the passport issue date onto the very next line.
+  // Only accept a standalone date (with an optional subdivision code) adjacent
+  // to the passport line; never take loading, unloading or application dates.
+  const passportLine = clean.match(/^[ \t]*Паспорт:[ \t]*[^\n]*/mi);
+  const followingLine = passportLine ? clean.slice(passportLine.index + passportLine[0].length).match(/^\n[ \t]*(\d{2}\.\d{2}\.\d{4})(?:[ \t]+к\.?\s*п\.?[ \t]*\d{3}[-–]\d{3})?[ \t]*(?:\n|$)/i) : null;
+  const passportWithDate = normalizePassport(passport, issueDate || followingLine?.[1] || '');
   const fields = {
     number: heading?.[1] || '', date: heading ? `${year}-${month}-${day}` : '',
     customer: party(head, 'Заказчик'), performer: party(head, 'Исполнитель'),
