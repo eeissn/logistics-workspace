@@ -118,7 +118,30 @@ def mobile_long_order(page):
         expect(metrics).to_contain_text("Заказчик:")
         expect(metrics).to_contain_text("Перевозчик:")
         expect(metrics).to_contain_text("Маржа:")
-        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
+        # Every display mode must fit the visual viewport, not just root scrollWidth.
+        dimensions = page.evaluate("""() => {
+            const viewport = document.documentElement.clientWidth;
+            const selectors = [
+                'main', '.registry-command', '.registry-tools', '#table',
+                '#table .order', '#table .order-summary', '#table .split-detail'
+            ];
+            return {viewport, elements: selectors.flatMap(selector =>
+                [...document.querySelectorAll(selector)].filter(el => el.getClientRects().length)
+                    .map(el => { const r = el.getBoundingClientRect();
+                        return {selector, left:r.left, right:r.right, width:r.width}; })
+            )};
+        }""")
+        assert all(item["left"] >= -1 and item["right"] <= dimensions["viewport"] + 1
+                   for item in dimensions["elements"]), dimensions
+        if view == "table":
+            cards = page.locator("#table .order-table .order")
+            expect(cards.first).to_be_visible()
+            route_bounds = cards.first.locator(".destination").bounding_box()
+            assert route_bounds["width"] >= 150, route_bounds
+            grid = cards.first.evaluate("""node => getComputedStyle(node).gridTemplateColumns
+                .split(' ').map(parseFloat)""")
+            assert len(grid) == 2 and grid[0] >= 150, grid
     page.locator("#table .order-summary").filter(has_text=number).click()
     details = page.locator("#table .split-detail")
     expect(page.locator("#table [aria-expanded=true].order-summary")).to_contain_text(number)
