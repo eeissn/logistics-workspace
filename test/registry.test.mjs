@@ -99,3 +99,16 @@ test('sort dates use the explicitly stated destination year, not the order year'
     ['this-year', 'new-year', 'next-year', 'invalid'],
   );
 });
+
+test('погрузки сегодня включают даты ISO, совпадающие с сортировкой по окну', () => {
+  const records = [
+    ['iso-today', '2026-11-13T09:30'],
+    ['iso-tomorrow', '2026-11-14T09:30'],
+    ['pdf-today', '13.11.2026 08:00'],
+  ].map(([number, schedule]) => ({
+    ...makeOrder(number, '2026-11-01', {}),
+    points:[{kind:'Погрузка', address:'Тест', schedule}],
+  }));
+  assert.deepEqual(selectOrders(records, {...query, view:'pickup', sort:'pickup', ascending:true})
+    .map(record => record.number), ['pdf-today', 'iso-today']);
+});

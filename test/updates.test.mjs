@@ -43,3 +43,11 @@ test('17 ноября: проверки шифрования и разделен
   assert.match(entry, /двух сотрудников/);
   assert.match(entry, /на тестовых данных/);
 });
+
+
+test('17 ноября: исправление ISO-дат отражено в истории обновлений', () => {
+  const newest = updates.find(group => group.title === '17 ноября 2026');
+  assert.ok(newest);
+  assert.ok(newest.items.some(item => item.includes('Погрузки/выгрузки сегодня')
+    && item.includes('ГГГГ-ММ-ДД')));
+});
