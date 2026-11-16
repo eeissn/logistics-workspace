@@ -56,7 +56,10 @@
 <main id="workspace" hidden>
   <header class="intro">
     <h1 id="view-title">Актуальные заявки</h1>
-    <p id="sync-status" class="quiet" role="status"></p>
+    <div class="intro-metrics">
+      <p id="month-metrics" class="month-metrics" aria-label="Показатели текущего месяца" hidden></p>
+      <p id="sync-status" class="quiet" role="status"></p>
+    </div>
   </header>
   <div class="registry-command">
     <label class="registry-search"><svg class="command-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input id="search" type="search" aria-label="Поиск по заявкам" placeholder="Номер, компания, маршрут"></label>
@@ -215,9 +218,17 @@
         <button type="button" id="reset-status-colors">Вернуть цвета</button>
       </details>
       <label>Отображение заявок<select id="settings-layout"></select></label>
+      <button type="button" id="updates-open" class="updates-link">Обновления сайта</button>
       <p class="quiet" id="settings-account" hidden></p>
       <p class="quiet" id="settings-status" role="status">Настройки сохраняются в этом браузере.</p>
     </div>
+  </div>
+</dialog>
+
+<dialog id="updates-dialog" class="compact-dialog" aria-labelledby="updates-title">
+  <div class="dialog-body">
+    <header class="dialog-head"><h2 id="updates-title">Обновления</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <ol id="updates-list" class="updates-list"></ol>
   </div>
 </dialog>
 
@@ -308,6 +319,7 @@
 <dialog id="review-dialog" aria-labelledby="review-title">
   <div class="dialog-body">
     <header class="dialog-head"><h2 id="review-title">Результат распознавания</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <p id="review-existing" class="review-existing" role="status" hidden></p>
     <div id="review-card" class="review-card"></div>
     <p class="error" id="review-error" role="alert"></p>
     <footer class="dialog-foot"><button id="review-edit" type="button">Проверить и изменить</button><button id="review-save" class="primary" type="button">Сохранить заявку</button></footer>

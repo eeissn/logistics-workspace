@@ -84,6 +84,23 @@ def calculators(page, mobile):
     cargo.locator("[data-close]").click()
 
 
+def updates_history(page, mobile):
+    click_workspace_action(page, "#settings", mobile)
+    expect(page.locator("#settings-dialog")).to_be_visible()
+    page.locator("#updates-open").click()
+    dialog = page.locator("#updates-dialog")
+    expect(dialog).to_be_visible()
+    expect(dialog.locator(".updates-group")).to_have_count(8)
+    expect(dialog).to_contain_text("16 сентября 2026")
+    expect(dialog).to_contain_text("16 ноября 2026")
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
+    if mobile:
+        bounds = dialog.bounding_box()
+        assert bounds["x"] >= -1
+        assert bounds["x"] + bounds["width"] <= 394
+    dialog.locator("[data-close]").click()
+
+
 def ledger_export(page, mobile):
     click_workspace_action(page, "#ledger-export", mobile)
     dialog = page.locator("#export-dialog")
@@ -114,7 +131,55 @@ def mobile_long_order(page):
         page.locator("#layout").select_option(view)
         registry = page.locator("#table")
         expect(registry).to_contain_text(route)
-        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        metrics = registry.locator(".finance-summary").first
+        expect(metrics).to_contain_text("Заказчик:")
+        expect(metrics).to_contain_text("Перевозчик:")
+        expect(metrics).to_contain_text("Маржа:")
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
+        # Every display mode must fit the visual viewport, not just root scrollWidth.
+        dimensions = page.evaluate("""() => {
+            const viewport = document.documentElement.clientWidth;
+            const selectors = [
+                'main', '.registry-command', '.registry-tools', '#table',
+                '#table .order', '#table .order-summary', '#table .split-detail'
+            ];
+            return {viewport, elements: selectors.flatMap(selector =>
+                [...document.querySelectorAll(selector)].filter(el => el.getClientRects().length)
+                    .map(el => { const r = el.getBoundingClientRect();
+                        return {selector, left:r.left, right:r.right, width:r.width}; })
+            )};
+        }""")
+        assert all(item["left"] >= -1 and item["right"] <= dimensions["viewport"] + 1
+                   for item in dimensions["elements"]), dimensions
+        if view == "table":
+            cards = page.locator("#table .order-table .order")
+            expect(cards.first).to_be_visible()
+            route_bounds = cards.first.locator(".destination").bounding_box()
+            assert route_bounds["width"] >= 150, route_bounds
+            grid = cards.first.evaluate("""node => getComputedStyle(node).gridTemplateColumns
+                .split(' ').map(parseFloat)""")
+            assert len(grid) == 2 and grid[0] >= 150, grid
+    # Cover narrow and wide iPhone CSS viewports, not just the iPhone 13 default.
+    for width in (320, 375, 393, 430):
+        page.set_viewport_size({"width": width, "height": 852})
+        for view in ("table", "split", "compact", "kanban"):
+            page.locator("#layout").select_option(view)
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"), (width, view)
+            assert page.evaluate("""() => {
+                const limit = document.documentElement.clientWidth + 1;
+                const selectors = ['main', '.registry-tools', '#table',
+                    '#table .order', '#table .order-summary'];
+                return selectors.every(q => [...document.querySelectorAll(q)]
+                    .filter(n => n.getClientRects().length)
+                    .every(n => { const r = n.getBoundingClientRect();
+                        return r.left >= -1 && r.right <= limit; }));
+            }"""), (width, view)
+            if view == "table":
+                card = page.locator("#table .order-table .order").first
+                route_rect = card.locator(".destination").bounding_box()
+                assert route_rect["width"] >= 150, (width, route_rect)
+    page.set_viewport_size({"width": 393, "height": 852})
+    page.locator("#layout").select_option("split")
     page.locator("#table .order-summary").filter(has_text=number).click()
     details = page.locator("#table .split-detail")
     expect(page.locator("#table [aria-expanded=true].order-summary")).to_contain_text(number)
@@ -219,7 +284,21 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     page.locator('#import-form [type="submit"]').click()
     expect(page.locator("#review-dialog")).to_be_visible()
     expect(page.locator("#review-title")).to_contain_text(str(number))
+    expect(page.locator("#review-existing")).to_be_hidden()
+    expect(page.locator("#review-save")).to_have_text("Сохранить заявку")
     page.locator("#review-save").click()
+    expect(page.locator("#review-dialog")).to_be_hidden()
+
+    # Re-importing an existing order must announce an update, not create a duplicate.
+    click_registry_action(page, "#import", mobile)
+    page.locator("#customer-pdf").set_input_files(pdfs[0])
+    page.locator("#carrier-pdf").set_input_files(pdfs[1])
+    page.locator('#import-form [type="submit"]').click()
+    expect(page.locator("#review-existing")).to_be_visible()
+    expect(page.locator("#review-existing")).to_contain_text("уже существует")
+    expect(page.locator("#review-existing")).to_contain_text("не будет создана")
+    expect(page.locator("#review-save")).to_have_text("Обновить заявку")
+    page.locator("#review-dialog [data-close]").click()
     expect(page.locator("#review-dialog")).to_be_hidden()
 
     click_workspace_action(page, "#ledger", mobile)
@@ -580,6 +659,7 @@ def smoke(browser_type, origin, chromium, number, report_total, device=None):
         sign_in(a, "first")
         sheet_preview(a, "Герман", number)
         calculators(a, device is not None)
+        updates_history(a, device is not None)
         create_order(a, order_a)
         ledger_export(a, device is not None)
 
