@@ -1724,12 +1724,14 @@ dialog .check label {
   background: transparent; color: var(--muted); font-size: .78rem;
   text-align: left; text-decoration: underline; text-underline-offset: .2rem;
 }
+#updates-dialog { width: min(720px, calc(100% - 1.5rem)); max-width: 720px; overflow-y: auto; overscroll-behavior: contain; }
+#updates-dialog .dialog-head { position: sticky; top: 0; }
 .updates-list { padding: 0; margin: .4rem 0 .2rem; list-style: none; }
 .updates-group { padding: .65rem 0; border-bottom: 1px solid var(--line); }
 .updates-group:last-child { border-bottom: 0; }
 .updates-group h3 { margin: 0 0 .3rem; color: var(--ink); font-size: .85rem; font-weight: 650; }
 .updates-group ul { padding-left: 1.05rem; margin: 0; }
-.updates-group li { margin: .2rem 0; line-height: 1.4; font-size: .81rem; color: var(--muted); }
+.updates-group li { margin: .5rem 0; line-height: 1.55; font-size: .88rem; color: var(--ink); }
 @media (max-width: 760px) {
   .intro { align-items: flex-start; }
   .intro-metrics { width: 100%; justify-content: flex-start; gap: .2rem .65rem; }
