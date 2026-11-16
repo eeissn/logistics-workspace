@@ -110,7 +110,7 @@ function assertUnchanged(current, number, stamp) {
 function updateMonthMetrics() {
   const el = $('month-metrics');
   const month = today().slice(0, 7);
-  const {count, total} = monthSnapshot(orders, month);
+  const {count, total} = monthSnapshot(orders, month, today());
   const label = new Date(month + '-01T12:00:00').toLocaleDateString('ru-RU', {month:'long', year:'numeric'});
   el.textContent = label + ' · ' + count + ' заявок · Маржа ' + money(total);
   el.title = 'Маржа по действующим правилам отчёта, без сорванных заявок. Количество включает все заявки месяца.';
