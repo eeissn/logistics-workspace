@@ -1,7 +1,8 @@
 import './style.css';
+import { updates } from './updates.mjs';
 import { mountCalculator } from './calculator.mjs';
 import { parseSheetText } from './sheet-preview.mjs';
-import { archived, blankOrder, etrnProgress, etrnStatus, margin, mergeImport, monthReport, orderMargin, tripStatus, tripStatuses, upsert } from './domain.mjs';
+import { archived, blankOrder, etrnProgress, etrnStatus, margin, mergeImport, monthReport, monthSnapshot, orderMargin, tripStatus, tripStatuses, upsert } from './domain.mjs';
 import { importPair, phones } from './import.mjs';
 import { addLedgerOrders, previewLedgerWorkbook } from './ledger.mjs';
 import { checkImportFile, readExcelArchive } from './import-files.mjs';
@@ -104,6 +105,16 @@ function assertUnchanged(current, number, stamp) {
   if (!order || order.updatedAt !== stamp) {
     throw new Error('Заявка изменилась. Обновите реестр и откройте её заново.');
   }
+}
+
+function updateMonthMetrics() {
+  const el = $('month-metrics');
+  const month = today().slice(0, 7);
+  const {count, total} = monthSnapshot(orders, month);
+  const label = new Date(month + '-01T12:00:00').toLocaleDateString('ru-RU', {month:'long', year:'numeric'});
+  el.textContent = label + ' · ' + count + ' заявок · Маржа ' + money(total);
+  el.title = 'Маржа по действующим правилам отчёта, без сорванных заявок. Количество включает все заявки месяца.';
+  el.hidden = !signedIn && !demo;
 }
 
 function showSyncStatus() {
@@ -671,6 +682,7 @@ function shortPeriodDate(value) {
 }
 
 function render() {
+  updateMonthMetrics();
   closeContacts();
   const day = today();
   for (const button of document.querySelectorAll('[data-view]')) {
@@ -1083,6 +1095,24 @@ function sizeMobileDialogs() {
 sizeMobileDialogs();
 window.visualViewport?.addEventListener('resize', sizeMobileDialogs);
 window.visualViewport?.addEventListener('scroll', sizeMobileDialogs);
+// Update the displayed period on month rollover even if the tab remains open.
+setInterval(updateMonthMetrics, 60_000);
+
+function showUpdates() {
+  const list = $('updates-list');
+  list.replaceChildren();
+  for (const release of updates) {
+    const group = node('li', null, 'updates-group');
+    group.append(node('h3', release.title));
+    const items = node('ul');
+    for (const item of release.items) items.append(node('li', item));
+    group.append(items);
+    list.append(group);
+  }
+  $('settings-dialog').close();
+  $('updates-dialog').showModal();
+}
+$('updates-open').addEventListener('click', showUpdates);
 
 $('settings').addEventListener('click', () => {
   const email = $('account-email').textContent;
@@ -1109,7 +1139,7 @@ $('cargo-open').addEventListener('click', async () => {
     if (generation === accountGeneration) $('notice').textContent = 'Не удалось открыть размещение груза. Повторите действие.';
   }
 });
-for (const id of ['settings-dialog', 'ledger-dialog', 'export-dialog', 'report-dialog', 'calculator-dialog', 'cargo-dialog']) {
+for (const id of ['settings-dialog', 'updates-dialog', 'ledger-dialog', 'export-dialog', 'report-dialog', 'calculator-dialog', 'cargo-dialog']) {
   $(id).addEventListener('close', () => {
     if (!mobileNav?.matches) return;
     const menu = $('workspace-menu');
