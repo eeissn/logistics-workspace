@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { margin, etrnSteps, etrnStatus, etrnProgress, markTrip, mergeImport, upsert, archived, monthReport, monthSnapshot, scheduledToday } from '../src/domain.mjs';
+import { margin, etrnSteps, etrnStatus, etrnProgress, markTrip, mergeImport, upsert, archived, monthReport, monthSnapshot, dateRange, scheduledToday } from '../src/domain.mjs';
 import { parseLedger, addLedgerOrders } from '../src/ledger.mjs';
 import { driverMessage } from '../src/driver.mjs';
 import { importPair, phones, normalizePassport } from '../src/import.mjs';
@@ -239,4 +239,24 @@ test('не подставляет постороннюю дату из сосе�
   const modified = carrier.replace('ФИО: Водитель Тестовый    Марка тягача: КАМАЗ',
     'ФИО: Водитель Тестовый    Марка тягача: MAN\nПаспорт: 0000 000000 Учебное управление    Номер тягача: А000АА 00\nКонтактный телефон: 89000000005');
   assert.equal(importPair(client, modified).passport, '0000 000000 Учебное управление');
+});
+
+
+test('окна рейса: год из конечной даты, Новый год и невозможные даты', () => {
+  assert.deepEqual(dateRange('13.11–14.11.2027', '2026-11-01'), ['2027-11-13', '2027-11-14']);
+  assert.deepEqual(dateRange('31.12–01.01.2027', '2026-12-01'), ['2026-12-31', '2027-01-01']);
+  assert.deepEqual(dateRange('31.12/01.01', '2026-12-01'), ['2026-12-31', '2027-01-01']);
+  assert.deepEqual(dateRange('28.02–01.03.2027', '2026-12-01'), ['2027-02-28', '2027-03-01']);
+  assert.deepEqual(dateRange('29.02.2028', '2026-11-01'), ['2028-02-29']);
+  assert.deepEqual(dateRange('29.02.2027', '2026-11-01'), []);
+  assert.deepEqual(dateRange('31.04.2027', '2026-11-01'), []);
+  assert.deepEqual(dateRange('32.11.2027', '2026-11-01'), []);
+  assert.deepEqual(dateRange('13.11', ''), []);
+
+  const trip = {date: '2026-11-01', points: [
+    {kind: 'Выгрузка', schedule: '31.12–01.01.2027', address: 'Тест'},
+  ]};
+  assert.equal(scheduledToday(trip, 'Выгрузка', '2026-12-31'), true);
+  assert.equal(scheduledToday(trip, 'Выгрузка', '2027-01-01'), true);
+  assert.equal(scheduledToday(trip, 'Выгрузка', '2027-01-02'), false);
 });
