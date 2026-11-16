@@ -260,3 +260,23 @@ test('окна рейса: год из конечной даты, Новый г�
   assert.equal(scheduledToday(trip, 'Выгрузка', '2027-01-01'), true);
   assert.equal(scheduledToday(trip, 'Выгрузка', '2027-01-02'), false);
 });
+
+test('фильтр на сегодня учитывает ISO-время и смешанные диапазоны дат', () => {
+  assert.deepEqual(dateRange('2026-11-12T10:00'), ['2026-11-12']);
+  assert.deepEqual(dateRange('2026-12-31T23:00 — 2027-01-01T08:00'),
+    ['2026-12-31', '2027-01-01']);
+  assert.deepEqual(dateRange('31.12.2026 — 2027-01-01T08:00'),
+    ['2026-12-31', '2027-01-01']);
+  assert.deepEqual(dateRange('2027-02-29T10:00'), []);
+  assert.deepEqual(dateRange('2028-02-29T10:00'), ['2028-02-29']);
+
+  const order = {date:'2026-11-01', points:[
+    {kind:'Погрузка', address:'Тест', schedule:'2026-11-12T10:00'},
+    {kind:'Выгрузка', address:'Тест', schedule:'2026-12-31T23:00 — 2027-01-01T08:00'},
+  ]};
+  assert.equal(scheduledToday(order, 'Погрузка', '2026-11-12'), true);
+  assert.equal(scheduledToday(order, 'Погрузка', '2026-11-13'), false);
+  assert.equal(scheduledToday(order, 'Выгрузка', '2026-12-31'), true);
+  assert.equal(scheduledToday(order, 'Выгрузка', '2027-01-01'), true);
+  assert.equal(scheduledToday(order, 'Выгрузка', '2027-01-02'), false);
+});
