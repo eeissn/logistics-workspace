@@ -117,6 +117,14 @@ export function orderMargin(order) {
   return hasMargin(order) ? margin(order.customerAmount, order.customerTax, order.carrierAmount, order.carrierTax).realProfit : null;
 }
 
+// Count all requests for the period; margin follows the established report (failed trips excluded).
+export function monthSnapshot(orders, month) {
+  return {
+    count: orders.filter(order => order.date?.startsWith(month + '-')).length,
+    total: monthReport(orders, month).total,
+  };
+}
+
 export function monthReport(orders, month) {
   const rows = orders.filter(order => order.date?.startsWith(month + '-') && tripStatus(order) !== 'failed')
     .sort((a,b) => a.date.localeCompare(b.date) || a.number.localeCompare(b.number, 'ru', {numeric:true}));
