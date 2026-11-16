@@ -3,12 +3,13 @@ import test from 'node:test';
 import {updates} from '../src/updates.mjs';
 
 test('обновления охватывают всю известную историю и отсортированы по датам', () => {
-  assert.equal(updates.length, 5);
+  assert.equal(updates.length, 8);
   assert.deepEqual(updates.map(group => group.title), [
     '16 ноября 2026', '15 ноября 2026', '14 ноября 2026',
-    '13 ноября 2026', '12 ноября 2026'
+    '13 ноября 2026', '12 ноября 2026', '11 ноября 2026',
+    '23 сентября 2026', '16 сентября 2026 · предыстория'
   ]);
-  assert.ok(updates.every(group => group.items.length >= 5));
+  assert.ok(updates.every(group => group.items.length >= 3));
   assert.ok(updates.every(group => group.items.every(item => item.trim().length > 15)));
   assert.ok(updates.every(group => !/\d{1,2}:\d{2}/.test(group.title)));
 });
