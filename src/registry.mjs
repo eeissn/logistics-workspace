@@ -74,7 +74,7 @@ function windowStart(order, kind) {
     const schedule = point.schedule || '';
     const [first, next] = schedule.matchAll(/\b(?:\d{4}-\d{2}-\d{2}(?=\b|T)|\d{1,2}\.\d{1,2}(?:\.\d{4})?\b)/g);
     if (!first) continue;
-    const date = first[0].includes('-') ? first[0] : dateRange(first[0], order.date)[0];
+    const date = first[0].includes('-') ? first[0] : dateRange(schedule.slice(first.index), order.date)[0];
     if (!date) continue;
     const instant = new Date(date);
     if (!Number.isFinite(instant.valueOf()) || instant.toISOString().slice(0, 10) !== date) continue;
