@@ -142,6 +142,27 @@ def mobile_long_order(page):
             grid = cards.first.evaluate("""node => getComputedStyle(node).gridTemplateColumns
                 .split(' ').map(parseFloat)""")
             assert len(grid) == 2 and grid[0] >= 150, grid
+    # Cover narrow and wide iPhone CSS viewports, not just the iPhone 13 default.
+    for width in (320, 375, 393, 430):
+        page.set_viewport_size({"width": width, "height": 852})
+        for view in ("table", "split", "compact", "kanban"):
+            page.locator("#layout").select_option(view)
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"), (width, view)
+            assert page.evaluate("""() => {
+                const limit = document.documentElement.clientWidth + 1;
+                const selectors = ['main', '.registry-tools', '#table',
+                    '#table .order', '#table .order-summary'];
+                return selectors.every(q => [...document.querySelectorAll(q)]
+                    .filter(n => n.getClientRects().length)
+                    .every(n => { const r = n.getBoundingClientRect();
+                        return r.left >= -1 && r.right <= limit; }));
+            }"""), (width, view)
+            if view == "table":
+                card = page.locator("#table .order-table .order").first
+                route_rect = card.locator(".destination").bounding_box()
+                assert route_rect["width"] >= 150, (width, route_rect)
+    page.set_viewport_size({"width": 393, "height": 852})
+    page.locator("#layout").select_option("split")
     page.locator("#table .order-summary").filter(has_text=number).click()
     details = page.locator("#table .split-detail")
     expect(page.locator("#table [aria-expanded=true].order-summary")).to_contain_text(number)
