@@ -114,6 +114,10 @@ def mobile_long_order(page):
         page.locator("#layout").select_option(view)
         registry = page.locator("#table")
         expect(registry).to_contain_text(route)
+        metrics = registry.locator(".finance-summary").first
+        expect(metrics).to_contain_text("Заказчик:")
+        expect(metrics).to_contain_text("Перевозчик:")
+        expect(metrics).to_contain_text("Маржа:")
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     page.locator("#table .order-summary").filter(has_text=number).click()
     details = page.locator("#table .split-detail")
