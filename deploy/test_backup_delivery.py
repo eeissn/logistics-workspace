@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta, timezone
+import hashlib
+import json
 from pathlib import Path
 import shutil
 import sqlite3
@@ -7,7 +9,7 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 
-from deploy.backup_delivery import NAME, publish, retrieve
+from deploy.backup_delivery import NAME, publish, read_manifest, retrieve
 
 
 class LocalOutbox:
@@ -84,3 +86,54 @@ class BackupDeliveryTest(unittest.TestCase):
                 retrieve(remote, rejected, now, fresh, retention)
             self.assertFalse((rejected / name).exists())
             self.assertEqual(list(rejected.glob(".download-*")), [])
+
+
+class ReceiptValidationTest(unittest.TestCase):
+    def test_malformed_receipts_are_rejected(self):
+        valid = {"size": 12, "sha256": "a" * 64}
+        invalid = (
+            "",
+            "{",
+            "[]",
+            json.dumps({**valid, "size": 0}),
+            json.dumps({**valid, "size": -1}),
+            json.dumps({**valid, "size": True}),
+            json.dumps({**valid, "size": 1.0}),
+            json.dumps({**valid, "sha256": "not-a-digest"}),
+            json.dumps({**valid, "sha256": "B" * 64}),
+            json.dumps({**valid, "unexpected": "value"}),
+            json.dumps({"size": 12}),
+        )
+        with TemporaryDirectory() as temporary:
+            receipt = Path(temporary) / "receipt.json"
+            receipt.write_text(json.dumps(valid), encoding="ascii")
+            self.assertEqual(read_manifest(receipt), valid)
+            for sample in invalid:
+                with self.subTest(receipt=sample):
+                    receipt.write_text(sample, encoding="ascii")
+                    with self.assertRaisesRegex(ValueError, "Invalid backup manifest"):
+                        read_manifest(receipt)
+
+    def test_empty_archive_cannot_be_verified_by_empty_receipt(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            remote_outbox = root / "outbox"
+            remote_outbox.mkdir()
+            name = "workspace-20261113T230000Z.cms"
+            (remote_outbox / name).mkdir()
+            folder = root / "download"
+            folder.mkdir()
+            (folder / name).touch()
+            receipts = folder / ".verified"
+            receipts.mkdir()
+            (receipts / "workspace-20261113T230000Z.json").write_text(
+                json.dumps({"size": 0, "sha256": hashlib.sha256(b"").hexdigest()}),
+                encoding="ascii",
+            )
+            with self.assertRaisesRegex(ValueError, "Invalid backup manifest"):
+                retrieve(
+                    LocalOutbox(remote_outbox), folder,
+                    datetime(2026, 11, 14, 6, tzinfo=timezone.utc),
+                    timedelta(hours=36), timedelta(days=45),
+                )
+            self.assertTrue((folder / name).exists())
