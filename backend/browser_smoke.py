@@ -246,7 +246,21 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     page.locator('#import-form [type="submit"]').click()
     expect(page.locator("#review-dialog")).to_be_visible()
     expect(page.locator("#review-title")).to_contain_text(str(number))
+    expect(page.locator("#review-existing")).to_be_hidden()
+    expect(page.locator("#review-save")).to_have_text("Сохранить заявку")
     page.locator("#review-save").click()
+    expect(page.locator("#review-dialog")).to_be_hidden()
+
+    # Re-importing an existing order must announce an update, not create a duplicate.
+    click_workspace_action(page, "#import", mobile)
+    page.locator("#customer-pdf").set_input_files(pdfs[0])
+    page.locator("#carrier-pdf").set_input_files(pdfs[1])
+    page.locator('#import-form [type="submit"]').click()
+    expect(page.locator("#review-existing")).to_be_visible()
+    expect(page.locator("#review-existing")).to_contain_text("уже существует")
+    expect(page.locator("#review-existing")).to_contain_text("не будет создана")
+    expect(page.locator("#review-save")).to_have_text("Обновить заявку")
+    page.locator("#review-dialog [data-close]").click()
     expect(page.locator("#review-dialog")).to_be_hidden()
 
     click_workspace_action(page, "#ledger", mobile)
