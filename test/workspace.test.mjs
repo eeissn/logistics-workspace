@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { margin, etrnSteps, etrnStatus, etrnProgress, markTrip, mergeImport, upsert, archived, monthReport, scheduledToday } from '../src/domain.mjs';
+import { margin, etrnSteps, etrnStatus, etrnProgress, markTrip, mergeImport, upsert, archived, monthReport, monthSnapshot, scheduledToday } from '../src/domain.mjs';
 import { parseLedger, addLedgerOrders } from '../src/ledger.mjs';
 import { driverMessage } from '../src/driver.mjs';
 import { importPair, phones } from '../src/import.mjs';
@@ -165,4 +165,39 @@ test('повторный импорт сохраняет отметки рейс
   assert.equal(merged.etrn.number, 'Э-12');
   assert.equal(etrnProgress(merged.etrn), '1/4 подписи');
   assert.equal(etrnProgress({...merged.etrn, pickupCarrier:true, recipient:true, deliveryCarrier:true, number:''}), 'Нужен номер');
+});
+
+
+test('импорт PDF сохраняет дату выдачи паспорта и отделяет номер прицепа', () => {
+  const modified = carrier.replace('ФИО: Водитель Тестовый    Марка тягача: КАМАЗ',
+    'ФИО: Водитель Тестовый    Марка тягача: VOLVO\nПаспорт: 0000 000000 Учебный отдел    Номер тягача: А000АА 00\nДата выдачи: 16.06.2006')
+    .replace('Номер прицепа:', 'Номер прицепа: ВЕ0000 00');
+  const order = importPair(client, modified);
+  assert.equal(order.passport, '0000 000000 Учебный отдел от 16.06.2006');
+  assert.match(driverMessage(order), /Паспорт: 0000 000000 Учебный отдел от 16\.06\.2006/);
+  assert.match(driverMessage(order), /Транспорт: VOLVO А000АА 00\nПрицеп: ВЕ0000 00/);
+  assert.doesNotMatch(driverMessage(order), /Транспорт:[^\n]*ВЕ0000/);
+  assert.deepEqual(importPair(modified, client), order);
+});
+
+test('пустой прицеп не выводится, существующая дата паспорта не удваивается', () => {
+  const modified = carrier.replace('ФИО: Водитель Тестовый    Марка тягача: КАМАЗ',
+    'ФИО: Водитель Тестовый    Марка тягача: VOLVO\nПаспорт: 0000 000000 Учебный отдел от 16.06.2006    Номер тягача: А000АА 00\nДата выдачи: 16.06.2006');
+  const order = importPair(client, modified);
+  const result = driverMessage(order);
+  assert.equal(result.match(/16\.06\.2006/g)?.length, 1);
+  assert.doesNotMatch(result, /Прицеп:/);
+  assert.match(result, /Транспорт: VOLVO А000АА 00/);
+});
+
+test('месячная сводка считает все заявки, но маржу по правилам отчёта', () => {
+  const data = [
+    {number:'1',date:'2026-11-01',ledgerMargin:100,trip:{stage:'unloaded'}},
+    {number:'2',date:'2026-11-30',ledgerMargin:50,trip:{stage:'failed'}},
+    {number:'3',date:'2026-11-02',customerAmount:null,carrierAmount:null},
+    {number:'4',date:'2026-12-01',ledgerMargin:70},
+  ];
+  assert.deepEqual(monthSnapshot(data,'2026-11'), {count:3,total:100});
+  assert.deepEqual(monthSnapshot(data,'2026-12'), {count:1,total:70});
+  assert.deepEqual(monthSnapshot(data,'2027-01'), {count:0,total:0});
 });
