@@ -30,7 +30,9 @@ jobs:
           python -m unittest backend.test_sheets -v
           python -m unittest deploy.test_backup_delivery -v
       - name: Validate release check
-        run: bash -n deploy/check-release.sh
+        run: |
+          bash -n deploy/check-release.sh
+          bash test/check-release.sh
       - name: Test and build frontend
         env:
           VITE_DEMO: 'false'
