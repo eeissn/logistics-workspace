@@ -28,6 +28,24 @@ def file_info(path):
         return {"size": os.fstat(stream.fileno()).st_size, "sha256": hashlib.file_digest(stream, "sha256").hexdigest()}
 
 
+def read_manifest(path):
+    """Validate receipt metadata before treating an encrypted archive as verified."""
+    try:
+        metadata = json.loads(path.read_text(encoding="ascii"))
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"Invalid backup manifest: {path.name}") from error
+    if (
+        not isinstance(metadata, dict)
+        or set(metadata) != {"size", "sha256"}
+        or type(metadata["size"]) is not int
+        or metadata["size"] <= 0
+        or not isinstance(metadata["sha256"], str)
+        or re.fullmatch(r"[0-9a-f]{64}", metadata["sha256"]) is None
+    ):
+        raise ValueError(f"Invalid backup manifest: {path.name}")
+    return metadata
+
+
 def publish(args):
     timestamp = datetime.strptime(args.snapshot_utc, STAMP)
     name = f"workspace-{timestamp.strftime(STAMP)}.cms"
@@ -106,14 +124,14 @@ def retrieve(remote, folder, now, max_age, retention):
     receipt = receipts / Path(name).with_suffix(".json")
     already_verified = (
         target.is_file() and receipt.is_file()
-        and file_info(target) == json.loads(receipt.read_text(encoding="ascii"))
+        and file_info(target) == read_manifest(receipt)
     )
     if not already_verified:
         with TemporaryDirectory(prefix=".download-", dir=folder) as directory:
             staging = Path(directory)
             remote.download(name, staging)
             manifest = staging / receipt.name
-            expected = json.loads(manifest.read_text(encoding="ascii"))
+            expected = read_manifest(manifest)
             encrypted = staging / name
             actual = file_info(encrypted)
             if not actual["size"] or expected != actual:
