@@ -38,12 +38,16 @@ export function parseLogistor(text) {
   const stake = paymentLine.match(/^(\d[\d ]*(?:[,.]\d+)?)\s*(?:руб|₽)/i);
   const tax = /без\s+НДС/i.test(paymentLine) ? '0' : paymentLine.match(/НДС\s*(22|5)\s*%/i)?.[1] ?? '';
   const [day, month, year] = (heading?.[2] || '').split('.');
+  const passport = trim(clean.match(/^[ \t]*Паспорт:[ \t]*(.*?)(?:[ \t]+Номер тягача:|$)/mi)?.[1]);
+  const issueDate = clean.match(/^[ \t]*(?:Дата выдачи(?: паспорта)?|Паспорт выдан):[ \t]*(\d{2}\.\d{2}\.\d{4})/mi)?.[1];
+  const passportWithDate = passport && issueDate && !passport.includes(issueDate)
+    ? passport + ' от ' + issueDate : passport;
   const fields = {
     number: heading?.[1] || '', date: heading ? `${year}-${month}-${day}` : '',
     customer: party(head, 'Заказчик'), performer: party(head, 'Исполнитель'),
     points: pointsFrom(clean),
     driver: trim(clean.match(/^[ \t]*ФИО:[ \t]*(.*?)(?:[ \t]{2,}Марка тягача:|$)/mi)?.[1]),
-    passport: trim(clean.match(/^[ \t]*Паспорт:[ \t]*(.*?)(?:[ \t]+Номер тягача:|$)/mi)?.[1]),
+    passport: passportWithDate,
     driverContact: trim(clean.match(/^[ \t]*Контактный телефон:[ \t]*(.*?)(?:[ \t]{2,}Номер прицепа:|$)/mi)?.[1]),
     vehicle: [
       trim(clean.match(/Марка тягача:[ \t]*([^\n]+)/i)?.[1]),
