@@ -1,4 +1,4 @@
-import { phones } from './import.mjs';
+import { phones, normalizePassport } from './import.mjs';
 
 export function driverMessage(order) {
   const contacts = (order.contacts || []).filter(contact => contact.role === 'Водитель');
@@ -12,7 +12,7 @@ export function driverMessage(order) {
   return [
     'Данные на водителя:',
     'ФИО: ' + value(order.driver),
-    'Паспорт: ' + value(order.passport),
+    'Паспорт: ' + value(normalizePassport(order.passport)),
     'Транспорт: ' + value(vehicle),
     ...(trailer ? ['Прицеп: ' + trailer] : []),
     'Номер телефона: ' + value(formattedPhone),
