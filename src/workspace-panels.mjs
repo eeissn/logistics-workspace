@@ -14,10 +14,13 @@ const money = value => value == null ? '—' : new Intl.NumberFormat('ru-RU',{
 
 export function mountWorkspacePanel({root,getOrder,edit,openEtrn,openDriver,openContacts}) {
   let selected;
-  const close=()=>{root.hidden=true;selected=null;document.body?.classList?.remove('workspace-peek-open');};
+  const localPdfUrls=[];
+  const discardLocalPdfs=()=>{for(const url of localPdfUrls.splice(0))URL.revokeObjectURL(url);};
+  const close=()=>{discardLocalPdfs();root.hidden=true;selected=null;document.body?.classList?.remove('workspace-peek-open');};
   const open=number=>{
     const order=getOrder(number);
     if(!order)return;
+    discardLocalPdfs();
     selected=number;
     root.replaceChildren();
     const top=element('header',null,'peek-header');
@@ -52,7 +55,36 @@ export function mountWorkspacePanel({root,getOrder,edit,openEtrn,openDriver,open
       points.append(entry);
     }
     if(!order.points?.length)points.append(element('p','Точки не указаны','quiet'));
-    points.append(element('p','Исходные PDF не хранятся в реестре. Для просмотра нужен безопасный источник файлов.','quiet'));
+    points.append(element('p','Выбери оригинал PDF только для временного просмотра в этой вкладке. Файл не загружается на сервер и не прикрепляется к заявке автоматически.','quiet'));
+    for(const [key,label] of [['customer','PDF заказчика'],['carrier','PDF перевозчика']]){
+      const holder=element('div',null,'peek-pdf-holder');
+      const inputLabel=element('label',label);
+      const input=element('input');
+      input.type='file';input.accept='.pdf,application/pdf';
+      input.dataset.source=key;
+      input.setAttribute('aria-label',label+' для заявки № '+order.number);
+      const preview=element('div',null,'peek-pdf-preview');
+      input.addEventListener('change',()=>{
+        preview.replaceChildren();
+        const file=input.files?.[0];
+        if(!file)return;
+        if(!(/\\.pdf$/i.test(file.name)||file.type==='application/pdf')||
+          file.size > 20*1024*1024){
+          preview.append(element('p','Выбери PDF не больше 20 МиБ.','error'));
+          input.value='';return;
+        }
+        const url=URL.createObjectURL(file);
+        localPdfUrls.push(url);
+        const pdf=element('object');
+        pdf.type='application/pdf';pdf.data=url;
+        pdf.setAttribute('aria-label',label+' — временный просмотр');
+        pdf.append(element('p','Предпросмотр не поддерживается этим браузером.'));
+        const link=element('a','Открыть выбранный PDF');
+        link.href=url;link.target='_blank';link.rel='noopener noreferrer';
+        preview.append(pdf,link);
+      });
+      inputLabel.append(input);holder.append(inputLabel,preview);points.append(holder);
+    }
     const etrn=element('section',null,'peek-context-panel');
     etrn.append(element('h3','ЭТРН · '+etrnStatus(order.etrn)));
     if(order.etrn?.number)etrn.append(element('p','Номер: '+order.etrn.number));
