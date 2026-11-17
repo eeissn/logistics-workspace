@@ -2,7 +2,7 @@ import './style.css';
 import { updates } from './updates.mjs';
 import { mountCalculator } from './calculator.mjs';
 import { parseSheetText } from './sheet-preview.mjs';
-import { archived, blankOrder, etrnProgress, etrnStatus, margin, mergeImport, monthReport, monthSnapshot, orderMargin, tripStatus, tripStatuses, upsert } from './domain.mjs';
+import { archived, blankOrder, etrnProgress, etrnSteps, etrnStatus, margin, mergeImport, monthReport, monthSnapshot, orderMargin, tripStatus, tripStatuses, upsert } from './domain.mjs';
 import { importPair, phones } from './import.mjs';
 import { addLedgerOrders, previewLedgerWorkbook } from './ledger.mjs';
 import { checkImportFile, readExcelArchive } from './import-files.mjs';
@@ -443,6 +443,76 @@ $('driver-edit').addEventListener('click', () => {
   openEditor(driverOrder, driverOrder.number);
 });
 
+function inspectOrder(number) {
+  const order=orders.find(item=>item.number===number);
+  if(!order)return;
+  inspectedNumber=number;
+  const dialog=$('order-inspector');
+  $('inspector-title').textContent='Заявка № '+number;
+  const body=$('inspector-body');
+  body.replaceChildren();
+  const columns=node('div',null,'inspector-columns');
+  const details=node('section',null,'inspector-column');
+  details.append(node('h3','Рейс и участники'),
+    detailFields('Основное',[
+      ['Маршрут',routeText(order)],['Заказчик',order.customer],
+      ['Перевозчик',order.carrier],['Водитель',order.driver],
+      ['Автомобиль',order.vehicle],['Дата заявки',order.date],
+      ['Груз',order.cargo],
+    ]));
+  const journey=node('ol',null,'inspector-stages');
+  const stage=tripStatus(order);
+  const statuses=tripStatuses.filter(([key])=>key!=='new' && key!=='failed');
+  statuses.forEach(([key,label],index)=>{
+    const item=node('li',label);
+    item.dataset.state=stage==='failed'?'stopped':
+      (statuses.findIndex(([id])=>id===stage)>=index?'done':'next');
+    journey.append(item);
+  });
+  details.append(node('h3','Ход перевозки'),journey);
+  const finance=node('section',null,'inspector-column');
+  finance.append(node('h3','Финансы'),financeSummary(order));
+  const flags=financialFlags(order);
+  if(flags.length) {
+    const warning=node('p',flags.map(flag=>flag.label).join(' · '),'risk-hint');
+    finance.append(warning);
+  }
+  const windows=node('ul',null,'inspector-points');
+  (order.points||[]).forEach(point=>{
+    const item=node('li');
+    item.append(node('strong',point.kind),node('span',point.address||'Адрес не указан'),
+      node('small',point.schedule||'Без окна'));
+    windows.append(item);
+  });
+  finance.append(node('h3','Точки маршрута'),windows);
+  const documents=node('section',null,'inspector-column');
+  documents.append(node('h3','Документы и ЭТРН'),
+    node('p','Номер ЭТРН: '+(order.etrn?.number||'не указан')),
+    node('p','Статус: '+etrnStatus(order.etrn)));
+  const stages=node('ol',null,'inspector-stages');
+  for(const [key,label] of etrnSteps) {
+    const item=node('li',label);
+    item.dataset.state=order.etrn?.[key]?'done':'next';
+    stages.append(item);
+  }
+  documents.append(stages,
+    node('p','Исходные PDF в реестре не хранятся. Для сверки оригиналов используйте исходные файлы.','quiet'));
+  const footer=$('inspector-actions');
+  footer.replaceChildren(
+    action('Редактировать',()=>{dialog.close();openOrder(number);},'primary'),
+    action('Данные водителя',()=>{dialog.close();openDriver(order);}),
+    action('Открыть ЭТРН',()=>{dialog.close();openEtrn(number);}),
+    action('Закрыть',()=>dialog.close())
+  );
+  columns.append(details,finance,documents);
+  body.append(columns);
+  dialog.showModal();
+}
+$('order-inspector').addEventListener('close',()=>{
+  $('dock-context').hidden=true;
+});
+$('dock-context').addEventListener('click',()=>inspectOrder(inspectedNumber));
+
 function openOrder(number) {
   const current = orders.find(order => order.number === number);
   if (!current) return;
@@ -543,6 +613,9 @@ function renderRows(container, rows) {
     const selector = bulkCheckbox(order);
     if (selector) label.append(selector);
     label.append(action('№ ' + order.number, () => openOrder(order.number), 'order-link'));
+    const inspector=action('◫',()=>inspectOrder(order.number),'inspect-open');
+    inspector.setAttribute('aria-label','Быстрый просмотр заявки № '+order.number);
+    label.append(inspector);
     const date = node('div', order.date ? order.date.slice(5).split('-').reverse().join('.') : '—', 'order-date');
     const customer = node('div', order.customer || '—', 'customer-cell');
     const carrier = node('div', order.carrier || '—', 'carrier-cell');
@@ -599,6 +672,7 @@ function renderCompact(container, rows) {
     if (selector) item.append(selector);
     item.append(orderSummary(order, () => openOrder(order.number), undefined, false,
       !window.matchMedia?.('(max-width: 760px)')?.matches));
+    item.append(action('Просмотр',()=>inspectOrder(order.number),'inspect-open'));
     list.append(item);
   }
   container.append(list);
@@ -623,7 +697,8 @@ function renderKanban(container, rows, scrollLeft) {
       const card = node('article', null, 'kanban-card');
       const selector = bulkCheckbox(order);
       if (selector) card.append(selector);
-      card.append(orderSummary(order, () => openOrder(order.number)), tripControl(order, true), etrnAction(order));
+      card.append(orderSummary(order, () => openOrder(order.number)), tripControl(order, true), etrnAction(order),
+        action('Просмотр',()=>inspectOrder(order.number),'inspect-open'));
       column.append(card);
     }
     board.append(column);
@@ -726,7 +801,9 @@ function renderSplit(container, rows) {
   );
   const actions = node('div', null, 'split-actions');
   actions.append(contactsCell(order),
+    action('Просмотр',()=>inspectOrder(order.number)),
     action('Открыть заявку', () => openOrder(order.number), 'primary'));
+  if(inline){inspectedNumber=order.number;$('dock-context').hidden=false;}
   panel.append(actions);
   split.append(list);
   if (inline) {
