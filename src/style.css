@@ -1973,3 +1973,57 @@ dialog :is(input,select,textarea) { scroll-margin-block: 5rem; }
   .order-table .order, .trip-status, .etrn-link, .stage-badge { transition: none; }
 }
 @media print { .mobile-dock { display: none !important; } }
+
+
+/* P1 owner feedback · 17.11.2026: clearer actions, KPI alignment and iPhone search. */
+.workspace-nav #command-launch {
+  display: flex; justify-content: space-between; align-items: center;
+  width: 100%; min-height: 42px; padding: .58rem .65rem;
+  text-align: left; color: var(--ink);
+  border: 1px solid var(--line); border-radius: 11px;
+  background: var(--paper); font-size: .84rem; font-weight: 625;
+}
+.workspace-nav #command-launch > span {
+  font-size: .69rem; font-weight: 550; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 5px; padding: .12rem .25rem;
+}
+.workspace-nav #command-launch:hover { background: var(--nav-active); }
+.command-dialog { width: min(610px,calc(100% - 1.5rem)); }
+.command-dialog .dialog-head h2 { font-size: 1.13rem; letter-spacing: -.025em; }
+.command-dialog #command-search { font-size: 1rem; background: var(--paper); }
+.command-group { font-size: .73rem; font-weight: 700; margin-top: .85rem; letter-spacing: .035em; }
+.command-choice { min-height: 58px; padding: .58rem .8rem; gap: .24rem; border-radius: 10px; }
+.command-choice strong { font-size: .95rem; line-height: 1.4; font-weight: 635; }
+.command-choice small { font-size: .81rem; line-height: 1.35; }
+.command-footnote { font-size: .76rem; }
+.intro-metrics { display: flex; align-items: center; justify-content: flex-end; gap: .55rem; flex-wrap: wrap; }
+.metric-chip[data-metric=count] { text-align: center; justify-items: center; }
+.metric-chip[data-metric=count] strong { min-width: 2ch; }
+.sync-quick {
+  min-height: 39px; flex: 0 0 auto;
+  font-size: .8rem; color: var(--ink); background: var(--paper);
+}
+.sync-quick:disabled { cursor: wait; }
+.bulk-numbers { border: 1px solid var(--line); border-radius: 10px; margin: .75rem 0; }
+.bulk-numbers > summary { padding: .65rem .8rem; cursor: pointer; font-size: .86rem; font-weight: 640; }
+.bulk-number-list { max-height: 270px; overflow-y: auto; overscroll-behavior: contain; padding: .3rem .75rem .75rem; display: grid; gap: .5rem; }
+.bulk-number-entry { display: grid; grid-template-columns: minmax(0,1fr) minmax(9rem,1.1fr); gap: .6rem; align-items: center; }
+.bulk-number-entry > span { min-width: 0; overflow-wrap: anywhere; font-size: .82rem; }
+.bulk-number-entry input { width: 100%; min-width: 0; background: var(--paper); }
+.registry-search { max-width: 100%; }
+.registry-search input { display: block; flex: 1 1 0%; min-width: 0; width: 100%; max-width: 100%; box-shadow: none; }
+.registry-search:focus-within { border-color: var(--outline); box-shadow: 0 0 0 1px var(--outline); }
+.registry-search input:focus { outline: none; }
+@media (max-width: 850px) {
+  .workspace-nav #command-launch { min-height: 44px; }
+}
+@media (max-width: 740px) {
+  .registry-command { min-width: 0; max-width: 100%; }
+  .registry-command .registry-search { min-width: 0; width: 100%; max-width: 100%; overflow: hidden; box-sizing: border-box; }
+  .registry-command #search { font-size: 16px; min-width: 0; width: 100%; max-width: 100%; padding-right: .25rem; }
+  .registry-command .registry-search:focus-within { box-shadow: inset 0 0 0 1px var(--outline); }
+  .intro-metrics { justify-content: flex-start; gap: .4rem; }
+  .sync-quick { width: auto; }
+  .command-dialog { width: min(100% - 1rem,610px); }
+  .bulk-number-entry { grid-template-columns: minmax(0,1fr); gap: .2rem; }
+}
