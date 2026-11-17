@@ -12,6 +12,7 @@ import { isActionable, monthGroups, scopeOrders } from './order-history.mjs';
 import { demoOrders } from './demo.mjs';
 import { attachExcelLab } from './excel-lab.mjs';
 import { mountCommandPalette } from './command-palette.mjs';
+import {viewPresets, matchesPreset, monthComparison, financialFlags, paymentReviewLabel} from './workspace-extras.mjs';
 import { defaultAccents, displayKey, layoutLabels, matchesTripView, pendingEtrn, readDisplayPreferences, readStatusColors, readThemeLayouts, routeText, selectOrders, statusColors, themeLabels, validAccent, violetPalettes } from './registry.mjs';
 
 const $ = id => document.getElementById(id);
@@ -55,6 +56,70 @@ const bulkNumbers = new Set();
 let bulkVisible = [];
 let bulkPreview = null;
 let historyMonth = 'all';
+let activePreset = '';
+let inspectedNumber = '';
+let customViews = [];
+const scopedViewKey = () => 'logistics-workspace:views:' +
+  (import.meta.env.VITE_DEMO === 'true' ? 'demo' : $('account-email').textContent.trim().toLowerCase() || 'signed-out');
+function readCustomViews() {
+  try {
+    const data = JSON.parse(localStorage.getItem(scopedViewKey()));
+    return Array.isArray(data) ? data.filter(item =>
+      item && typeof item.label === 'string' && item.label.length <= 40 &&
+      typeof item.search === 'string' && item.search.length <= 160 &&
+      (item.scope === 'active' || item.scope === 'history') &&
+      typeof item.filter === 'string' && typeof item.view === 'string').slice(0,8) : [];
+  } catch { return []; }
+}
+function saveCustomViews() {
+  try { localStorage.setItem(scopedViewKey(), JSON.stringify(customViews)); }
+  catch { $('notice').textContent = 'Не удалось сохранить виды в этом браузере.'; }
+}
+function activateSavedView(id) {
+  activePreset=id;
+  if (id.startsWith('custom-')) {
+    const item=customViews[Number(id.slice(7))];
+    if (!item) return;
+    registryScope=item.scope; view=item.view;
+    $('search').value=item.search; $('filter').value=item.filter;
+    historyMonth='all';
+  } else {
+    if (id === 'problems') registryScope='history';
+    else if (id === 'today' || id === 'etrn') registryScope='active';
+    else registryScope='history';
+    view='all'; $('search').value=''; $('filter').value='';
+    historyMonth='all';
+  }
+  render();
+}
+function renderSavedViews() {
+  const parent=$('saved-view-buttons');
+  parent.replaceChildren();
+  for (const item of viewPresets) {
+    const button=action(item.label,()=>activateSavedView(item.id),'saved-view-chip');
+    button.setAttribute('aria-pressed',String(activePreset===item.id));
+    button.title=item.id==='unpaid' ? paymentReviewLabel : item.label;
+    parent.append(button);
+  }
+  customViews.forEach((item,index)=>{
+    const button=action(item.label,()=>activateSavedView('custom-'+index),'saved-view-chip');
+    button.setAttribute('aria-pressed',String(activePreset==='custom-'+index));
+    parent.append(button);
+  });
+  $('clear-saved-view').hidden=!activePreset;
+}
+$('save-current-view').addEventListener('click',()=>{
+  if(customViews.length>=8){$('notice').textContent='Можно сохранить до восьми своих видов.';return;}
+  const label=window.prompt('Название вида (до 40 символов)');
+  if(!label?.trim())return;
+  customViews.push({label:label.trim().slice(0,40),scope:registryScope,
+    search:$('search').value.slice(0,160),filter:$('filter').value,view});
+  saveCustomViews();renderSavedViews();
+});
+$('clear-saved-view').addEventListener('click',()=>{
+  activePreset=''; view='all'; $('search').value=''; $('filter').value=''; render();
+});
+
 let sort = 'delivery';
 let ascending = true;
 const display = readDisplayPreferences();
@@ -702,6 +767,7 @@ function shortPeriodDate(value) {
 
 function render() {
   updateMonthMetrics();
+  renderSavedViews();
   closeContacts();
   const day = today();
   for (const button of document.querySelectorAll('[data-view]')) {
@@ -733,7 +799,9 @@ function render() {
   const matches = selectOrders(orders, {
     query:$('search').value, filter:$('filter').value, view, today:day, sort, ascending, ...period,
   });
-  const scoped = scopeOrders(matches, {scope:registryScope, month:historyMonth, search:$('search').value});
+  const scopedBase = scopeOrders(matches, {scope:registryScope, month:historyMonth, search:$('search').value});
+  const scoped = activePreset && !activePreset.startsWith('custom-') ?
+    scopedBase.filter(order => matchesPreset(order,activePreset,day)) : scopedBase;
   const groups = monthGroups(orders);
   $('view-title').textContent = registryScope === 'active' ? 'Актуальные заявки' : 'История заявок';
   $('active-nav').setAttribute('aria-current', registryScope === 'active' ? 'page' : 'false');
@@ -1234,7 +1302,7 @@ $('dock-more').addEventListener('click', () => {
 });
 $('workspace-menu').addEventListener('toggle', () =>
   $('dock-more').setAttribute('aria-expanded', String($('workspace-menu').open)));
-$('search').addEventListener('input', render);
+$('search').addEventListener('input', () => { activePreset=''; render(); });
 $('filter-view').addEventListener('change', event => {
   view = event.currentTarget.value;
   if (view === 'completed' || view === 'failed') {
@@ -1357,6 +1425,7 @@ function signInScreen(message = '') {
     $(id).textContent = '';
   }
   $('account-email').textContent = '';
+  customViews=[];activePreset='';inspectedNumber='';
   $('sync-status').textContent = '';
   $('sync-status').title = '';
   $('notice').textContent = '';
