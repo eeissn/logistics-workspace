@@ -618,13 +618,24 @@ def contacts_viewport(page, number):
         expect(trigger).to_have_attribute("aria-expanded", "true")
         expect(panel.get_by_role("link")).to_have_attribute("href", "tel:+70000000001")
         popup, button = panel.bounding_box(), trigger.bounding_box()
-        viewport = page.evaluate("({width: innerWidth, height: innerHeight})")
-        assert popup["x"] >= 0 and popup["x"] + popup["width"] <= viewport["width"]
-        assert popup["y"] >= 0 and popup["y"] + popup["height"] <= viewport["height"]
-        if edge == "top":
-            assert popup["y"] >= button["y"] + button["height"]
-        else:
-            assert popup["y"] + popup["height"] <= button["y"]
+        viewport = page.evaluate("""() => {
+            const dock = document.getElementById('mobile-dock');
+            const visible = dock && !dock.hidden && getComputedStyle(dock).display !== 'none';
+            return {
+                width:innerWidth, height:innerHeight,
+                usableBottom:visible ? dock.getBoundingClientRect().top : innerHeight
+            };
+        }""")
+        assert popup["x"] >= 0 and popup["x"] + popup["width"] <= viewport["width"] + 1
+        assert popup["y"] >= 0 and popup["y"] + popup["height"] <= viewport["usableBottom"] + 1
+        # Placement direction depends on available space after reserving the dock.
+        # Check the direction only if the opposite side cannot hold the popup.
+        below_room = viewport["usableBottom"] - (button["y"] + button["height"])
+        above_room = button["y"]
+        if below_room < popup["height"] + 8 and above_room >= popup["height"] + 8:
+            assert popup["y"] + popup["height"] <= button["y"] + 2
+        elif above_room < popup["height"] + 8 and below_room >= popup["height"] + 8:
+            assert popup["y"] >= button["y"] + button["height"] - 2
         return trigger
 
     trigger = check_placement("20", "top")
