@@ -52,11 +52,15 @@ export const tripTimeline = order => {
 };
 export const etrnTimeline = order => {
   const status = etrnStatus(order.etrn);
-  return ['К созданию','В работе','Подписана'].map((title,index)=>({
-    title,state:status==='Закрыта вручную'?'manual':
-      status==='Не требуется'?'not-required':
-      title===status?'current':
-      ['К созданию','В работе','Подписана'].indexOf(status)>index?'done':'pending',
+  // Keep the visual timeline aligned with the real ETRN progression.
+  // "Заказ-заявка создана" is distinct from "Создана ЭТРН".
+  const stages = ['К созданию', 'Заказ-заявка создана', 'В работе', 'Подписана'];
+  const current = stages.indexOf(status);
+  return stages.map((title, index) => ({
+    title,
+    state: status === 'Закрыта вручную' ? 'manual' :
+      status === 'Не требуется' ? 'not-required' :
+      index === current ? 'current' : index < current ? 'done' : 'pending',
   }));
 };
 export const safeRecordText = order => [order.number,order.customer,order.carrier,
