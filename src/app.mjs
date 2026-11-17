@@ -471,7 +471,7 @@ function renderRows(container, rows) {
     ['route','Маршрут'], ['pickup','Загрузка'], ['delivery','Выгрузка'], ['etrn','ЭТРН'], ['trip','Статус рейса'], ['', 'Водитель / контакты']]) {
     const heading = node('div');
     heading.dataset.column = column || 'contacts';
-    heading.style.order = String(display.columnOrder.indexOf(column || 'contacts'));
+    if(heading.style) heading.style.order = String(display.columnOrder.indexOf(column || 'contacts'));
     heading.setAttribute('role', 'columnheader');
     if (column === sort) heading.setAttribute('aria-sort', ascending ? 'ascending' : 'descending');
     if (column) {
@@ -526,8 +526,8 @@ function renderRows(container, rows) {
       cell.setAttribute('role','cell');
       if(index<columnKeys.length) {
         cell.dataset.column=columnKeys[index];
-        cell.style.order=String(display.columnOrder.indexOf(columnKeys[index]));
-      } else cell.style.order=String(columnKeys.length);
+        if(cell.style) cell.style.order=String(display.columnOrder.indexOf(columnKeys[index]));
+      } else if(cell.style) cell.style.order=String(columnKeys.length);
     });
     table.append(row);
   }
