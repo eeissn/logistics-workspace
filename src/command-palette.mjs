@@ -9,6 +9,9 @@ export const commandDefinitions = Object.freeze([
   {id:'report', label:'Маржа за месяц', detail:'Сводка и печать отчёта', group:'Аналитика'},
   {id:'table', label:'Вид: таблица', detail:'Плотный реестр', group:'Отображение'},
   {id:'split', label:'Вид: список и детали', detail:'Карточка заявки рядом с реестром', group:'Отображение'},
+  {id:'selected', label:'Просмотр выбранной заявки', detail:'Контекстная панель рейса', group:'Текущая заявка', contextual:true},
+  {id:'selected-driver', label:'Данные водителя текущей заявки', detail:'Подготовить текст для заказчика', group:'Текущая заявка', contextual:true},
+  {id:'selected-etrn', label:'ЭТРН текущей заявки', detail:'Открыть документ и этапы', group:'Текущая заявка', contextual:true},
   {id:'settings', label:'Настройки', detail:'Темы, цвета и отображение', group:'Приложение'},
 ]);
 
@@ -23,7 +26,7 @@ export function matchCommands(query, commands = commandDefinitions) {
   });
 }
 
-export function mountCommandPalette({dialog, input, results, opener, actions, available}) {
+export function mountCommandPalette({dialog, input, results, opener, actions, available, hasSelection = () => false}) {
   const closeThenRun = id => {
     if (!available() || typeof actions[id] !== 'function') return;
     dialog.close();
@@ -31,7 +34,7 @@ export function mountCommandPalette({dialog, input, results, opener, actions, av
   };
   const draw = () => {
     results.replaceChildren();
-    const matches = matchCommands(input.value);
+    const matches = matchCommands(input.value).filter(item=> !item.contextual || hasSelection());
     if (!matches.length) {
       const empty = document.createElement('p');
       empty.className = 'command-empty';
