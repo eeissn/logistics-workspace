@@ -11,6 +11,7 @@ import { driverMessage } from './driver.mjs';
 import { isActionable, monthGroups, scopeOrders } from './order-history.mjs';
 import { demoOrders } from './demo.mjs';
 import { attachExcelLab } from './excel-lab.mjs';
+import { mountCommandPalette } from './command-palette.mjs';
 import { defaultAccents, displayKey, layoutLabels, matchesTripView, pendingEtrn, readDisplayPreferences, readStatusColors, readThemeLayouts, routeText, selectOrders, statusColors, themeLabels, validAccent, violetPalettes } from './registry.mjs';
 
 const $ = id => document.getElementById(id);
@@ -113,7 +114,16 @@ function updateMonthMetrics() {
   const month = today().slice(0, 7);
   const {count, total} = monthSnapshot(orders, month, today());
   const label = new Date(month + '-01T12:00:00').toLocaleDateString('ru-RU', {month:'long', year:'numeric'});
-  el.textContent = label + ' · ' + count + ' заявок · Маржа ' + money(total);
+  el.replaceChildren();
+  for (const [key, caption, value] of [
+    ['month', 'Период', label], ['count', 'Заявки', String(count)],
+    ['margin', 'Маржа', money(total)],
+  ]) {
+    const part = node('span', null, 'metric-chip');
+    part.dataset.metric = key;
+    part.append(node('small', caption), node('strong', value));
+    el.append(part);
+  }
   el.title = 'Маржа по действующим правилам отчёта, без сорванных заявок. Количество включает все заявки месяца.';
   el.hidden = !signedIn && !demo;
 }
@@ -723,6 +733,9 @@ function render() {
   for (const button of document.querySelectorAll('[data-scope]')) {
     button.setAttribute('aria-pressed', String(button.dataset.scope === registryScope));
   }
+  $('dock-active').setAttribute('aria-current', registryScope === 'active' ? 'page' : 'false');
+  $('dock-history').setAttribute('aria-current', registryScope === 'history' ? 'page' : 'false');
+  $('dock-more').setAttribute('aria-expanded', String($('workspace-menu').open));
   $('active-count').textContent = String(orders.filter(isActionable).length);
   $('history-count').textContent = String(orders.length);
   $('history-browser').hidden = registryScope !== 'history';
@@ -1174,6 +1187,41 @@ $('sort').addEventListener('change', event => {
 $('sort-direction').addEventListener('click', () => setSort(sort));
 
 for (const button of document.querySelectorAll('[data-close]')) button.addEventListener('click', () => button.closest('dialog').close());
+const focusRegistrySearch = () => {
+  const input = $('search');
+  input.scrollIntoView({block:'center', behavior:'instant'});
+  input.focus({preventScroll:true});
+  input.select();
+};
+mountCommandPalette({
+  dialog:$('command-dialog'), input:$('command-search'),
+  results:$('command-results'), opener:$('command-launch'),
+  available:() => demo || signedIn,
+  actions:{
+    search:focusRegistrySearch,
+    active:() => changeRegistryScope('active'),
+    history:() => changeRegistryScope('history'),
+    new:() => $('new').click(),
+    pdf:() => $('import').click(),
+    excel:() => $('ledger').click(),
+    report:() => $('report').click(),
+    table:() => setDisplay('layout','table'),
+    split:() => setDisplay('layout','split'),
+    settings:() => $('settings').click(),
+  },
+});
+$('dock-active').addEventListener('click', () => changeRegistryScope('active'));
+$('dock-history').addEventListener('click', () => changeRegistryScope('history'));
+$('dock-search').addEventListener('click', focusRegistrySearch);
+$('dock-new').addEventListener('click', () => $('new').click());
+$('dock-more').addEventListener('click', () => {
+  const menu = $('workspace-menu');
+  menu.open = !menu.open;
+  $('dock-more').setAttribute('aria-expanded', String(menu.open));
+  if (menu.open) menu.querySelector('summary').focus({preventScroll:true});
+});
+$('workspace-menu').addEventListener('toggle', () =>
+  $('dock-more').setAttribute('aria-expanded', String($('workspace-menu').open)));
 $('search').addEventListener('input', render);
 $('filter-view').addEventListener('change', event => {
   view = event.currentTarget.value;
@@ -1258,6 +1306,7 @@ $('import-form').addEventListener('submit', async event => {
 function showWorkspace(visible) {
   $('workspace').hidden = !visible;
   $('workspace-nav').hidden = !visible;
+  $('mobile-dock').hidden = !visible;
   $('sign-in').hidden = visible;
 }
 
