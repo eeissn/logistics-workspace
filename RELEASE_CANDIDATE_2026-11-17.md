@@ -23,3 +23,13 @@ Status: **RC, not yet deployed to VPS**. The installed VPS commit SHA, database 
 6. Record deployed SHA, date, CI, rollback SHA, and results. Roll back on unsuccessful checks.
 
 No live records were modified in preparing this candidate.
+
+## Visual polish amendment — 17.11.2026
+
+Follow-up to PR #27: visually consistent typography, desktop sidebar legibility, predictable primary CTA, low-noise search/filters, neutral KPI surfaces, comfortable record density, ETRN badge and drawer hierarchy, safe mobile touch targets and keyboard focus. Apple HIG, Attio and Linear informed the interaction principles; this is not a clone or an official endorsement.
+
+The final release must pass the exact-SHA full Chromium + WebKit run (including per-order ETRN reload and persistent desktop navigation), API/SQLite isolation, screenshot review at desktop/mobile widths, and an explicit VPS SHA and current-backup verification. No database schema changes are part of visual polish.
+
+After deployment, test the real number 7372 ETRN **without rewriting a real status unless authorized**. Use a permitted test entry for create/save/reload first. Verify that account A/B data are still isolated; the prior 527 count is the sum across owner partitions, not the owner's UI count.
+
+Rollback: preserve the running SHA and `dist` before any switch; do not automatically restore an older SQLite backup over newer data.
