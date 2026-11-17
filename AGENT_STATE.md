@@ -1,3 +1,11 @@
+# Post-release QA · 17.11.2026 (owner's five screenshots)
+
+- Owner verified production symptoms after release: ETRN agreement-created checkbox is saved but badge remains «К созданию»; page toolbar has poor visual hierarchy; tiny «◫» quick-inspection action is not legible; sidebar is cluttered, duplicated navigation; applying quick filters or saved views collapses the entire desktop sidebar. Their separate account and colleague's account are isolated, so **do not equate combined backup order count (527) with either individual user's visible registry count**.
+- Root cause ETRN: `etrnStatus` did not consider `orderForm` when `created=false`. Add «Заказ-заявка создана» as intermediate display stage. Keep this stage in pending ETRN filters and timelines. Persistence API is already covered by release/2026-11-17-etrn-ux; do not weaken account isolation or change stored schema.
+- Root cause disappearing sidebar: `applyPersonalView` and `data-preset` handlers set `workspace-menu.open=false` unconditionally, hiding the entire `<details>`-backed desktop navigation. Close only in mobile layout. Add one-click reset to active/all.
+- UX corrections: reorganize grouped tools/quick filters/saved views, remove duplicates; replace glyph-only detail trigger with visible readable label; improve typography/contacts/drawer width and a primary new-order action beside the title. Keep iPhone bottom dock.
+- Quality gate: inspect desktop 1440px, intermediate 850px, iPhone narrow width, modal and quick-view, filter actions and navigation return, real ETRN badge transitions in fresh synthetic browser tests. Run GitHub Actions fully green on final SHA and physical Safari/Zen acceptance **before** deployment. Production 527 records and 2 accounts must remain untouched by code changes. No automatic release to VPS.
+
 # P1 · утверждены все 10 UX-идей · 17.11.2026
 
 - Пользователь дал явное согласие реализовать **все 10** идей из `UX_IDEAS_FOR_APPROVAL.md` и продолжать другие реальные P1. Создана ветка `feature/p1-ten-ideas-workspace` на базе `feature/p1-feedback-etrn-ux` (PR #22 с зелёным CI).
