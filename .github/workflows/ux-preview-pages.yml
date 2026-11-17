@@ -2,7 +2,7 @@ name: Publish UX 2.0 preview (isolated GitHub Pages)
 
 on:
   push:
-    branches: [feature/p1-workspace-design-system, feature/p1-feedback-etrn-ux]
+    branches: [feature/p1-workspace-design-system, feature/p1-feedback-etrn-ux, feature/p1-ten-ux-ideas]
   workflow_dispatch:
 
 permissions:
