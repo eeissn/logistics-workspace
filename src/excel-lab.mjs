@@ -113,7 +113,7 @@ export function attachExcelLab() {
     document.getElementById('ledger').click());
   panel.querySelector('#lab-reset-demo').addEventListener('click', () => {
     if (!window.confirm('Очистить только тестовые заявки в этом браузере?')) return;
-    localStorage.removeItem('logistics-workspace:v1');
+    localStorage.removeItem('logistics-workspace:excel-lab:v1');
     location.reload();
   });
 }
