@@ -73,12 +73,12 @@ const savingTrips = new Set();
 const tripTitles = new Map(tripStatuses);
 let driverOrder;
 const today = () => new Intl.DateTimeFormat('sv-SE', {timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-const desktopMetrics = window.matchMedia('(min-width: 851px)');
+const desktopMetrics = window.matchMedia?.('(min-width: 851px)');
 function syncMetricsDisclosure() {
   $('metrics-disclosure').open = !desktopMetrics.matches;
 }
 syncMetricsDisclosure();
-desktopMetrics.addEventListener('change', syncMetricsDisclosure);
+desktopMetrics?.addEventListener?.('change', syncMetricsDisclosure);
 
 
 function startImport(button, key = button, label) {
