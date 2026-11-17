@@ -739,6 +739,25 @@ def workspace_design(page, mobile):
         }"""), "Desktop navigation legibility regression"
 
     if mobile:
+        expect(page.locator("#metrics-disclosure")).to_have_attribute("open", "")
+    else:
+        expect(page.locator("#metrics-disclosure")).not_to_have_attribute("open", "")
+        expect(page.locator("#metrics-summary")).to_be_visible()
+        page.locator("#metrics-summary").click()
+        expect(page.locator("#metrics-disclosure")).to_have_attribute("open", "")
+        expect(page.locator("#month-metrics")).to_be_visible()
+        page.locator("#metrics-summary").click()
+        expect(page.locator("#metrics-disclosure")).not_to_have_attribute("open", "")
+        # The persistent desktop sidebar replaces redundant registry tabs.
+        expect(page.locator("#active-nav")).to_be_visible()
+        expect(page.locator("#history-nav")).to_be_visible()
+        expect(page.locator(".registry-tabs")).to_be_hidden()
+        assert page.evaluate("""() => {
+            const refresh = document.querySelector('#sync-quick').getBoundingClientRect();
+            const status = document.querySelector('#sync-status').getBoundingClientRect();
+            return refresh.right <= status.left + 1;
+        }""")
+    if mobile:
         expect(page.locator("#mobile-dock")).to_be_visible()
         page.locator("#dock-history").click()
         expect(page.locator("#view-title")).to_have_text("История заявок")
@@ -925,7 +944,8 @@ def large_year_browser(chromium, origin):
                 date: index < 200 ? '2025-12-15' : index < 400 ? '2026-01-15' : '2026-11-15',
                 customer: 'Synthetic year ' + index, carrier: 'Synthetic carrier',
                 route: 'Москва → Казань', points: [], contacts: [], differences: [],
-                payment: {}, etrn: {}, trip: {stage: index % 7 === 0 ? 'loaded' : 'unloaded'}
+                payment: {}, etrn: {required:true,created:true,number:'YEAR-'+index,allSigned:true},
+                trip: {stage: index % 7 === 0 ? 'loaded' : 'unloaded'}
             }));
             const response = await fetch('/api/records', {
                 method: 'PUT',
