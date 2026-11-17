@@ -13,8 +13,9 @@ import { demoOrders } from './demo.mjs';
 import { attachExcelLab } from './excel-lab.mjs';
 import { mountWorkspacePanel, mountComparison } from './workspace-panels.mjs';
 import { financialFlags, flagLabels, savedViewPresets } from './workspace-insights.mjs';
+import { readSavedViews, writeSavedViews } from './saved-views.mjs';
 import { mountCommandPalette } from './command-palette.mjs';
-import { defaultAccents, displayKey, layoutLabels, matchesTripView, pendingEtrn, readDisplayPreferences, readStatusColors, readThemeLayouts, routeText, selectOrders, statusColors, themeLabels, validAccent, violetPalettes } from './registry.mjs';
+import { columnKeys, columnTitles, safeColumnOrder, defaultAccents, displayKey, layoutLabels, matchesTripView, pendingEtrn, readDisplayPreferences, readStatusColors, readThemeLayouts, routeText, selectOrders, statusColors, themeLabels, validAccent, violetPalettes } from './registry.mjs';
 
 const $ = id => document.getElementById(id);
 const currency = new Intl.NumberFormat('ru', {style:'currency', currency:'RUB', maximumFractionDigits:0});
@@ -469,6 +470,8 @@ function renderRows(container, rows) {
   for (const [column, title] of [['number','№ заявки'], ['date','Дата'], ['customer','Заказчик'], ['carrier','Перевозчик'],
     ['route','Маршрут'], ['pickup','Загрузка'], ['delivery','Выгрузка'], ['etrn','ЭТРН'], ['trip','Статус рейса'], ['', 'Водитель / контакты']]) {
     const heading = node('div');
+    heading.dataset.column = column || 'contacts';
+    heading.style.order = String(display.columnOrder.indexOf(column || 'contacts'));
     heading.setAttribute('role', 'columnheader');
     if (column === sort) heading.setAttribute('aria-sort', ascending ? 'ascending' : 'descending');
     if (column) {
@@ -519,7 +522,13 @@ function renderRows(container, rows) {
     const etrn = node('div', null, 'etrn-cell');
     etrn.append(etrnAction(order));
     row.append(label, date, customer, carrier, direction, ...windows, etrn, stage, contactsCell(order), financeSummary(order));
-    for (const cell of row.children) cell.setAttribute('role', 'cell');
+    [...row.children].forEach((cell,index) => {
+      cell.setAttribute('role','cell');
+      if(index<columnKeys.length) {
+        cell.dataset.column=columnKeys[index];
+        cell.style.order=String(display.columnOrder.indexOf(columnKeys[index]));
+      } else cell.style.order=String(columnKeys.length);
+    });
     table.append(row);
   }
   container.append(table);
@@ -1124,6 +1133,25 @@ const showSettingsSection = name => {
 };
 settingsTabs.forEach(button => button.addEventListener('click',
   ()=>showSettingsSection(button.dataset.settingsSection)));
+for (const key of columnKeys) {
+  const option=node('option',columnTitles[key]);
+  option.value=key;
+  $('column-choice').append(option);
+}
+function moveColumn(delta) {
+  const key=$('column-choice').value;
+  const from=display.columnOrder.indexOf(key);
+  const target=from+delta;
+  if(from<0||target<0||target>=display.columnOrder.length)return;
+  [display.columnOrder[from],display.columnOrder[target]]=
+    [display.columnOrder[target],display.columnOrder[from]];
+  saveDisplay();render();
+}
+$('column-left').addEventListener('click',()=>moveColumn(-1));
+$('column-right').addEventListener('click',()=>moveColumn(1));
+$('reset-columns').addEventListener('click',()=>{
+  display.columnOrder=[...columnKeys];saveDisplay();render();
+});
 $('reset-appearance').addEventListener('click', () => {
   // Reset only visual preferences; keep orders, accounts and user-created views.
   display.theme='sputnik';
@@ -1308,6 +1336,50 @@ $('filter-view').addEventListener('change', event => {
 });
 $('filter').addEventListener('change', render);
 $('financial-filter').addEventListener('change', render);
+const ownerViewKey=()=>demo?'demo':$('account-email').textContent;
+function applyPersonalView(entry) {
+  view=entry.view;registryScope=entry.scope;historyMonth='all';period={};
+  sort=entry.sort;ascending=entry.ascending;
+  $('filter').value=entry.etrn;
+  $('financial-filter').value=entry.financial;
+  $('search').value='';
+  $('workspace-menu').open=false;
+  render();
+}
+function renderCustomViews() {
+  const box=$('custom-views');
+  box.replaceChildren();
+  for(const item of readSavedViews(ownerViewKey())) {
+    const row=node('div',null,'custom-view-row');
+    const open=action(item.name,()=>applyPersonalView(item));
+    const remove=action('×',()=>{
+      if(!window.confirm('Удалить сохранённый вид «'+item.name+'»?'))return;
+      const views=readSavedViews(ownerViewKey()).filter(entry=>entry.name!==item.name);
+      writeSavedViews(ownerViewKey(),views);renderCustomViews();
+    });
+    remove.setAttribute('aria-label','Удалить вид '+item.name);
+    row.append(open,remove);box.append(row);
+  }
+}
+$('save-view').addEventListener('click',()=>{
+  const requested=window.prompt('Название вида (до 45 символов)');
+  if(!requested)return;
+  const name=requested.trim().slice(0,45);
+  if(!name)return;
+  const items=readSavedViews(ownerViewKey());
+  if(items.some(item=>item.name.toLowerCase()===name.toLowerCase())) {
+    $('notice').textContent='Вид с таким названием уже существует.';return;
+  }
+  if(items.length>=25) {
+    $('notice').textContent='Можно сохранить не больше 25 видов.';return;
+  }
+  items.push({name,scope:registryScope,view,etrn:$('filter').value,
+    financial:$('financial-filter').value,sort,ascending});
+  $('notice').textContent=writeSavedViews(ownerViewKey(),items)?
+    'Вид сохранён только для этого аккаунта и браузера.':
+    'Не удалось сохранить вид в браузере.';
+  renderCustomViews();
+});
 for(const button of document.querySelectorAll('[data-preset]')) {
   button.addEventListener('click',()=>{
     const preset=savedViewPresets.find(item=>item.id===button.dataset.preset);
@@ -1438,6 +1510,7 @@ function signInScreen(message = '') {
     $(id).textContent = '';
   }
   $('account-email').textContent = '';
+  $('custom-views').replaceChildren();
   $('sync-status').textContent = '';
   $('sync-status').title = '';
   $('notice').textContent = '';
@@ -1495,6 +1568,7 @@ async function showAccount(account) {
   accountGeneration++;
   signedIn = true;
   $('account-email').textContent = account.email;
+  renderCustomViews();
   $('sync-tools').hidden = false;
   $('sign-out').hidden = false;
   try {
@@ -1639,6 +1713,7 @@ $('local-import').addEventListener('click', async event => {
 });
 
 if (demo) {
+  renderCustomViews();
   attachExcelLab();
   $('demo-note').hidden = false;
   showWorkspace(true);
