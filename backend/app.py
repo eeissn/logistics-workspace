@@ -370,6 +370,55 @@ def create_app(path, origin, sheet_preview=None):
 
         return await run_in_threadpool(save)
 
+    @app.patch("/api/etrn")
+    async def patch_etrn(request: Request):
+        """Update a single owned order without reposting the entire registry."""
+        active = session(request, mutate=True)
+        data = await read_json(request, 16384)
+        if not isinstance(data, dict) or set(data) != {"number", "updatedAt", "etrn"}:
+            raise HTTPException(422, "Invalid ETRN update")
+        number, stamp, etrn = data["number"], data["updatedAt"], data["etrn"]
+        if (not isinstance(number, str) or not 1 <= len(number) <= 48 or
+            not isinstance(stamp, str) or not 1 <= len(stamp) <= 80 or
+            not isinstance(etrn, dict) or not isinstance(etrn.get("number", ""), str)):
+            raise HTTPException(422, "Invalid ETRN update")
+        if any(type(value) is not bool for key, value in etrn.items() if key != "number"):
+            raise HTTPException(422, "Invalid ETRN flags")
+
+        def save_one():
+            with database(path, write=True) as db:
+                valid_session = db.execute(
+                    "SELECT 1 FROM sessions WHERE token=? AND email=? AND expires>?",
+                    (active["token"], active["email"], int(time.time())),
+                ).fetchone()
+                if valid_session is None:
+                    raise HTTPException(401, "Sign in required")
+                row = db.execute(
+                    "SELECT payload, updated_at FROM orders WHERE owner=? AND number=?",
+                    (active["email"], number),
+                ).fetchone()
+                if row is None:
+                    raise HTTPException(404, "Order not found")
+                if row["updated_at"] != stamp:
+                    raise HTTPException(409, "Order changed")
+                current = json.loads(row["payload"])
+                current["etrn"] = etrn
+                validate_orders([current])
+                payload = json.dumps(current, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+                if payload != row["payload"]:
+                    updated = datetime.now(timezone.utc).isoformat(timespec="microseconds")
+                    db.execute(
+                        "UPDATE orders SET payload=?, updated_at=? WHERE owner=? AND number=?",
+                        (payload, updated, active["email"], number),
+                    )
+                    db.execute(
+                        "UPDATE registry SET revision=revision+1 WHERE owner=?",
+                        (active["email"],),
+                    )
+                return snapshot(db, active["email"])
+
+        return await run_in_threadpool(save_one)
+
     @app.post("/api/etrn/bulk")
     async def bulk_etrn(request: Request):
         active = session(request, mutate=True)

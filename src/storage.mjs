@@ -62,6 +62,15 @@ const offlineStore = {
     localStorage.setItem(KEY, JSON.stringify({version: 1, orders}));
     return orders;
   },
+  async updateEtrn(number, stamp, etrn) {
+    const current = localOrders();
+    const order = current.find(entry => entry.number === number);
+    if (!order || order.updatedAt !== stamp) throw new Error('Заявка изменилась. Обновите реестр.');
+    const saved = current.map(entry => entry.number === number
+      ? {...entry, etrn, updatedAt: new Date().toISOString()} : entry);
+    localStorage.setItem(KEY, JSON.stringify({version: 1, orders: saved}));
+    return saved;
+  },
 };
 
 async function inSession(send, accept) {
@@ -160,6 +169,13 @@ export const store = demo ? offlineStore : {
     if (revision === undefined) throw new Error('Не удалось получить текущую версию реестра.');
     return inSession(() => request('etrn/bulk', 'POST',
       {items, choice, preview, revision}, account.csrf), result => result);
+  },
+  async updateEtrn(number, stamp, etrn) {
+    if (!account) throw new Error('Сеанс завершён.');
+    return inSession(
+      () => request('etrn', 'PATCH', {number, updatedAt: stamp, etrn}, account.csrf),
+      acceptSnapshot,
+    );
   },
   async save(orders, base) {
     const revision = revisions.get(base);

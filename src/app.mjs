@@ -192,6 +192,31 @@ async function saveRecords(records, current) {
   }
 }
 
+async function saveEtrn(number, stamp, etrn, generation) {
+  if (demo) {
+    await updateOrder(number, stamp, order => ({...order, etrn}), generation);
+    return;
+  }
+  pendingWrites++;
+  showSyncStatus();
+  try {
+    const saved = await store.updateEtrn(number, stamp, etrn);
+    if (generation === accountGeneration) {
+      orders = saved;
+      saveFailure = refreshFailure = undefined;
+      serverConfirmed = true;
+    }
+  } catch (error) {
+    if (generation === accountGeneration) saveFailure = error;
+    throw error;
+  } finally {
+    if (generation === accountGeneration) {
+      pendingWrites--;
+      showSyncStatus();
+    }
+  }
+}
+
 async function updateOrder(number, stamp, update, generation) {
   const current = await store.list();
   if (generation !== accountGeneration) return;
@@ -1464,7 +1489,7 @@ etrnForm.addEventListener('submit', async event => {
       draft.etrn = etrn;
       editorPreview();
     } else {
-      await updateOrder(etrnOrderNumber, etrnStamp, order => ({...order, etrn}), generation);
+      await saveEtrn(etrnOrderNumber, etrnStamp, etrn, generation);
       if (generation !== accountGeneration) return;
       render();
       $('notice').textContent = 'Статус ЭТРН сохранён.';
