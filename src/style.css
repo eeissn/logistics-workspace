@@ -2489,6 +2489,7 @@ dialog .dialog-foot button { min-height: 42px; font-weight: 610; }
     background: var(--paper);
     min-height: 44px;
   }
+  .registry-command .registry-search input { min-height: 44px; }
   .registry-command #filters-open,
   .registry-command #registry-more summary {
     min-height: 44px;
