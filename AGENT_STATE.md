@@ -1,3 +1,10 @@
+# Контрольная точка · 17.11.2026 — P1 браузерная регрессия 515 заявок
+
+- Сверены актуальные `AGENTS.md`, `PROJECT_SPEC.md`, `ROADMAP.md`, `AGENT_STATE.md` и полный CI PR #17 (`cd0a017`, success: https://github.com/eeissn/logistics-workspace/actions/runs/43960837844).
+- Создан PR #18 `feature/large-year-browser-smoke` поверх PR #17: временный HTTPS API, 515 синтетических заявок в Chromium, «Актуальные» 74 / «История» 515, помесячный выбор, глобальный поиск в истории, проверка 4 вариантов отображения и переполнения экрана.
+- В `src/updates.mjs` добавлена понятная запись, в `test/updates.test.mjs` — регрессия; в `ROADMAP.md` отмечен проверенный CI PR #17 и реализация сценария, но не закрыты физическая приёмка и измерения UI. CI PR #18 проверить по итогам последнего коммита.
+- Важная граница: нет изменений рабочего VPS, реальной SQLite, SSH или планировщика Windows; UI ещё не обновлён.
+
 # Контрольная точка · 17.11.2026 — P1 серверная регрессия 515 заявок
 
 - Сверены `AGENTS.md`, `PROJECT_SPEC.md`, `ROADMAP.md`, `AGENT_STATE.md` и CI предыдущей ветки. Последний прогон PR #16 `5ad0606` успешно завершён: https://github.com/eeissn/logistics-workspace/actions/runs/43959934766. Отметка о результате внесена в ROADMAP.
