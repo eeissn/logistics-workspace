@@ -1,4 +1,4 @@
-import {archived, etrnStatus, hasMargin, orderMargin, tripStatus} from './domain.mjs';
+import {etrnStatus, hasMargin, orderMargin, tripStatus} from './domain.mjs';
 
 // UI-only insights: never mutate orders, never infer payment dates from missing data.
 export const financialFlags = (order, minimum = 5000) => {
@@ -18,7 +18,7 @@ export function monthlyComparison(orders, first, second, threshold = 5000) {
   const aggregate = month => {
     const values = orders.filter(order => order.date?.slice(0,7) === month &&
       tripStatus(order) !== 'failed');
-    const margins = values.filter(hasMargin).map(orderMargin)
+    const margins = values.map(orderMargin)
       .filter(value => value != null && Number.isFinite(value)).sort((a,b) => a-b);
     const total = margins.reduce((sum,value)=>sum+value,0);
     return {
