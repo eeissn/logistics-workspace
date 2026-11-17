@@ -7,7 +7,7 @@ const order = (number, date, stage) => ({
   ...blankOrder(), number, date, trip: {stage},
 });
 
-test('active queue retains unloaded trips until ETRN is signed or closed manually', () => {
+test('active queue retains unloaded trips until ETRN is signed (manual close stays actionable)', () => {
   const orders = [
     order('old-open', '2024-01-01', 'loaded'),
     order('new-open', '2027-01-01', 'new'),
@@ -18,10 +18,10 @@ test('active queue retains unloaded trips until ETRN is signed or closed manuall
     order('failed', '2026-11-01', 'failed'),
   ];
   assert.deepEqual(scopeOrders(orders).map(x => x.number),
-    ['old-open', 'new-open', 'unloaded-etrn-open', 'unloaded-no-etrn']);
+    ['old-open', 'new-open', 'unloaded-etrn-open', 'unloaded-no-etrn', 'unloaded-manual']);
   assert.equal(isActionable(orders[2]), true);
   assert.equal(isActionable(orders[4]), false);
-  assert.equal(isActionable(orders[5]), false);
+  assert.equal(isActionable(orders[5]), true);
   assert.equal(isActionable({...orders[5],trip:{stage:'loaded'}}), true);
   assert.equal(isActionable(orders[6]), false);
   assert.equal(isActionable({...orders[6], trip:{stage:'signed'}}), true);
