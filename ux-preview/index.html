@@ -10,7 +10,7 @@
 <link rel="icon" href="./favicon.svg" type="image/svg+xml" sizes="any">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png" sizes="180x180">
 <link rel="manifest" href="./site.webmanifest">
-  <script type="module" crossorigin src="./assets/index-CyN9XJ_1.js"></script>
+  <script type="module" crossorigin src="./assets/index-f0ngjHKj.js"></script>
   <link rel="stylesheet" crossorigin href="./assets/index-BFpOamsW.css">
 </head>
 <body>
@@ -286,7 +286,10 @@
     </div></section>
     <section id="settings-registry" class="settings-pane" hidden>
       <label>Отображение заявок<select id="settings-layout"></select></label>
-      <p class="quiet">Виды и фильтры сохраняются в этом браузере отдельно для каждой учётной записи.</p>
+      <label>Сигнал о низкой марже, ₽
+        <input type="number" id="margin-threshold" min="0" max="10000000" step="500" value="5000">
+      </label>
+      <p class="quiet">Индикатор не изменяет расчёт маржи. Виды и этот порог сохраняются только в браузере для текущего аккаунта.</p>
     </section>
     <section id="settings-notifications" class="settings-pane" hidden>
       <p>Системные уведомления о сохранении и ошибках отображаются в рабочем реестре.</p>
