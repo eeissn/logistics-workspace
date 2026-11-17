@@ -1,20 +1,20 @@
 import {etrnStatus, hasMargin, orderMargin, tripStatus} from './domain.mjs';
 
 // UI-only insights: never mutate orders, never infer payment dates from missing data.
-export const financialFlags = (order, minimum = 5000) => {
+export const financialFlags = (order, minimum = 0.10) => {
   if (!hasMargin(order) && !Number.isFinite(order.ledgerMargin)) return ['unknown'];
   const value = orderMargin(order);
   if (value == null || !Number.isFinite(value)) return ['unknown'];
   if (value < 0) return ['loss'];
-  if (value < minimum) return ['low'];
+  if (Number.isFinite(order.carrierAmount) && order.carrierAmount > 0 && value < order.carrierAmount * minimum) return ['low'];
   return [];
 };
 export const flagLabels = Object.freeze({
   unknown:'Не все ставки или ставки НДС заполнены',
   loss:'Отрицательная маржа',
-  low:'Маржа ниже выбранного порога',
+  low:'Маржа меньше 10% от ставки перевозчика',
 });
-export function monthlyComparison(orders, first, second, threshold = 5000) {
+export function monthlyComparison(orders, first, second, threshold = 0.10) {
   const aggregate = month => {
     const values = orders.filter(order => order.date?.slice(0,7) === month &&
       tripStatus(order) !== 'failed');
@@ -38,7 +38,6 @@ export const savedViewPresets = Object.freeze([
   {id:'today-delivery',title:'Выгрузка сегодня',view:'delivery',etrn:''},
   {id:'awaiting-etrn',title:'Ждём ЭТРН',view:'all',etrn:'pending'},
   {id:'issues',title:'Проблемные',view:'failed',etrn:''},
-  {id:'money-issues',title:'Финансовые риски',view:'all',etrn:'',financial:'issues'},
 ]);
 // Payment deadlines are intentionally not guessed from originals/EDO terms.
 // A future "Не оплачено" view requires explicit per-order payment status.
