@@ -340,6 +340,16 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     dialog.get_by_role("button", name="Отмена").click()
     row.locator(".etrn-link").click()
     expect(dialog.locator('[name="etrnNumber"]')).not_to_have_value(f"ETRN-{number}")
+    # Owner regression: preparing an agreement must change the ETRN badge immediately
+    # and the stage must survive a complete authenticated page reload.
+    dialog.locator('[name="orderForm"]').check()
+    expect(dialog.locator("#etrn-status")).to_have_text("Заказ-заявка создана")
+    page.locator("#etrn-save").click()
+    expect(row.locator(".etrn-link")).to_have_text("Заказ-заявка создана")
+    page.reload()
+    expect(row.locator(".etrn-link")).to_have_text("Заказ-заявка создана")
+    row.locator(".etrn-link").click()
+    expect(dialog.locator('[name="orderForm"]')).to_be_checked()
     dialog.locator('[name="manualComplete"]').check()
     page.locator("#etrn-save").click()
     expect(page.locator("#etrn-dialog")).to_be_hidden()
