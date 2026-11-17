@@ -786,6 +786,14 @@ function render() {
     const badge = button.querySelector('.view-count');
     if (badge) badge.textContent = orders.filter(order => matchesTripView(order, button.dataset.view, day)).length;
   }
+  for (const button of document.querySelectorAll('[data-preset]')) {
+    const preset = savedViewPresets.find(item => item.id === button.dataset.preset);
+    const selected = preset && view === preset.view &&
+      $('filter').value === (preset.etrn || '') &&
+      $('financial-filter').value === (preset.financial || '') &&
+      registryScope === (preset.view === 'failed' ? 'history' : 'active');
+    button.setAttribute('aria-pressed', String(Boolean(selected)));
+  }
   const viewFilter = view !== 'all' && view !== 'not-unloaded';
   const etrnFilter = $('filter').value;
   const financeFilter = $('financial-filter').value;
