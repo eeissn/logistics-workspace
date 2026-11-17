@@ -34,6 +34,8 @@ def main():
                     sleep(.15)
                 expect(page.locator("#excel-lab-controls")).to_be_visible()
                 expect(page.locator("#sign-in")).to_be_hidden()
+                # The existing Pages demos use a different localStorage namespace.
+                page.evaluate("localStorage.setItem('logistics-workspace:v1', 'sibling-untouched')")
                 with page.expect_download() as download_info:
                     page.locator('[data-lab-sample="alternate"]').click()
                 alternate = download_info.value
@@ -59,6 +61,12 @@ def main():
                 )
                 expect(page.locator("#ledger-preview")).not_to_contain_text("К импорту:")
                 page.locator("#ledger-dialog [data-close]").click()
+                assert page.evaluate("localStorage.getItem('logistics-workspace:v1')") == 'sibling-untouched'
+                assert page.evaluate("localStorage.getItem('logistics-workspace:excel-lab:v1')")
+                page.once("dialog", lambda dialog: dialog.accept())
+                page.locator("#lab-reset-demo").click()
+                expect(page.locator("#table")).not_to_contain_text("ALT-2026-01")
+                assert page.evaluate("localStorage.getItem('logistics-workspace:v1')") == 'sibling-untouched'
     finally:
         server.terminate()
         server.wait(timeout=10)
