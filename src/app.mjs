@@ -11,6 +11,8 @@ import { driverMessage } from './driver.mjs';
 import { isActionable, monthGroups, scopeOrders } from './order-history.mjs';
 import { demoOrders } from './demo.mjs';
 import { attachExcelLab } from './excel-lab.mjs';
+import { mountWorkspacePanel, mountComparison } from './workspace-panels.mjs';
+import { financialFlags, flagLabels, savedViewPresets } from './workspace-insights.mjs';
 import { mountCommandPalette } from './command-palette.mjs';
 import { defaultAccents, displayKey, layoutLabels, matchesTripView, pendingEtrn, readDisplayPreferences, readStatusColors, readThemeLayouts, routeText, selectOrders, statusColors, themeLabels, validAccent, violetPalettes } from './registry.mjs';
 
@@ -427,6 +429,20 @@ function updateBulkControls() {
   $('bulk-select-visible').disabled = bulkVisible.length === 0;
 }
 
+let workspacePanel;
+const panelFor = number => workspacePanel?.open(number);
+const financeBadges = order => {
+  const flags = financialFlags(order);
+  const box = node('span', null, 'finance-flags');
+  for (const flag of flags) {
+    const badge = node('span', flag === 'unknown' ? 'Нет ставок' :
+      flag === 'loss' ? 'Убыток' : 'Низкая маржа', 'finance-flag');
+    badge.dataset.flag = flag;
+    badge.title = flagLabels[flag];
+    box.append(badge);
+  }
+  return box;
+};
 function financeSummary(order) {
   const rates = [
     ['Заказчик', order.customerAmount],
@@ -478,6 +494,8 @@ function renderRows(container, rows) {
     const selector = bulkCheckbox(order);
     if (selector) label.append(selector);
     label.append(action('№ ' + order.number, () => openOrder(order.number), 'order-link'));
+    label.append(action('◫', () => panelFor(order.number), 'order-peek-button'));
+    label.append(financeBadges(order));
     const date = node('div', order.date ? order.date.slice(5).split('-').reverse().join('.') : '—', 'order-date');
     const customer = node('div', order.customer || '—', 'customer-cell');
     const carrier = node('div', order.carrier || '—', 'carrier-cell');
@@ -523,6 +541,7 @@ function orderSummary(order, open, selected, showParties = false, showDates = tr
   }
   if (showDates && (dates || showParties)) button.append(node('small', dates || '—', 'quiet summary-dates'));
   button.append(financeSummary(order));
+  button.append(financeBadges(order));
   return button;
 }
 
@@ -558,7 +577,8 @@ function renderKanban(container, rows, scrollLeft) {
       const card = node('article', null, 'kanban-card');
       const selector = bulkCheckbox(order);
       if (selector) card.append(selector);
-      card.append(orderSummary(order, () => openOrder(order.number)), tripControl(order, true), etrnAction(order));
+      card.append(orderSummary(order, () => openOrder(order.number)), tripControl(order, true), etrnAction(order),
+        action('Быстрый просмотр', () => panelFor(order.number), 'peek-card-button'));
       column.append(card);
     }
     board.append(column);
@@ -661,7 +681,8 @@ function renderSplit(container, rows) {
   );
   const actions = node('div', null, 'split-actions');
   actions.append(contactsCell(order),
-    action('Открыть заявку', () => openOrder(order.number), 'primary'));
+    action('Открыть заявку', () => openOrder(order.number), 'primary'),
+    action('Быстрый просмотр', () => panelFor(order.number)));
   panel.append(actions);
   split.append(list);
   if (inline) {
@@ -712,12 +733,14 @@ function render() {
   }
   const viewFilter = view !== 'all' && view !== 'not-unloaded';
   const etrnFilter = $('filter').value;
-  const filterCount = Number(viewFilter) + Number(Boolean(etrnFilter));
+  const financeFilter = $('financial-filter').value;
+  const filterCount = Number(viewFilter) + Number(Boolean(etrnFilter)) + Number(Boolean(financeFilter));
   $('filter-view').value = view;
   const activeFilters = $('active-filters');
   const filterLabels = [];
   if (viewFilter) filterLabels.push($('filter-view').selectedOptions?.[0]?.textContent.trim());
   if (etrnFilter) filterLabels.push($('filter').selectedOptions?.[0]?.textContent.trim());
+  if (financeFilter) filterLabels.push($('financial-filter').selectedOptions?.[0]?.textContent.trim());
   activeFilters.textContent = filterLabels.filter(Boolean).join(' · ');
   activeFilters.hidden = !filterCount;
   const hasPeriod = Boolean(period.from || period.to);
@@ -733,7 +756,13 @@ function render() {
   const matches = selectOrders(orders, {
     query:$('search').value, filter:$('filter').value, view, today:day, sort, ascending, ...period,
   });
-  const scoped = scopeOrders(matches, {scope:registryScope, month:historyMonth, search:$('search').value});
+  const financialMatches = financeFilter
+    ? matches.filter(order => {
+        const flags = financialFlags(order);
+        return financeFilter === 'issues' ? flags.length > 0 : flags.includes(financeFilter);
+      })
+    : matches;
+  const scoped = scopeOrders(financialMatches, {scope:registryScope, month:historyMonth, search:$('search').value});
   const groups = monthGroups(orders);
   $('view-title').textContent = registryScope === 'active' ? 'Актуальные заявки' : 'История заявок';
   $('active-nav').setAttribute('aria-current', registryScope === 'active' ? 'page' : 'false');
@@ -1244,6 +1273,7 @@ $('filter-view').addEventListener('change', event => {
   render();
 });
 $('filter').addEventListener('change', render);
+$('financial-filter').addEventListener('change', render);
 $('add-point').addEventListener('click', () => addPoint());
 $('new').addEventListener('click', () => openEditor(blankOrder()));
 $('editor-etrn').addEventListener('click', () => openEtrn());
@@ -1341,6 +1371,7 @@ function signInScreen(message = '') {
   setWorkspaceMenu();
   for (const reset of pendingImports.values()) reset();
   for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
+  workspacePanel?.close();
   orders = [];
   period = {};
   view = 'all';
@@ -1516,6 +1547,23 @@ $('sign-out').addEventListener('click', async event => {
 
 $('sync-refresh').addEventListener('click', refresh);
 $('sync-quick').addEventListener('click', () => $('sync-refresh').click());
+const comparison = mountComparison({
+  dialog:$('compare-dialog'),orders:() => orders,
+  first:$('compare-first'),second:$('compare-second'),results:$('compare-results'),
+});
+$('compare-open').addEventListener('click', comparison.open);
+workspacePanel = mountWorkspacePanel({
+  root:$('order-peek'),
+  getOrder:number=>orders.find(order=>order.number===number),
+  edit:openOrder,
+  openEtrn,
+  openDriver:number=>{const order=orders.find(order=>order.number===number);if(order)openDriver(order);},
+  openContacts:number=>{const order=orders.find(order=>order.number===number);
+    if(order)openEditor(order,order.number);
+  },
+});
+$('dock-context').addEventListener('click',()=>{if(workspacePanel?.selected())panelFor(workspacePanel.selected());});
+
 $('local-import').addEventListener('click', async event => {
   const operation = startImport(event.currentTarget);
   if (!operation) return;
