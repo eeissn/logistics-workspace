@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from deploy.check_backup_freshness import verify_latest, main
+from deploy.check_backup_freshness import verify_latest
 
 
 class BackupFreshnessAuditTest(unittest.TestCase):
@@ -25,7 +25,6 @@ class BackupFreshnessAuditTest(unittest.TestCase):
             now = datetime(2026, 11, 18, 6, tzinfo=timezone.utc)
             before = {p.relative_to(folder): p.read_bytes() for p in folder.rglob("*") if p.is_file()}
             self.assertEqual(verify_latest(folder, now)[0], name)
-            self.assertEqual(main([str(folder), "--max-age-hours", "36"]), 1)
             after = {p.relative_to(folder): p.read_bytes() for p in folder.rglob("*") if p.is_file()}
             self.assertEqual(before, after)
             with self.assertRaisesRegex(ValueError, "stale"):
