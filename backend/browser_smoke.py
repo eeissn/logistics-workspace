@@ -526,6 +526,7 @@ def registry_views(page, number, order_a, mobile):
     click_workspace_action(page, "#settings", mobile)
     settings.locator("#accent-color").fill("#226650")
     expect(page.locator("html")).to_have_attribute("style", re.compile("--custom-accent: #226650"))
+    settings.locator('[data-settings-section="registry"]').click()
     settings.locator("#settings-layout").select_option("kanban")
     settings.locator("[data-close]").click()
     expect(layout).to_have_value("kanban")
