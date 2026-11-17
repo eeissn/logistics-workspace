@@ -753,6 +753,67 @@ def smoke(browser_type, origin, chromium, number, report_total, device=None):
 
 
 
+
+def bulk_etrn_numbers_ui(chromium, origin):
+    """Preview and save two signed ETRN statuses with independently editable numbers."""
+    with closing(chromium.launch()) as browser:
+        page = browser.new_page(ignore_https_errors=True)
+        page.goto(origin)
+        sign_in(page, "first")
+        page.evaluate("""async () => {
+            const {csrf} = await (await fetch('/api/me')).json();
+            const headers = {'Content-Type': 'application/json', 'X-CSRF-Token': csrf};
+            const response = await fetch('/api/records', {headers});
+            if (!response.ok) throw new Error('Cannot read synthetic registry');
+            const snapshot = await response.json();
+            if (!snapshot.orders.length) throw new Error('Missing test order template');
+            const template = snapshot.orders[0];
+            const fixtures = ['BULK-UI-01', 'BULK-UI-02'].map(number => ({
+                ...template, number,
+                trip: {...template.trip, stage: 'loaded'},
+                etrn: {required: true, number: '', created: false, allSigned: false},
+            }));
+            const save = await fetch('/api/records', {
+                method:'PUT', headers,
+                body:JSON.stringify({revision:snapshot.revision,orders:[...snapshot.orders,...fixtures]})
+            });
+            if (!save.ok) throw new Error('Cannot create UI fixtures: ' + await save.text());
+        }""")
+        page.reload()
+        page.locator("#search").fill("BULK-UI-")
+        expect(page.locator("#table .order")).to_have_count(2)
+        page.locator("#bulk-mode").click()
+        page.locator("#bulk-select-visible").click()
+        expect(page.locator("#bulk-selected")).to_contain_text("2")
+        page.locator("#bulk-open").click()
+        dialog = page.locator("#bulk-dialog")
+        dialog.locator("#bulk-choice").select_option("signed")
+        dialog.locator("#bulk-numbers summary").click()
+        inputs = dialog.locator("#bulk-number-list input")
+        expect(inputs).to_have_count(2)
+        expect(inputs.nth(0)).to_have_value("BULK-UI-01")
+        expect(inputs.nth(1)).to_have_value("BULK-UI-02")
+        inputs.nth(0).fill("CUSTOM-BULK-01")
+        inputs.nth(0).press("Tab")
+        expect(dialog.locator("#bulk-preview")).to_contain_text("Готово к изменению: 2")
+        expect(dialog.locator("#bulk-apply")).to_be_enabled()
+        dialog.locator("#bulk-apply").click()
+        expect(dialog).to_be_hidden()
+        expect(page.locator("#notice")).to_contain_text("Изменено ЭТРН: 2")
+        confirmed = page.evaluate("""async () => {
+            const {csrf} = await (await fetch('/api/me')).json();
+            const snapshot = await (await fetch('/api/records', {
+                headers: {'X-CSRF-Token': csrf}
+            })).json();
+            return snapshot.orders.filter(item => item.number.startsWith('BULK-UI-'))
+                .map(item => [item.number, item.etrn.number, item.etrn.created, item.etrn.allSigned]);
+        }""")
+        assert confirmed == [
+            ["BULK-UI-01", "CUSTOM-BULK-01", True, True],
+            ["BULK-UI-02", "BULK-UI-02", True, True],
+        ], confirmed
+
+
 def large_year_browser(chromium, origin):
     """Verify 515 synthetic orders through the real UI, without using production."""
     with closing(chromium.launch()) as browser:
@@ -844,6 +905,7 @@ def main():
                 smoke(playwright.chromium, origin, playwright.chromium, 41001, r"22\s*000")
                 smoke(playwright.webkit, origin, playwright.chromium, 41002, r"44\s*000",
                       {**playwright.devices["iPhone 13"], "viewport": {"width": 393, "height": 852}})
+                bulk_etrn_numbers_ui(playwright.chromium, origin)
                 large_year_browser(playwright.chromium, origin)
         finally:
             server.terminate()
