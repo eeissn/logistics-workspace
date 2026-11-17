@@ -1,0 +1,59 @@
+name: Publish Excel Lab (isolated GitHub Pages demo)
+
+on:
+  push:
+    branches: [feature/p1-excel-lab]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: excel-lab-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'eeissn/logistics-workspace'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Test JavaScript and Excel Lab
+        run: |
+          npm ci
+          npm test
+      - name: Build isolated offline-only demo
+        env:
+          VITE_DEMO: 'true'
+          VITE_EXCEL_LAB: 'true'
+          VITE_SHEET_PREVIEW: 'false'
+        run: |
+          npm run build
+          grep -q 'assets/' dist/index.html
+      - name: Publish only /excel-lab/ while preserving other demos
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch origin gh-pages
+          git worktree add /tmp/excel-lab-pages origin/gh-pages
+          mkdir -p /tmp/excel-lab-pages/excel-lab
+          find /tmp/excel-lab-pages/excel-lab -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+          cp -a dist/. /tmp/excel-lab-pages/excel-lab/
+          touch /tmp/excel-lab-pages/.nojekyll
+          git -C /tmp/excel-lab-pages add excel-lab .nojekyll
+          if git -C /tmp/excel-lab-pages diff --cached --quiet; then
+            echo 'No demo changes.'
+            exit 0
+          fi
+          git -C /tmp/excel-lab-pages config user.name 'github-actions[bot]'
+          git -C /tmp/excel-lab-pages config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C /tmp/excel-lab-pages commit -m "pages: refresh isolated Excel Lab from ${GITHUB_SHA:0:8}"
+          git -C /tmp/excel-lab-pages push origin HEAD:gh-pages
