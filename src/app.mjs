@@ -57,6 +57,7 @@ let bulkVisible = [];
 let bulkPreview = null;
 let historyMonth = 'all';
 let activePreset = '';
+let minimumMargin = 5000;
 let inspectedNumber = '';
 const inspectorObjectUrls=[];
 function clearInspectorFiles(){
@@ -66,6 +67,23 @@ function clearInspectorFiles(){
 let customViews = [];
 const scopedViewKey = () => 'logistics-workspace:views:' +
   (import.meta.env.VITE_DEMO === 'true' ? 'demo' : $('account-email').textContent.trim().toLowerCase() || 'signed-out');
+function readMinimumMargin(){
+  try {
+    const value=Number(localStorage.getItem(scopedViewKey()+':margin'));
+    return Number.isFinite(value)&&value>=0&&value<=10000000&&
+      localStorage.getItem(scopedViewKey()+':margin')!==null?value:5000;
+  } catch{return 5000;}
+}
+$('margin-threshold').addEventListener('change',()=>{
+  const number=Number($('margin-threshold').value);
+  if(!Number.isFinite(number)||number<0||number>10000000){
+    $('margin-threshold').value=String(minimumMargin);return;
+  }
+  minimumMargin=number;
+  try{localStorage.setItem(scopedViewKey()+':margin',String(number));}
+  catch{$('settings-status').textContent='Не удалось сохранить порог в этом браузере.';}
+  render();
+});
 function readCustomViews() {
   try {
     const data = JSON.parse(localStorage.getItem(scopedViewKey()));
@@ -478,7 +496,7 @@ function inspectOrder(number) {
   details.append(node('h3','Ход перевозки'),journey);
   const finance=node('section',null,'inspector-column');
   finance.append(node('h3','Финансы'),financeSummary(order));
-  const flags=financialFlags(order);
+  const flags=financialFlags(order,minimumMargin);
   if(flags.length) {
     const warning=node('p',flags.map(flag=>flag.label).join(' · '),'risk-hint');
     finance.append(warning);
@@ -670,7 +688,7 @@ function renderRows(container, rows) {
     const etrn = node('div', null, 'etrn-cell');
     etrn.append(etrnAction(order));
     const rates=financeSummary(order);
-    const problems=financialFlags(order);
+    const problems=financialFlags(order,minimumMargin);
     if(problems.length){
       const badge=node('span','⚑ '+problems.map(flag=>flag.label).join(' · '),'financial-flag');
       badge.title='Проверьте ставки заявки перед принятием решения.';
@@ -922,7 +940,7 @@ function render() {
   });
   const scopedBase = scopeOrders(matches, {scope:registryScope, month:historyMonth, search:$('search').value});
   const scoped = activePreset && !activePreset.startsWith('custom-') ?
-    scopedBase.filter(order => matchesPreset(order,activePreset,day)) : scopedBase;
+    scopedBase.filter(order => matchesPreset(order,activePreset,day,minimumMargin)) : scopedBase;
   const groups = monthGroups(orders);
   $('view-title').textContent = registryScope === 'active' ? 'Актуальные заявки' : 'История заявок';
   $('active-nav').setAttribute('aria-current', registryScope === 'active' ? 'page' : 'false');
@@ -1635,7 +1653,8 @@ async function showAccount(account) {
   accountGeneration++;
   signedIn = true;
   $('account-email').textContent = account.email;
-  customViews=readCustomViews();activePreset='';
+  customViews=readCustomViews();minimumMargin=readMinimumMargin();
+  $('margin-threshold').value=String(minimumMargin);activePreset='';
   $('sync-tools').hidden = false;
   $('sign-out').hidden = false;
   try {
@@ -1763,6 +1782,8 @@ $('local-import').addEventListener('click', async event => {
 });
 
 if (demo) {
+  customViews=readCustomViews();minimumMargin=readMinimumMargin();
+  $('margin-threshold').value=String(minimumMargin);
   attachExcelLab();
   $('demo-note').hidden = false;
   showWorkspace(true);
