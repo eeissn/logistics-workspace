@@ -1849,3 +1849,9 @@ dialog .check label {
   .excel-lab-panel:not([hidden]) { margin: .5rem 0 1rem; padding: .85rem; }
   .excel-lab-buttons { display: grid; grid-template-columns: 1fr; }
 }
+
+.ledger-example-preview { margin-top: .6rem; }
+.ledger-example-preview summary { cursor: pointer; font-weight: 600; padding: .4rem 0; }
+.ledger-example-preview ol { margin: .3rem 0 .6rem; padding-left: 1.4rem; }
+.ledger-example-preview li { margin-bottom: .65rem; overflow-wrap: anywhere; }
+.ledger-example-preview li p { margin: .18rem 0; }
