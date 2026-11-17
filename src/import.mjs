@@ -9,7 +9,7 @@ export function normalizePassport(value = '', issueDate = '') {
   let passport = trim(value);
   if (!passport) return '';
   // "К.П." is the issuing office subdivision code, not needed in the driver message.
-  passport = passport.replace(/(?:[,;]?\s*к\.?\s*п\.?\s*[:№]?\s*\d{3}[-–]\d{3})\s*$/i, '').trim();
+  passport = passport.replace(/(?:[,;]?\s*к\.?\s*п\.?\s*(?:[:№]?\s*\d{3}[-–]\d{3})?)\s*$/i, '').trim();
   const dated = passport.match(/(?:^|\s)(?:от\s+)?(\d{2}\.\d{2}\.\d{4})\s*$/);
   if (dated) {
     passport = passport.slice(0, dated.index).trim();
@@ -57,7 +57,7 @@ export function parseLogistor(text) {
   // Only accept a standalone date (with an optional subdivision code) adjacent
   // to the passport line; never take loading, unloading or application dates.
   const passportLine = clean.match(/^[ \t]*Паспорт:[ \t]*[^\n]*/mi);
-  const followingLine = passportLine ? clean.slice(passportLine.index + passportLine[0].length).match(/^\n[ \t]*(\d{2}\.\d{2}\.\d{4})(?:[ \t]+к\.?\s*п\.?[ \t]*\d{3}[-–]\d{3})?[ \t]*(?:\n|$)/i) : null;
+  const followingLine = passportLine ? clean.slice(passportLine.index + passportLine[0].length).match(/^\n[ \t]*(\d{2}\.\d{2}\.\d{4})(?:[ \t]+к\.?\s*п\.?(?:[ \t]*\d{3}[-–]\d{3})?)?[ \t]*(?:\n|$)/i) : null;
   const passportWithDate = normalizePassport(passport, issueDate || followingLine?.[1] || '');
   const fields = {
     number: heading?.[1] || '', date: heading ? `${year}-${month}-${day}` : '',
