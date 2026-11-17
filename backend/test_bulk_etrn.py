@@ -30,7 +30,7 @@ class BulkEtrnTest(unittest.TestCase):
         self.assertTrue(updated["etrn"]["sender"])
         self.assertEqual(source["etrn"]["number"], "ETRN-1")
         self.assertEqual(apply_bulk_etrn(self.order, "created")["etrn"]["number"], "A1")
-        for value in ("", " " * 2, "abc\\n123", "a" * 81, 123):
+        for value in ("", " " * 2, "abc\n123", "a" * 81, 123):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 apply_bulk_etrn(source, "signed", value)
         with self.assertRaises(ValueError):
