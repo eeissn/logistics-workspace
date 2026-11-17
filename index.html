@@ -39,6 +39,8 @@
       </div>
       <nav class="favorite-views" aria-label="Избранные фильтры">
         <strong>Рабочие виды</strong><button type="button" data-preset="awaiting-etrn">Ждём ЭТРН</button><button type="button" data-preset="money-issues">Финансовые риски</button><button type="button" data-preset="today-pickup">Загрузка сегодня</button><button type="button" data-preset="today-delivery">Выгрузка сегодня</button><button type="button" data-preset="issues">Проблемные рейсы</button>
+        <button type="button" id="save-view">＋ Сохранить текущий вид</button>
+        <div id="custom-views" class="custom-views" aria-label="Мои виды реестра"></div>
         <strong>☆ Избранное</strong>
         <button type="button" data-view="pickup" aria-pressed="false">Загрузка сегодня</button>
         <button type="button" data-view="delivery" aria-pressed="false">Выгрузка сегодня</button>
@@ -278,6 +280,13 @@
       </section>
       <section data-settings-panel="registry" class="settings-panel" hidden>
         <label>Отображение заявок<select id="settings-layout"></select></label>
+        <h3>Порядок столбцов таблицы</h3>
+        <div class="column-settings">
+          <label>Столбец<select id="column-choice" aria-label="Столбец таблицы"></select></label>
+          <button id="column-left" type="button">← Раньше</button>
+          <button id="column-right" type="button">Позже →</button>
+          <button id="reset-columns" type="button">По умолчанию</button>
+        </div>
         <p class="quiet">Быстрые виды и финансовые фильтры доступны в панели навигации. Настройки интерфейса сохраняются только в этом браузере.</p>
       </section>
       <section data-settings-panel="account" class="settings-panel" hidden>
