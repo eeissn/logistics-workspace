@@ -259,6 +259,7 @@
     <nav class="settings-sections" aria-label="Разделы настроек">
       <button type="button" data-settings-section="appearance" aria-pressed="true">Оформление</button>
       <button type="button" data-settings-section="registry">Реестр</button>
+      <button type="button" data-settings-section="notifications">Уведомления</button>
       <button type="button" data-settings-section="account">Аккаунт</button>
       <button type="button" data-settings-section="updates">Обновления</button>
     </nav>
@@ -288,6 +289,12 @@
           <button id="reset-columns" type="button">По умолчанию</button>
         </div>
         <p class="quiet">Быстрые виды и финансовые фильтры доступны в панели навигации. Настройки интерфейса сохраняются только в этом браузере.</p>
+      </section>
+      <section data-settings-panel="notifications" class="settings-panel" hidden>
+        <h3>Уведомления о синхронизации</h3>
+        <label class="check"><input id="notify-sync-errors" type="checkbox"> Показывать уведомление браузера, если сохранение не удалось</label>
+        <p class="quiet">Только когда вкладка скрыта и уведомления разрешены браузером. Номера заявок, имена и суммы в уведомление не включаются.</p>
+        <p id="notify-status" class="quiet" role="status"></p>
       </section>
       <section data-settings-panel="account" class="settings-panel" hidden>
         <h3>Аккаунт</h3>
