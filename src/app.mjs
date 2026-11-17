@@ -1447,7 +1447,18 @@ mountCommandPalette({
   dialog:$('command-dialog'), input:$('command-search'),
   results:$('command-results'), opener:$('command-launch'),
   available:() => demo || signedIn,
+  contextCommands:() => inspectedNumber && orders.some(item=>item.number===inspectedNumber) ? [
+    {id:'inspect',label:'Просмотр заявки № '+inspectedNumber,
+      detail:'Открыть карточку без потери позиции в реестре',group:'Текущая заявка'},
+    {id:'driver',label:'Данные водителя · '+inspectedNumber,
+      detail:'Просмотреть и скопировать сведения водителя',group:'Текущая заявка'},
+    {id:'etrn',label:'ЭТРН · '+inspectedNumber,
+      detail:'Открыть документ и этапы подписи',group:'Текущая заявка'},
+  ] : [],
   actions:{
+    inspect:()=>inspectOrder(inspectedNumber),
+    driver:()=>{const item=orders.find(order=>order.number===inspectedNumber);if(item)openDriver(item);},
+    etrn:()=>openEtrn(inspectedNumber),
     search:focusRegistrySearch,
     active:() => changeRegistryScope('active'),
     history:() => changeRegistryScope('history'),
