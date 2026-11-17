@@ -10,6 +10,7 @@ import { auth, demo, localOrders, sessionChangeKey, store } from './storage.mjs'
 import { driverMessage } from './driver.mjs';
 import { isActionable, monthGroups, scopeOrders } from './order-history.mjs';
 import { demoOrders } from './demo.mjs';
+import { attachExcelLab } from './excel-lab.mjs';
 import { defaultAccents, displayKey, layoutLabels, matchesTripView, pendingEtrn, readDisplayPreferences, readStatusColors, readThemeLayouts, routeText, selectOrders, statusColors, themeLabels, validAccent, violetPalettes } from './registry.mjs';
 
 const $ = id => document.getElementById(id);
@@ -1477,6 +1478,7 @@ $('local-import').addEventListener('click', async event => {
 });
 
 if (demo) {
+  attachExcelLab();
   $('demo-note').hidden = false;
   showWorkspace(true);
   store.list().then(async saved => {
