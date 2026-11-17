@@ -17,7 +17,7 @@ export function financialFlags(order, minimum=5000) {
   else if (value < minimum) flags.push({key:'low',label:'Низкая маржа'});
   return flags;
 }
-export function matchesPreset(order,preset,day) {
+export function matchesPreset(order,preset,day,minimum=5000) {
   switch(preset) {
     case 'today': return order.date === day ||
       (order.points || []).some(point => String(point.schedule || '').includes(day) ||
@@ -29,7 +29,7 @@ export function matchesPreset(order,preset,day) {
     case 'unpaid': return tripStatus(order) === 'unloaded' &&
       !order.payment?.paidAt && !order.payment?.confirmedPaid;
     case 'problems': return tripStatus(order) === 'failed';
-    case 'margin': return financialFlags(order).length > 0;
+    case 'margin': return financialFlags(order,minimum).length > 0;
     default: return true;
   }
 }
