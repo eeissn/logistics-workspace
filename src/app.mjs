@@ -73,6 +73,13 @@ const savingTrips = new Set();
 const tripTitles = new Map(tripStatuses);
 let driverOrder;
 const today = () => new Intl.DateTimeFormat('sv-SE', {timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const desktopMetrics = window.matchMedia('(min-width: 851px)');
+function syncMetricsDisclosure() {
+  $('metrics-disclosure').open = !desktopMetrics.matches;
+}
+syncMetricsDisclosure();
+desktopMetrics.addEventListener('change', syncMetricsDisclosure);
+
 
 function startImport(button, key = button, label) {
   if ((!signedIn && !demo) || pendingImports.has(key)) return;
@@ -128,6 +135,8 @@ function updateMonthMetrics() {
     el.append(part);
   }
   el.title = 'Маржа по действующим правилам отчёта, без сорванных заявок. Количество включает все заявки месяца.';
+  $('metrics-summary').textContent = `${label} · ${count} заявок · Маржа ${money(total)}`;
+  $('metrics-disclosure').hidden = !signedIn && !demo;
   el.hidden = !signedIn && !demo;
 }
 
