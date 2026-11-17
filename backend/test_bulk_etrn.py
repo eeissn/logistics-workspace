@@ -13,11 +13,28 @@ class BulkEtrnTest(unittest.TestCase):
         self.assertEqual(result["trip"], self.order["trip"])
         self.assertNotIn("created", self.order["etrn"])
 
-    def test_signed_requires_existing_document_number(self):
+    def test_signed_defaults_to_agreement_number_without_faking_signature_steps(self):
+        signed = apply_bulk_etrn(self.order, "signed")
+        self.assertEqual(signed["etrn"]["number"], "A1")
+        self.assertTrue(signed["etrn"]["created"])
+        self.assertTrue(signed["etrn"]["allSigned"])
+        self.assertNotIn("sender", signed["etrn"])
+        self.assertEqual(self.order["etrn"]["number"], "")
+
+    def test_signed_preserves_existing_number_and_allows_per_order_override(self):
+        source = {"number": "A1", "etrn": {"created": True, "number": "ETRN-1",
+                                          "required": True, "sender": True}}
+        self.assertEqual(apply_bulk_etrn(source, "signed")["etrn"]["number"], "ETRN-1")
+        updated = apply_bulk_etrn(source, "signed", "CORRECTED-1")
+        self.assertEqual(updated["etrn"]["number"], "CORRECTED-1")
+        self.assertTrue(updated["etrn"]["sender"])
+        self.assertEqual(source["etrn"]["number"], "ETRN-1")
+        self.assertEqual(apply_bulk_etrn(self.order, "created")["etrn"]["number"], "A1")
+        for value in ("", " " * 2, "abc\\n123", "a" * 81, 123):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                apply_bulk_etrn(source, "signed", value)
         with self.assertRaises(ValueError):
-            apply_bulk_etrn(self.order, "signed")
-        source = {"number": "A1", "etrn": {"created": True, "number": "ETRN-1", "required": True}}
-        self.assertTrue(apply_bulk_etrn(source, "signed")["etrn"]["allSigned"])
+            apply_bulk_etrn(source, "manual", "NEW")
 
     def test_correct_accidental_signed_status_without_losing_number(self):
         source = {"etrn": {"created": True, "allSigned": True, "number": "ETRN-1",
