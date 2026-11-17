@@ -87,6 +87,7 @@ def calculators(page, mobile):
 def updates_history(page, mobile):
     click_workspace_action(page, "#settings", mobile)
     expect(page.locator("#settings-dialog")).to_be_visible()
+    page.locator('[data-settings-section="updates"]').click()
     page.locator("#updates-open").click()
     dialog = page.locator("#updates-dialog")
     expect(dialog).to_be_visible()
