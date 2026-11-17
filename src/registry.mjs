@@ -1,5 +1,17 @@
 import { dateRange, etrnStatus, scheduledToday, tripStatus } from './domain.mjs';
 
+export const columnKeys = ['number','date','customer','carrier','route',
+  'pickup','delivery','etrn','trip','contacts'];
+export const columnTitles = {
+  number:'№ заявки',date:'Дата',customer:'Заказчик',carrier:'Перевозчик',
+  route:'Маршрут',pickup:'Загрузка',delivery:'Выгрузка',
+  etrn:'ЭТРН',trip:'Статус рейса',contacts:'Водитель / контакты',
+};
+export function safeColumnOrder(value) {
+  return Array.isArray(value) && value.length === columnKeys.length &&
+    new Set(value).size === columnKeys.length &&
+    value.every(key=>columnKeys.includes(key)) ? value : [...columnKeys];
+}
 export const layoutLabels = {
   table: 'Таблица',
   compact: 'Компактный список',
@@ -30,13 +42,14 @@ export function readDisplayPreferences() {
     return {
       theme: Object.hasOwn(themeLabels, saved?.theme) ? saved.theme : 'sputnik',
       layout: Object.hasOwn(layoutLabels, saved?.layout) ? saved.layout : saved?.theme === 'sand' ? 'split' : 'table',
+      columnOrder:safeColumnOrder(saved?.columnOrder),
       violetPalette: Object.hasOwn(violetPalettes, saved?.violetPalette) ? saved.violetPalette : 'violet',
       accents: Object.fromEntries(Object.keys(themeLabels)
         .filter(theme => validAccent(saved?.accents?.[theme]))
         .map(theme => [theme, saved.accents[theme]])),
     };
   } catch {
-    return {theme:'sputnik', layout:'table', violetPalette:'violet', accents:{}};
+    return {theme:'sputnik', layout:'table', violetPalette:'violet', accents:{}, columnOrder:[...columnKeys]};
   }
 }
 
