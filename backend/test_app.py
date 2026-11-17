@@ -310,6 +310,54 @@ class WorkspaceTests(unittest.TestCase):
             "choice": "created", "revision": 1, "items": [items[0]], "preview": False
         }).json()["results"][0]["result"], "conflict")
 
+    def test_bulk_signed_71_uses_agreement_numbers_and_safe_individual_override(self):
+        h1 = self.writer(self.first)
+        h2 = self.writer(self.second, "second")
+        sample = []
+        for index in range(71):
+            item = order(f"AGR-{index:03d}")
+            item["etrn"] = {"required": True, "number": "", "created": False}
+            sample.append(item)
+        sample[5]["etrn"]["number"] = "EXISTING-5"
+        sample[5]["etrn"]["sender"] = True
+        initial = self.put(self.first, h1, 0, sample).json()
+        self.put(self.second, h2, 0, [order("AGR-000")])
+        items = [{"number": row["number"], "updatedAt": row["updatedAt"]}
+                 for row in initial["orders"]]
+        items[6]["etrnNumber"] = "CUSTOM-6"
+        payload = {"choice": "signed", "revision": initial["revision"], "items": items}
+        url = "/api/etrn/bulk"
+        preview = self.first.post(url, headers=h1, json={**payload, "preview": True})
+        self.assertEqual(preview.status_code, 200, preview.text)
+        self.assertEqual(preview.json()["ready"], 71)
+        self.assertEqual(self.first.get("/api/records", headers=h1).json(), initial)
+        applied = self.first.post(url, headers=h1, json={**payload, "preview": False})
+        self.assertEqual(applied.status_code, 200, applied.text)
+        self.assertEqual(applied.json()["updated"], 71)
+        updated = self.first.get("/api/records", headers=h1).json()
+        values = updated["orders"]
+        self.assertEqual(values[0]["etrn"]["number"], "AGR-000")
+        self.assertEqual(values[5]["etrn"]["number"], "EXISTING-5")
+        self.assertTrue(values[5]["etrn"]["sender"])
+        self.assertEqual(values[6]["etrn"]["number"], "CUSTOM-6")
+        self.assertTrue(all(row["etrn"]["created"] and row["etrn"]["allSigned"] for row in values))
+        self.assertFalse(any(row["etrn"].get("recipient") for row in values))
+        self.assertFalse(self.second.get("/api/records", headers=h2).json()
+                         ["orders"][0]["etrn"].get("allSigned"))
+        self.assertEqual(self.first.post(url, headers=h1, json=payload).status_code, 409)
+        for bad in ("", "bad\\nnumber", "x" * 81):
+            broken = [{**items[0], "etrnNumber": bad}]
+            invalid = self.first.post(url, headers=h1, json={
+                "choice": "signed", "revision": updated["revision"],
+                "items": broken, "preview": False,
+            })
+            self.assertEqual(invalid.status_code, 422)
+        invalid_choice = self.first.post(url, headers=h1, json={
+            "choice": "manual", "revision": updated["revision"],
+            "items": [items[6]], "preview": True,
+        })
+        self.assertEqual(invalid_choice.status_code, 422)
+
     def test_bulk_etrn_can_correct_accidental_signed_status(self):
         headers = self.writer(self.first)
         original = order("TEST-CORRECTION")
