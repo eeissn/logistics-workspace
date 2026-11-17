@@ -14,7 +14,7 @@ const money = value => value == null ? '—' : new Intl.NumberFormat('ru-RU',{
 
 export function mountWorkspacePanel({root,getOrder,edit,openEtrn,openDriver,openContacts}) {
   let selected;
-  const close=()=>{root.hidden=true;selected=null;document.body.classList.remove('workspace-peek-open');};
+  const close=()=>{root.hidden=true;selected=null;document.body?.classList?.remove('workspace-peek-open');};
   const open=number=>{
     const order=getOrder(number);
     if(!order)return;
@@ -89,7 +89,7 @@ export function mountWorkspacePanel({root,getOrder,edit,openEtrn,openDriver,open
       details.append(alert);
     }
     root.hidden=false;
-    document.body.classList.add('workspace-peek-open');
+    document.body?.classList?.add('workspace-peek-open');
     closeButton.focus({preventScroll:true});
   };
   root.addEventListener('keydown',event=>{if(event.key==='Escape')close();});
