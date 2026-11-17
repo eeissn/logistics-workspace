@@ -2027,3 +2027,10 @@ dialog :is(input,select,textarea) { scroll-margin-block: 5rem; }
   .command-dialog { width: min(100% - 1rem,610px); }
   .bulk-number-entry { grid-template-columns: minmax(0,1fr); gap: .2rem; }
 }
+
+/* Keep the account footer reachable at laptop heights when the sidebar grows. */
+@media (min-width: 851px) {
+  .workspace-menu { overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
+  .workspace-menu-body { min-height: 0; }
+  .account-tools { flex: 0 0 auto; }
+}
