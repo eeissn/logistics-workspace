@@ -82,6 +82,35 @@ class WorkspaceTests(unittest.TestCase):
         self.second.cookies.set("__Host-logistics", cookie)
         self.assertEqual(self.second.get("/api/records").status_code, 401)
 
+    def test_single_etrn_patch_persists_without_reposting_registry(self):
+        first = self.writer(self.first)
+        other = self.writer(self.second, "second")
+        saved = self.put(self.first, first, 0, [order("7371"), order("7372")]).json()
+        original = saved["orders"][0]
+        second_original = saved["orders"][1]
+        payload = {
+            "number": original["number"], "updatedAt": original["updatedAt"],
+            "etrn": {**original["etrn"], "orderForm": True, "created": True, "allSigned": True},
+        }
+        response = self.first.patch("/api/etrn", headers=first, json=payload)
+        self.assertEqual(response.status_code, 200)
+        after = response.json()
+        self.assertEqual(after["revision"], 2)
+        self.assertEqual(after["orders"][0]["etrn"], payload["etrn"])
+        self.assertEqual(after["orders"][1], second_original)
+        self.assertEqual(self.first.get("/api/records").json(), after)
+        self.assertEqual(self.second.get("/api/records", headers=other).json()["orders"], [])
+        self.assertEqual(self.second.patch("/api/etrn", headers=other, json=payload).status_code, 404)
+        self.assertEqual(self.first.patch("/api/etrn", headers=first, json=payload).status_code, 409)
+        self.assertEqual(self.first.patch("/api/etrn", json=payload).status_code, 403)
+        current = after["orders"][0]
+        unchanged = self.first.patch("/api/etrn", headers=first, json={
+            "number": current["number"], "updatedAt": current["updatedAt"],
+            "etrn": current["etrn"],
+        })
+        self.assertEqual(unchanged.status_code, 200)
+        self.assertEqual(unchanged.json()["revision"], 2)
+
     def test_accounts_use_salted_hashes_and_are_limited_to_two(self):
         with self.assertRaisesRegex(ValueError, "two accounts"):
             add_user(self.path, "third@example.test", PASSWORD)
