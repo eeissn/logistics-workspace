@@ -306,6 +306,8 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     page.locator("#ledger-file").set_input_files(workbook)
     page.locator('#ledger-form [type="submit"]').click()
     expect(page.locator("#ledger-preview")).to_contain_text("К импорту: 1")
+    expect(page.locator("#ledger-preview .ledger-example-preview summary")).to_contain_text("Пример распознанных заявок")
+    expect(page.locator("#ledger-preview .ledger-example-preview")).to_contain_text(f"EXCEL-{number}")
     expect(page.locator("#ledger-preview")).to_contain_text("Выгрузился (1)")
     page.locator('#ledger-form [type="submit"]').click()
     expect(page.locator("#ledger-dialog")).to_be_hidden()
