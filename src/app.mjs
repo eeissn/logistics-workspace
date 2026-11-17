@@ -1300,6 +1300,7 @@ mountCommandPalette({
   dialog:$('command-dialog'), input:$('command-search'),
   results:$('command-results'), opener:$('command-launch'),
   available:() => demo || signedIn,
+  hasSelection:()=>Boolean(workspacePanel?.selected()),
   actions:{
     search:focusRegistrySearch,
     active:() => changeRegistryScope('active'),
@@ -1311,6 +1312,16 @@ mountCommandPalette({
     table:() => setDisplay('layout','table'),
     split:() => setDisplay('layout','split'),
     settings:() => $('settings').click(),
+    selected:() => panelFor(workspacePanel?.selected()),
+    'selected-driver':() => {
+      const number=workspacePanel?.selected();
+      const order=orders.find(item=>item.number===number);
+      if(order){workspacePanel.close();openDriver(order);}
+    },
+    'selected-etrn':() => {
+      const number=workspacePanel?.selected();
+      if(number){workspacePanel.close();openEtrn(number);}
+    },
   },
 });
 $('dock-active').addEventListener('click', () => changeRegistryScope('active'));
