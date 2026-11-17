@@ -700,12 +700,12 @@ def workspace_design(page, mobile):
                for box in geometry["bounds"].values()), f"Control outside viewport: {geometry}"
     assert geometry["bounds"]["#new"]["font"] >= 12.5, f"Small primary label: {geometry}"
     assert geometry["bounds"]["#view-title"]["font"] >= 20, f"Small heading: {geometry}"
-    if mobile:
-        # On narrow screens, the header action may wrap below the title.
-        assert geometry["bounds"]["#new"]["top"] >= geometry["bounds"]["#view-title"]["top"] - 2, f"Mobile action precedes heading: {geometry}"
-    else:
-        assert abs((geometry["bounds"]["#new"]["top"] + geometry["bounds"]["#new"]["height"]/2) -
-                   (geometry["bounds"]["#view-title"]["top"] + geometry["bounds"]["#view-title"]["height"]/2)) <= 6, f"Misaligned header actions: {geometry}"
+    primary = geometry["bounds"]["#new"]
+    heading = geometry["bounds"]["#view-title"]
+    centered = abs((primary["top"] + primary["height"]/2) -
+                   (heading["top"] + heading["height"]/2)) <= 6
+    wrapped_below = mobile and primary["top"] >= heading["top"] + heading["height"] - 2
+    assert centered or wrapped_below, f"Misaligned header actions: {geometry}"
     assert geometry["scrollWidth"] <= geometry["viewport"] + 1, f"Horizontal overflow: {geometry}"
     if not mobile:
         assert page.evaluate("""() => {
