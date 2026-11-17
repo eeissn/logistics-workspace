@@ -1621,7 +1621,7 @@ function selectedEtrnItems() {
     const item = {number: order.number, updatedAt: order.updatedAt || ''};
     if (editable) {
       const value = inputs.get(order.number)?.value.trim();
-      if (!value || value.length > 80 || /[\\x00-\\x1f]/.test(value)) {
+      if (!value || value.length > 80 || /[\x00-\x1f]/.test(value)) {
         throw new Error('Проверь номер ЭТРН заявки № ' + order.number + '.');
       }
       const original = order.etrn?.number?.trim() || order.number;
