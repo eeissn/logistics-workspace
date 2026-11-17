@@ -682,6 +682,42 @@ def workspace_design(page, mobile):
     expect(page.locator("#sync-quick")).to_be_enabled()
     expect(page.locator('#month-metrics [data-metric="count"]')).to_have_css("text-align", "center")
     expect(page.locator('#month-metrics [data-metric="margin"]')).to_contain_text("Маржа")
+    # Visual quality gate for all browser engines: controls stay within the
+    # viewport, text is not reduced to unreadable icon-sized labels, and
+    # the primary action stays discoverable across desktop and mobile.
+    geometry = page.evaluate("""() => {
+        const ids = ['#view-title', '#new', '#sync-quick', '#filters-open', '#search'];
+        const bounds = Object.fromEntries(ids.map(selector => {
+            const el = document.querySelector(selector);
+            const box = el.getBoundingClientRect();
+            return [selector, {left:box.left,right:box.right,top:box.top,height:box.height,width:box.width,
+                font:parseFloat(getComputedStyle(el).fontSize)}];
+        }));
+        return {bounds,viewport:innerWidth,scrollWidth:document.documentElement.scrollWidth};
+    }""")
+    assert all(box["width"] > 0 and box["height"] >= 20 and
+               box["left"] >= -1 and box["right"] <= geometry["viewport"] + 1
+               for box in geometry["bounds"].values()), f"Control outside viewport: {geometry}"
+    assert geometry["bounds"]["#new"]["font"] >= 12.5, f"Small primary label: {geometry}"
+    assert geometry["bounds"]["#view-title"]["font"] >= 20, f"Small heading: {geometry}"
+    primary = geometry["bounds"]["#new"]
+    heading = geometry["bounds"]["#view-title"]
+    centered = abs((primary["top"] + primary["height"]/2) -
+                   (heading["top"] + heading["height"]/2)) <= 6
+    wrapped_below = mobile and primary["top"] >= heading["top"] + heading["height"] - 2
+    assert centered or wrapped_below, f"Misaligned header actions: {geometry}"
+    assert geometry["scrollWidth"] <= geometry["viewport"] + 1, f"Horizontal overflow: {geometry}"
+    if not mobile:
+        assert page.evaluate("""() => {
+            const nav = document.querySelector('#workspace-nav');
+            const menu = document.querySelector('#workspace-menu');
+            const css = getComputedStyle(nav);
+            const button = document.querySelector('.nav-primary button');
+            return nav.getBoundingClientRect().width >= 190 &&
+                   menu.open && css.position === 'fixed' &&
+                   parseFloat(getComputedStyle(button).fontSize) >= 13.5;
+        }"""), "Desktop navigation legibility regression"
+
     if mobile:
         expect(page.locator("#mobile-dock")).to_be_visible()
         page.locator("#dock-history").click()
