@@ -37,6 +37,11 @@ jobs:
         run: |
           npm run build
           grep -q 'assets/' dist/index.html
+      - name: Verify offline Excel Lab in real Chromium
+        run: |
+          python -m pip install playwright==1.58.0
+          python -m playwright install --with-deps chromium
+          python -m backend.excel_lab_smoke
       - name: Publish only /excel-lab/ while preserving other demos
         env:
           GH_TOKEN: ${{ github.token }}
