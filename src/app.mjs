@@ -58,6 +58,11 @@ let bulkPreview = null;
 let historyMonth = 'all';
 let activePreset = '';
 let inspectedNumber = '';
+const inspectorObjectUrls=[];
+function clearInspectorFiles(){
+  for(const url of inspectorObjectUrls)URL.revokeObjectURL(url);
+  inspectorObjectUrls.length=0;
+}
 let customViews = [];
 const scopedViewKey = () => 'logistics-workspace:views:' +
   (import.meta.env.VITE_DEMO === 'true' ? 'demo' : $('account-email').textContent.trim().toLowerCase() || 'signed-out');
@@ -446,6 +451,7 @@ $('driver-edit').addEventListener('click', () => {
 function inspectOrder(number) {
   const order=orders.find(item=>item.number===number);
   if(!order)return;
+  clearInspectorFiles();
   inspectedNumber=number;
   const dialog=$('order-inspector');
   $('inspector-title').textContent='Заявка № '+number;
@@ -496,7 +502,30 @@ function inspectOrder(number) {
     stages.append(item);
   }
   documents.append(stages,
-    node('p','Исходные PDF в реестре не хранятся. Для сверки оригиналов используйте исходные файлы.','quiet'));
+    node('p','Исходные PDF в реестре не хранятся. Можно временно открыть свои локальные копии — они не загружаются на сервер и не связываются автоматически с заявкой.','quiet'));
+  for(const labelText of ['PDF заказчика','PDF перевозчика']){
+    const field=node('label',labelText,'inspector-local-file');
+    const input=node('input');
+    input.type='file';input.accept='.pdf,application/pdf';
+    const link=node('a','Открыть выбранный PDF','inspect-file-link');
+    link.hidden=true;link.target='_blank';link.rel='noopener noreferrer';
+    input.addEventListener('change',()=>{
+      if(link.href?.startsWith('blob:')){
+        URL.revokeObjectURL(link.href);
+        const index=inspectorObjectUrls.indexOf(link.href);
+        if(index>=0)inspectorObjectUrls.splice(index,1);
+      }
+      const file=input.files?.[0];
+      if(!file || (file.type && file.type!=='application/pdf') ||
+          !file.name.toLowerCase().endsWith('.pdf') || file.size>25*1024*1024){
+        link.hidden=true;link.removeAttribute('href');return;
+      }
+      const url=URL.createObjectURL(file);
+      inspectorObjectUrls.push(url);
+      link.href=url;link.hidden=false;
+    });
+    field.append(input,link);documents.append(field);
+  }
   const footer=$('inspector-actions');
   footer.replaceChildren(
     action('Редактировать',()=>{dialog.close();openOrder(number);},'primary'),
@@ -509,6 +538,7 @@ function inspectOrder(number) {
   dialog.showModal();
 }
 $('order-inspector').addEventListener('close',()=>{
+  clearInspectorFiles();
   $('dock-context').hidden=true;
   $('dock-more').hidden=false;
 });
