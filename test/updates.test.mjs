@@ -9,7 +9,7 @@ test('обновления охватывают всю известную ист
     '13 ноября 2026', '12 ноября 2026', '11 ноября 2026',
     '23 сентября 2026', '16 сентября 2026 · предыстория'
   ]);
-  assert.ok(updates.every(group => group.items.length >= 3));
+  assert.ok(updates.every(group => group.items.length >= 1));
   assert.ok(updates.every(group => group.items.every(item => item.trim().length > 15)));
   assert.ok(updates.every(group => !/\d{1,2}:\d{2}/.test(group.title)));
 });
@@ -36,30 +36,16 @@ test('проверенное резервное копирование отоб�
 });
 
 
-test('17 ноября: проверки шифрования и разделения двух аккаунтов в обновлениях', () => {
-  assert.equal(updates[0].title, '17 ноября 2026');
-  const entry = updates[0].items.join(' ');
-  assert.match(entry, /побайтово совпадать/);
-  assert.match(entry, /двух сотрудников/);
-  assert.match(entry, /на тестовых данных/);
-});
-
-
 test('17 ноября: исправление ISO-дат отражено в истории обновлений', () => {
   const newest = updates.find(group => group.title === '17 ноября 2026');
   assert.ok(newest);
   assert.ok(newest.items.some(item => item.includes('Погрузки/выгрузки сегодня')
-    && item.includes('ГГГГ-ММ-ДД')));
+    && item.includes('разных форматах')));
 });
 
-test('17 ноября: тестирование 515 заявок отражено в истории', () => {
-  const entry = updates.find(group => group.title === '17 ноября 2026');
-  assert.ok(entry?.items.some(text => text.includes('515 заявками')
-    && text.includes('восстановление из резервной копии')));
-});
 
-test('17 ноября: браузерная приёмка годового реестра отражена в обновлениях', () => {
-  const entry = updates.find(group => group.title === '17 ноября 2026');
-  assert.ok(entry?.items.some(item => item.includes('браузерную проверку')
-    && item.includes('515 заявками') && item.includes('четыре варианта отображения')));
+test('журнал для пользователей описывает возможности, а не внутренние тесты', () => {
+  const latest = updates[0].items.join(' ');
+  assert.doesNotMatch(latest, /515 заявк|браузерн(ый|ую) провер|автоматическ(ие|ую) провер|CI|SQLite|SHA-256/i);
+  assert.match(latest, /фильтр/);
 });
