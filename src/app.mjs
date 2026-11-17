@@ -131,6 +131,23 @@ function updateMonthMetrics() {
   el.hidden = !signedIn && !demo;
 }
 
+let lastSyncWarning = '';
+const syncWarningKey=()=>displayKey+':sync-notice:'+
+  encodeURIComponent(($('account-email').textContent||'demo').toLowerCase());
+function syncNotificationsEnabled() {
+  try{return localStorage.getItem(syncWarningKey())==='true';}
+  catch{return false;}
+}
+function notifySyncProblem(state) {
+  if(!state||!['offline','failed','unavailable'].includes(state)) {
+    lastSyncWarning='';return;
+  }
+  if(state===lastSyncWarning||!document.hidden||!syncNotificationsEnabled()||
+    !globalThis.Notification||Notification.permission!=='granted')return;
+  lastSyncWarning=state;
+  try{new Notification('Logistics Workspace',{body:'Синхронизация требует внимания. Откройте рабочую вкладку.'});}
+  catch{/* Browser notifications may be blocked by the OS. */}
+}
 function showSyncStatus() {
   $('sync-quick').hidden = demo || !signedIn;
   $('sync-quick').disabled = pendingWrites > 0 || refreshing !== undefined;
@@ -142,6 +159,7 @@ function showSyncStatus() {
     : saveFailure ? 'failed' : refreshFailure ? 'unavailable'
     : serverConfirmed ? 'saved' : '';
   status.dataset.state = state;
+  notifySyncProblem(state);
   status.textContent = ({
     busy: 'Синхронизация', offline: 'Нет соединения',
     failed: 'Ошибка сохранения', unavailable: 'Реестр недоступен', saved: 'Сохранено',
@@ -1152,6 +1170,31 @@ $('column-right').addEventListener('click',()=>moveColumn(1));
 $('reset-columns').addEventListener('click',()=>{
   display.columnOrder=[...columnKeys];saveDisplay();render();
 });
+async function setSyncNotifications(event) {
+  const input=event.currentTarget;
+  if(input.checked) {
+    if(!('Notification' in globalThis)){
+      input.checked=false;
+      $('notify-status').textContent='Этот браузер не поддерживает уведомления.';
+      return;
+    }
+    const permission=Notification.permission==='granted'?'granted':
+      await Notification.requestPermission();
+    if(permission!=='granted'){
+      input.checked=false;
+      $('notify-status').textContent='Браузер не разрешил уведомления.';
+      return;
+    }
+  }
+  try{localStorage.setItem(syncWarningKey(),String(input.checked));}
+  catch{
+    $('notify-status').textContent='Не удалось сохранить настройку.';
+    return;
+  }
+  $('notify-status').textContent=input.checked?
+    'Уведомления включены для этого аккаунта и браузера.':'Уведомления выключены.';
+}
+$('notify-sync-errors').addEventListener('change',setSyncNotifications);
 $('reset-appearance').addEventListener('click', () => {
   // Reset only visual preferences; keep orders, accounts and user-created views.
   display.theme='sputnik';
@@ -1579,6 +1622,7 @@ async function showAccount(account) {
   accountGeneration++;
   signedIn = true;
   $('account-email').textContent = account.email;
+  $('notify-sync-errors').checked=syncNotificationsEnabled();
   renderCustomViews();
   $('sync-tools').hidden = false;
   $('sign-out').hidden = false;
