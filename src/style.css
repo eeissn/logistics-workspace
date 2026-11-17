@@ -1855,3 +1855,121 @@ dialog .check label {
 .ledger-example-preview ol { margin: .3rem 0 .6rem; padding-left: 1.4rem; }
 .ledger-example-preview li { margin-bottom: .65rem; overflow-wrap: anywhere; }
 .ledger-example-preview li p { margin: .18rem 0; }
+
+
+/* Workspace UX 2.0 — Attio structure, Linear feedback, Steep metrics,
+   Raycast mobile access, Rill command navigation, consistent accessible forms.
+   Existing themes and four views remain functional. */
+.intro-metrics { min-width: 0; }
+.month-metrics {
+  display: flex; align-items: stretch; flex-wrap: wrap;
+  gap: .4rem; margin: 0;
+}
+.metric-chip {
+  display: grid; align-content: center; gap: .13rem;
+  padding: .44rem .7rem;
+  min-width: 5.4rem;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.metric-chip small { color: var(--muted); font-size: .68rem; letter-spacing: .01em; }
+.metric-chip strong { color: var(--ink); font-size: .83rem; font-weight: 680; }
+.metric-chip[data-metric=margin] strong { color: var(--theme-outline); }
+.command-launch { font-size: .8rem; white-space: nowrap; letter-spacing: -.015em; }
+.command-launch:hover { color: var(--theme-outline); }
+.command-dialog { width: min(560px,calc(100% - 1.5rem)); margin: min(13vh,90px) auto auto; }
+.command-dialog .dialog-body { padding: 1rem; }
+.command-search-label { display: grid; gap: .4rem; font-size: .78rem; color: var(--muted); }
+#command-search {
+  width: 100%; min-height: 48px; font-size: .96rem; padding-inline: .8rem;
+  border: 1px solid var(--line); background: var(--surface);
+}
+.command-results {
+  display: grid; align-content: start; gap: .15rem;
+  max-height: min(56vh,540px); overflow-y: auto;
+  margin-block: .6rem;
+}
+.command-group {
+  margin: .7rem 0 .2rem; padding-inline: .6rem;
+  font-size: .7rem; font-weight: 680; letter-spacing: .055em;
+  text-transform: uppercase; color: var(--muted);
+}
+.command-choice {
+  width: 100%; display: grid; gap: .15rem;
+  min-height: 52px; padding: .55rem .7rem; text-align: left;
+  border: 1px solid transparent; background: transparent;
+}
+.command-choice:hover, .command-choice:focus-visible {
+  background: var(--nav-active); border-color: var(--line);
+}
+.command-choice strong { font-size: .87rem; font-weight: 650; }
+.command-choice small { font-size: .73rem; color: var(--muted); }
+.command-empty { color: var(--muted); padding: .8rem; }
+.command-footnote { margin: .7rem 0 0; font-size: .7rem; }
+
+/* Selected record can be inspected without losing position in the list. */
+@media (min-width: 1060px) {
+  .split-view > .split-detail {
+    position: sticky; top: 1rem; max-height: calc(100dvh - 2rem);
+    overflow-y: auto; scrollbar-gutter: stable;
+  }
+}
+.split-list .order-summary[aria-pressed=true] {
+  background: var(--nav-active);
+  box-shadow: inset 3px 0 var(--accent);
+}
+.order-table .order-id::before { min-width: 5px; }
+.order-table .order:focus-within {
+  background: var(--nav-active);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb,var(--accent) 17%,transparent);
+}
+.order-table .order { transition: background-color .14s ease; }
+.trip-status, .etrn-link, .stage-badge {
+  font-variant-numeric: tabular-nums;
+  transition: background-color .14s ease, border-color .14s ease;
+}
+.trip-status:focus-visible, .etrn-link:focus-visible { outline-offset: 1px; }
+.dialog-body, dialog form { overflow-wrap: anywhere; }
+dialog :is(input,select,textarea) { scroll-margin-block: 5rem; }
+.dialog-head { background: var(--paper); }
+.dialog-foot { background: var(--paper); }
+
+.mobile-dock { display: none; }
+@media (max-width: 740px) {
+  .registry-command .command-launch { display: none; }
+  main#workspace { padding-bottom: calc(6.8rem + env(safe-area-inset-bottom)); }
+  .intro { align-items: stretch; }
+  .month-metrics { gap: .3rem; }
+  .metric-chip { flex: 1 1 0; min-width: 0; padding: .4rem .48rem; }
+  .metric-chip small { font-size: .65rem; }
+  .metric-chip strong { font-size: .78rem; overflow-wrap: anywhere; }
+  .mobile-dock:not([hidden]) {
+    display: grid; grid-template-columns: repeat(5,minmax(0,1fr));
+    position: fixed; z-index: 12; inset: auto 0 0;
+    min-height: calc(64px + env(safe-area-inset-bottom));
+    padding: .36rem max(.3rem,env(safe-area-inset-left))
+      calc(.3rem + env(safe-area-inset-bottom))
+      max(.3rem,env(safe-area-inset-right));
+    background: var(--paper); border-top: 1px solid var(--line);
+    box-shadow: 0 -5px 24px rgb(15 18 30 / 7%);
+  }
+  .mobile-dock button {
+    display: grid; place-items: center; align-content: center; gap: .1rem;
+    min-width: 0; min-height: 48px; padding: .15rem .1rem;
+    border: 0; background: transparent; color: var(--muted);
+    border-radius: 9px;
+  }
+  .mobile-dock button[aria-current=page] {
+    color: var(--theme-outline); background: var(--nav-active); font-weight: 700;
+  }
+  .mobile-dock button > span { font-size: 1.25rem; line-height: 1.1; }
+  .mobile-dock button > small { font-size: .63rem; overflow: hidden; text-overflow: ellipsis; }
+  .mobile-dock button:focus-visible { outline-offset: -2px; }
+  .command-dialog { margin-top: 5vh; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .order-table .order, .trip-status, .etrn-link, .stage-badge { transition: none; }
+}
+@media print { .mobile-dock { display: none !important; } }
