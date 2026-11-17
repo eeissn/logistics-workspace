@@ -98,7 +98,7 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(after["revision"], 2)
         self.assertEqual(after["orders"][0]["etrn"], payload["etrn"])
         self.assertEqual(after["orders"][1], second_original)
-        self.assertEqual(self.first.get("/api/records").json(), after)
+        self.assertEqual(self.first.get("/api/records", headers=first).json(), after)
         self.assertEqual(self.second.get("/api/records", headers=other).json()["orders"], [])
         self.assertEqual(self.second.patch("/api/etrn", headers=other, json=payload).status_code, 404)
         self.assertEqual(self.first.patch("/api/etrn", headers=first, json=payload).status_code, 409)
