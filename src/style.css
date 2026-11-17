@@ -2294,7 +2294,7 @@ dialog :is(input,select,textarea) { scroll-margin-block: 5rem; }
 .workspace-nav .saved-views-group button {
   min-height: 40px;
   padding: .55rem .72rem;
-  font-size: .88rem;
+  font-size: .94rem;
   line-height: 1.35;
   letter-spacing: -.008em;
 }
