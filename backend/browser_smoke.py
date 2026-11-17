@@ -700,7 +700,8 @@ def workspace_design(page, mobile):
                for box in geometry["bounds"].values()), f"Control outside viewport: {geometry}"
     assert geometry["bounds"]["#new"]["font"] >= 12.5, f"Small primary label: {geometry}"
     assert geometry["bounds"]["#view-title"]["font"] >= 20, f"Small heading: {geometry}"
-    assert geometry["bounds"]["#new"]["top"] >= geometry["bounds"]["#view-title"]["top"] - 2, f"Action above heading: {geometry}"
+    assert abs((geometry["bounds"]["#new"]["top"] + geometry["bounds"]["#new"]["height"]/2) -
+               (geometry["bounds"]["#view-title"]["top"] + geometry["bounds"]["#view-title"]["height"]/2)) <= 6, f"Misaligned header actions: {geometry}"
     assert geometry["scrollWidth"] <= geometry["viewport"] + 1, f"Horizontal overflow: {geometry}"
     if not mobile:
         assert page.evaluate("""() => {
