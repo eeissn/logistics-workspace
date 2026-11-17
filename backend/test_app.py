@@ -345,7 +345,7 @@ class WorkspaceTests(unittest.TestCase):
         self.assertFalse(self.second.get("/api/records", headers=h2).json()
                          ["orders"][0]["etrn"].get("allSigned"))
         self.assertEqual(self.first.post(url, headers=h1, json=payload).status_code, 409)
-        for bad in ("", "bad\\nnumber", "x" * 81):
+        for bad in ("", "bad\nnumber", "x" * 81):
             broken = [{**items[0], "etrnNumber": bad}]
             invalid = self.first.post(url, headers=h1, json={
                 "choice": "signed", "revision": updated["revision"],
