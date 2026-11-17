@@ -2574,6 +2574,10 @@ dialog .dialog-foot button { min-height: 42px; font-weight: 610; }
   #table, #archive { flex: 0 0 100%; min-width: 0; }
   .registry-tools .view-picker > span[aria-hidden] {display:none;}
 }
+@media (min-width: 851px) and (max-width: 1120px) {
+  main#workspace .intro { flex-wrap: wrap; }
+  .intro-metrics { width: 100%; justify-content: flex-end; }
+}
 @media (max-width: 850px) {
   .metrics-disclosure > summary { display: none; }
   .metrics-disclosure { flex: 1 1 100%; }
