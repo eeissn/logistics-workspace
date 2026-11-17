@@ -1,5 +1,7 @@
 const KEY = import.meta.env?.VITE_EXCEL_LAB === 'true'
-  ? 'logistics-workspace:excel-lab:v1' : 'logistics-workspace:v1';
+  ? 'logistics-workspace:excel-lab:v1'
+  : import.meta.env?.VITE_UX_PREVIEW === 'true'
+    ? 'logistics-workspace:ux-preview:v1' : 'logistics-workspace:v1';
 export const sessionChangeKey = 'logistics-workspace:session-change';
 export const demo = import.meta.env?.VITE_DEMO === 'true';
 

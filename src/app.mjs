@@ -11,6 +11,7 @@ import { driverMessage } from './driver.mjs';
 import { isActionable, monthGroups, scopeOrders } from './order-history.mjs';
 import { demoOrders } from './demo.mjs';
 import { attachExcelLab } from './excel-lab.mjs';
+import { mountCommandPalette } from './command-palette.mjs';
 import { defaultAccents, displayKey, layoutLabels, matchesTripView, pendingEtrn, readDisplayPreferences, readStatusColors, readThemeLayouts, routeText, selectOrders, statusColors, themeLabels, validAccent, violetPalettes } from './registry.mjs';
 
 const $ = id => document.getElementById(id);
@@ -113,7 +114,16 @@ function updateMonthMetrics() {
   const month = today().slice(0, 7);
   const {count, total} = monthSnapshot(orders, month, today());
   const label = new Date(month + '-01T12:00:00').toLocaleDateString('ru-RU', {month:'long', year:'numeric'});
-  el.textContent = label + ' · ' + count + ' заявок · Маржа ' + money(total);
+  el.replaceChildren();
+  for (const [key, caption, value] of [
+    ['month', 'Период', label], ['count', 'Заявки', String(count)],
+    ['margin', 'Маржа', money(total)],
+  ]) {
+    const part = node('span', null, 'metric-chip');
+    part.dataset.metric = key;
+    part.append(node('small', caption), node('strong', value));
+    el.append(part);
+  }
   el.title = 'Маржа по действующим правилам отчёта, без сорванных заявок. Количество включает все заявки месяца.';
   el.hidden = !signedIn && !demo;
 }
@@ -309,7 +319,13 @@ function positionContacts() {
   const left = (viewport?.offsetLeft ?? 0) + inset;
   const top = (viewport?.offsetTop ?? 0) + inset;
   const right = left + (viewport?.width ?? document.documentElement.clientWidth) - inset * 2;
-  const bottom = top + (viewport?.height ?? document.documentElement.clientHeight) - inset * 2;
+  let bottom = top + (viewport?.height ?? document.documentElement.clientHeight) - inset * 2;
+  // The iPhone dock is fixed to the bottom and must never cover contact links.
+  // Use the actually rendered edge rather than guessing a safe-area height.
+  const dock = $('mobile-dock');
+  if (!dock.hidden && window.matchMedia('(max-width: 740px)').matches) {
+    bottom = Math.min(bottom, dock.getBoundingClientRect().top - inset);
+  }
   if (anchor.bottom <= top || anchor.top >= bottom || anchor.right <= left || anchor.left >= right) return closeContacts();
 
   contactPanel.style.width = Math.min(304, right - left) + 'px';
@@ -723,6 +739,9 @@ function render() {
   for (const button of document.querySelectorAll('[data-scope]')) {
     button.setAttribute('aria-pressed', String(button.dataset.scope === registryScope));
   }
+  $('dock-active').setAttribute('aria-current', registryScope === 'active' ? 'page' : 'false');
+  $('dock-history').setAttribute('aria-current', registryScope === 'history' ? 'page' : 'false');
+  $('dock-more').setAttribute('aria-expanded', String($('workspace-menu').open));
   $('active-count').textContent = String(orders.filter(isActionable).length);
   $('history-count').textContent = String(orders.length);
   $('history-browser').hidden = registryScope !== 'history';
@@ -1164,7 +1183,8 @@ document.addEventListener('focusin', event => {
 document.addEventListener('pointerdown', event => {
   if (contactAnchor && !contactAnchor.contains(event.target) && !contactPanel.contains(event.target)) closeContacts();
   const menu = $('workspace-menu');
-  if (mobileNav?.matches && menu.open && !menu.contains(event.target)) menu.open = false;
+  if (mobileNav?.matches && menu.open && !menu.contains(event.target) &&
+      !$('dock-more').contains(event.target)) menu.open = false;
 });
 $('sort').addEventListener('change', event => {
   sort = event.currentTarget.value;
@@ -1174,6 +1194,41 @@ $('sort').addEventListener('change', event => {
 $('sort-direction').addEventListener('click', () => setSort(sort));
 
 for (const button of document.querySelectorAll('[data-close]')) button.addEventListener('click', () => button.closest('dialog').close());
+const focusRegistrySearch = () => {
+  const input = $('search');
+  input.scrollIntoView({block:'center', behavior:'instant'});
+  input.focus({preventScroll:true});
+  input.select();
+};
+mountCommandPalette({
+  dialog:$('command-dialog'), input:$('command-search'),
+  results:$('command-results'), opener:$('command-launch'),
+  available:() => demo || signedIn,
+  actions:{
+    search:focusRegistrySearch,
+    active:() => changeRegistryScope('active'),
+    history:() => changeRegistryScope('history'),
+    new:() => $('new').click(),
+    pdf:() => $('import').click(),
+    excel:() => $('ledger').click(),
+    report:() => $('report').click(),
+    table:() => setDisplay('layout','table'),
+    split:() => setDisplay('layout','split'),
+    settings:() => $('settings').click(),
+  },
+});
+$('dock-active').addEventListener('click', () => changeRegistryScope('active'));
+$('dock-history').addEventListener('click', () => changeRegistryScope('history'));
+$('dock-search').addEventListener('click', focusRegistrySearch);
+$('dock-new').addEventListener('click', () => $('new').click());
+$('dock-more').addEventListener('click', () => {
+  const menu = $('workspace-menu');
+  menu.open = !menu.open;
+  $('dock-more').setAttribute('aria-expanded', String(menu.open));
+  if (menu.open) menu.querySelector('summary').focus({preventScroll:true});
+});
+$('workspace-menu').addEventListener('toggle', () =>
+  $('dock-more').setAttribute('aria-expanded', String($('workspace-menu').open)));
 $('search').addEventListener('input', render);
 $('filter-view').addEventListener('change', event => {
   view = event.currentTarget.value;
@@ -1258,6 +1313,7 @@ $('import-form').addEventListener('submit', async event => {
 function showWorkspace(visible) {
   $('workspace').hidden = !visible;
   $('workspace-nav').hidden = !visible;
+  $('mobile-dock').hidden = !visible;
   $('sign-in').hidden = visible;
 }
 

@@ -55,3 +55,9 @@ test('17 ноября: тестовая среда Excel указана в по�
   assert.ok(entry?.items.some(item => item.includes('учебную среду') &&
     item.includes('разными названиями')));
 });
+
+test('17 ноября: пользовательские улучшения интерфейса отражены в истории', () => {
+  const entry = updates.find(group => group.title === '17 ноября 2026');
+  assert.ok(entry?.items.some(item => item.includes('быстрые команды')
+    && item.includes('навигация на iPhone') && item.includes('детали заявки')));
+});

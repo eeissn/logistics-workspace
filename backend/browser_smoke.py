@@ -651,6 +651,47 @@ def contacts_viewport(page, number):
     page.locator("#search").clear()
 
 
+def workspace_design(page, mobile):
+    """Raycast-style commands, Linear feedback, Steep metrics and mobile dock."""
+    expect(page.locator("#month-metrics .metric-chip")).to_have_count(3)
+    expect(page.locator('#month-metrics [data-metric="margin"]')).to_contain_text("Маржа")
+    if mobile:
+        expect(page.locator("#mobile-dock")).to_be_visible()
+        page.locator("#dock-history").click()
+        expect(page.locator("#view-title")).to_have_text("История заявок")
+        expect(page.locator("#dock-history")).to_have_attribute("aria-current", "page")
+        page.locator("#dock-active").click()
+        expect(page.locator("#view-title")).to_have_text("Актуальные заявки")
+        page.locator("#dock-search").click()
+        expect(page.locator("#search")).to_be_focused()
+        page.locator("#dock-more").click()
+        expect(page.locator("#dock-more")).to_have_attribute("aria-expanded", "true")
+        page.locator("#dock-more").click()
+        expect(page.locator("#dock-more")).to_have_attribute("aria-expanded", "false")
+    else:
+        page.locator("#command-launch").click()
+        dialog = page.locator("#command-dialog")
+        expect(dialog).to_be_visible()
+        dialog.locator("#command-search").fill("история")
+        expect(dialog.locator(".command-choice")).to_have_count(1)
+        dialog.locator("#command-search").press("Enter")
+        expect(dialog).to_be_hidden()
+        expect(page.locator("#view-title")).to_have_text("История заявок")
+        page.keyboard.press("Control+k")
+        expect(dialog).to_be_visible()
+        dialog.locator("#command-search").fill("список детали")
+        dialog.locator("#command-search").press("Enter")
+        expect(page.locator("#layout")).to_have_value("split")
+        page.keyboard.press("Control+k")
+        dialog.locator("#command-search").fill("вид таблица")
+        dialog.locator("#command-search").press("Enter")
+        expect(page.locator("#layout")).to_have_value("table")
+        page.keyboard.press("/")
+        expect(page.locator("#search")).to_be_focused()
+        page.locator("#active-nav").click()
+        expect(page.locator("#view-title")).to_have_text("Актуальные заявки")
+
+
 def smoke(browser_type, origin, chromium, number, report_total, device=None):
     order_a = f"A-{browser_type.name}"
     order_b = f"B-{browser_type.name}"
@@ -660,6 +701,7 @@ def smoke(browser_type, origin, chromium, number, report_total, device=None):
         a = first.new_page()
         a.goto(origin)
         sign_in(a, "first")
+        workspace_design(a, device is not None)
         sheet_preview(a, "Герман", number)
         calculators(a, device is not None)
         updates_history(a, device is not None)
