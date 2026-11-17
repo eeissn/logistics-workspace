@@ -56,6 +56,7 @@ export function etrnStatus(etrn) {
   if (!etrn?.required) return 'Не требуется';
   if (etrn.created && etrn.number?.trim() && (etrn.allSigned ?? etrnSteps.every(([id]) => etrn[id]))) return 'Подписана';
   if (etrn.created) return 'В работе';
+  if (etrn.orderForm) return 'Заказ-заявка создана';
   return 'К созданию';
 }
 

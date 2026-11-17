@@ -73,7 +73,7 @@ export function readThemeLayouts() {
   }
 }
 
-export const pendingEtrn = order => ['К созданию', 'В работе'].includes(etrnStatus(order.etrn));
+export const pendingEtrn = order => ['К созданию', 'Заказ-заявка создана', 'В работе'].includes(etrnStatus(order.etrn));
 
 export function routeText(order) {
   if (order.route?.trim()) return order.route;

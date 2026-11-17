@@ -262,7 +262,7 @@ def import_fixtures(chromium, number):
 def click_workspace_action(page, button, mobile):
     menu = page.locator("#workspace-menu")
     if mobile and menu.get_attribute("open") is None:
-        menu.locator("summary").click()
+        menu.locator(":scope > summary").click()
     page.locator(button).click()
 
 
@@ -340,6 +340,17 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     dialog.get_by_role("button", name="Отмена").click()
     row.locator(".etrn-link").click()
     expect(dialog.locator('[name="etrnNumber"]')).not_to_have_value(f"ETRN-{number}")
+    # Owner regression: preparing an agreement must change the ETRN badge immediately
+    # and the stage must survive a complete authenticated page reload.
+    required.check()
+    dialog.locator('[name="orderForm"]').check()
+    expect(dialog.locator("#etrn-status")).to_have_text("Заказ-заявка создана")
+    page.locator("#etrn-save").click()
+    expect(row.locator(".etrn-link")).to_have_text("Заказ-заявка создана")
+    page.reload()
+    expect(row.locator(".etrn-link")).to_have_text("Заказ-заявка создана")
+    row.locator(".etrn-link").click()
+    expect(dialog.locator('[name="orderForm"]')).to_be_checked()
     dialog.locator('[name="manualComplete"]').check()
     page.locator("#etrn-save").click()
     expect(page.locator("#etrn-dialog")).to_be_hidden()
@@ -717,6 +728,15 @@ def workspace_design(page, mobile):
         expect(page.locator("#search")).to_be_focused()
         page.locator("#active-nav").click()
         expect(page.locator("#view-title")).to_have_text("Актуальные заявки")
+        # Applying desktop quick filters must not collapse the entire navigation.
+        page.locator('[data-preset="awaiting-etrn"]').click()
+        expect(page.locator("#workspace-menu")).to_have_attribute("open", "")
+        expect(page.locator("#calculator")).to_be_visible()
+        expect(page.locator("#reset-workspace-view")).to_be_visible()
+        page.locator("#reset-workspace-view").click()
+        expect(page.locator("#view-title")).to_have_text("Актуальные заявки")
+        expect(page.locator("#workspace-menu")).to_have_attribute("open", "")
+        expect(page.locator("#filters-count")).to_be_hidden()
 
 
 def smoke(browser_type, origin, chromium, number, report_total, device=None):

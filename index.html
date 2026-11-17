@@ -28,23 +28,32 @@
   <details class="workspace-menu" id="workspace-menu">
     <summary aria-label="Меню рабочего пространства">⋯</summary>
     <div class="workspace-menu-body">
-      <div class="nav-tools">
+      <button type="button" id="command-launch" class="sidebar-command" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K"><span class="sidebar-command-label">⌕ Поиск и действия</span><kbd>Ctrl K</kbd></button>
+      <nav class="nav-primary" aria-label="Инструменты">
+        <p class="nav-section-title">Инструменты</p>
         <button type="button" id="calculator" aria-haspopup="dialog">Калькулятор</button>
         <button type="button" id="cargo-open" aria-haspopup="dialog">Размещение груза</button>
         <button type="button" id="ledger">Импорт Excel</button>
         <button type="button" id="ledger-export" aria-haspopup="dialog">Экспорт Excel</button>
         <button type="button" id="report">Отчёт по марже</button>
-        <button type="button" id="compare-open">Сравнить месяцы</button>
-        <button type="button" id="command-launch" class="sidebar-command" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K">⌘ Поиск и действия <span aria-hidden="true">⌘K</span></button>
-      </div>
-      <nav class="favorite-views" aria-label="Избранные фильтры">
-        <strong>Рабочие виды</strong><button type="button" data-preset="awaiting-etrn">Ждём ЭТРН</button><button type="button" data-preset="money-issues">Финансовые риски</button><button type="button" data-preset="today-pickup">Загрузка сегодня</button><button type="button" data-preset="today-delivery">Выгрузка сегодня</button><button type="button" data-preset="issues">Проблемные рейсы</button>
-        <button type="button" id="save-view">＋ Сохранить текущий вид</button>
-        <div id="custom-views" class="custom-views" aria-label="Мои виды реестра"></div>
-        <strong>☆ Избранное</strong>
-        <button type="button" data-view="pickup" aria-pressed="false">Загрузка сегодня</button>
-        <button type="button" data-view="delivery" aria-pressed="false">Выгрузка сегодня</button>
-        <button type="button" data-view="failed" aria-pressed="false">Проблемные</button>
+        <button type="button" id="compare-open">Сравнение месяцев</button>
+      </nav>
+      <nav class="favorite-views" aria-label="Быстрые фильтры">
+        <div class="nav-section-row"><span class="nav-section-title">Быстрые фильтры</span><button type="button" id="reset-workspace-view" class="nav-reset" title="Вернуться к актуальным заявкам">Сбросить</button></div>
+        <button type="button" data-preset="awaiting-etrn">Ждём ЭТРН</button>
+        <button type="button" data-preset="money-issues">Финансовые риски</button>
+        <button type="button" data-preset="today-pickup">Загрузка сегодня</button>
+        <button type="button" data-preset="today-delivery">Выгрузка сегодня</button>
+        <button type="button" data-preset="issues">Проблемные рейсы</button>
+        <details class="saved-views-group"><summary>Мои виды</summary>
+          <button type="button" id="save-view">＋ Сохранить текущий вид</button>
+          <div id="custom-views" class="custom-views" aria-label="Мои виды реестра"></div>
+        </details>
+        <div class="legacy-view-actions" hidden>
+          <button type="button" data-view="pickup" aria-pressed="false">Загрузка сегодня</button>
+          <button type="button" data-view="delivery" aria-pressed="false">Выгрузка сегодня</button>
+          <button type="button" data-view="failed" aria-pressed="false">Проблемные</button>
+        </div>
       </nav>
       <div class="account-tools">
         <div id="sync-tools" class="sync-tools" hidden>
@@ -72,7 +81,7 @@
     <p class="quiet">Порядок проверки: скачайте учебный XLSX → «Проверить импорт Excel» → выберите файл → «Проверить файл». Импорт в это демо возможен только после подтверждения и не затрагивает 515 рабочих заявок. Не используйте здесь настоящие документы.</p>
   </section>
   <header class="intro">
-    <h1 id="view-title">Актуальные заявки</h1>
+    <div class="intro-title"><h1 id="view-title">Актуальные заявки</h1><button id="new" class="primary" type="button" aria-label="Новая заявка"><span aria-hidden="true">+</span> <span class="action-label">Новая заявка</span></button></div>
     <div class="intro-metrics">
       <p id="month-metrics" class="month-metrics" aria-label="Показатели текущего месяца" hidden></p>
       <p id="sync-status" class="quiet" role="status"></p>
@@ -83,7 +92,7 @@
     <label class="registry-search"><svg class="command-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input id="search" type="search" aria-label="Поиск по заявкам" placeholder="Номер, компания, маршрут"></label>
     <button id="filters-open" type="button" aria-haspopup="dialog"><svg class="command-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-6 7v5l-4 2v-7z"/></svg><span>Фильтры</span><span id="filters-count" class="command-count" hidden>1</span></button>
     <div id="period-slot"><button id="period-open" type="button" aria-haspopup="dialog"><svg class="command-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="14" rx="2"/><path d="M8 4v4m8-4v4M4 10h16"/></svg><span id="period-label">Период</span></button></div>
-    <div class="actions" id="registry-actions"><button id="new" class="primary" type="button" aria-label="Новая заявка"><span aria-hidden="true">+</span> <span class="action-label">Новая заявка</span></button><button id="import" type="button"><span aria-hidden="true">↑</span> <span class="action-label">Загрузить два PDF</span></button></div>
+    <div class="actions" id="registry-actions"><button id="import" type="button"><span aria-hidden="true">↑</span> <span class="action-label">Загрузить два PDF</span></button></div>
     <details id="registry-more"><summary aria-label="Другие действия с заявками">⋯</summary><div id="registry-more-actions"></div></details>
   </div>
   <p id="active-filters" class="active-filters" hidden></p>

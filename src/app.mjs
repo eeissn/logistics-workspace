@@ -540,7 +540,9 @@ function renderRows(container, rows) {
     const selector = bulkCheckbox(order);
     if (selector) label.append(selector);
     label.append(action('№ ' + order.number, () => openOrder(order.number), 'order-link'));
-    label.append(action('◫', () => panelFor(order.number), 'order-peek-button'));
+    const inspect = action('Детали', () => panelFor(order.number), 'order-peek-button');
+    inspect.setAttribute('aria-label', 'Быстрый просмотр заявки № ' + order.number);
+    label.append(inspect);
     label.append(financeBadges(order));
     const date = node('div', order.date ? order.date.slice(5).split('-').reverse().join('.') : '—', 'order-date');
     const customer = node('div', order.customer || '—', 'customer-cell');
@@ -783,6 +785,14 @@ function render() {
     button.setAttribute('aria-pressed', String(current));
     const badge = button.querySelector('.view-count');
     if (badge) badge.textContent = orders.filter(order => matchesTripView(order, button.dataset.view, day)).length;
+  }
+  for (const button of document.querySelectorAll('[data-preset]')) {
+    const preset = savedViewPresets.find(item => item.id === button.dataset.preset);
+    const selected = preset && view === preset.view &&
+      $('filter').value === (preset.etrn || '') &&
+      $('financial-filter').value === (preset.financial || '') &&
+      registryScope === (preset.view === 'failed' ? 'history' : 'active');
+    button.setAttribute('aria-pressed', String(Boolean(selected)));
   }
   const viewFilter = view !== 'all' && view !== 'not-unloaded';
   const etrnFilter = $('filter').value;
@@ -1423,7 +1433,7 @@ function applyPersonalView(entry) {
   $('filter').value=entry.etrn;
   $('financial-filter').value=entry.financial;
   $('search').value='';
-  $('workspace-menu').open=false;
+  if (mobileNav?.matches) $('workspace-menu').open = false;
   render();
 }
 function renderCustomViews() {
@@ -1441,6 +1451,18 @@ function renderCustomViews() {
     row.append(open,remove);box.append(row);
   }
 }
+$('reset-workspace-view').addEventListener('click', () => {
+  registryScope = 'active';
+  view = 'all';
+  historyMonth = 'all';
+  period = {};
+  $('filter').value = '';
+  $('financial-filter').value = '';
+  $('search').value = '';
+  $('workspace-menu').open = !mobileNav?.matches;
+  render();
+  $('notice').textContent = 'Показаны актуальные заявки без дополнительных фильтров.';
+});
 $('save-view').addEventListener('click',()=>{
   const requested=window.prompt('Название вида (до 45 символов)');
   if(!requested)return;
@@ -1471,7 +1493,7 @@ for(const button of document.querySelectorAll('[data-preset]')) {
     $('search').value='';
     $('filter').value=preset.etrn;
     $('financial-filter').value=preset.financial||'';
-    $('workspace-menu').open=false;
+    if (mobileNav?.matches) $('workspace-menu').open = false;
     render();
   });
 }
