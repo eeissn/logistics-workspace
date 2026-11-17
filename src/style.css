@@ -1831,3 +1831,21 @@ dialog .check label {
   font-size: .88rem;
   line-height: 1.5;
 }
+
+/* GitHub Pages Excel Lab only. The panel is hidden in production builds. */
+.excel-lab-panel:not([hidden]) {
+  margin: 1rem 0 1.25rem;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid var(--border, #c8ccd3);
+  border-radius: 14px;
+  background: var(--surface, #f6f7f9);
+  max-width: 100%;
+}
+.excel-lab-panel h2 { margin: 0 0 .5rem; font-size: 1.1rem; }
+.excel-lab-panel p { margin: .45rem 0 .75rem; line-height: 1.45; }
+.excel-lab-buttons { display: flex; flex-wrap: wrap; gap: .55rem; }
+.excel-lab-buttons button { flex: 0 1 auto; min-height: 44px; max-width: 100%; white-space: normal; }
+@media (max-width: 760px) {
+  .excel-lab-panel:not([hidden]) { margin: .5rem 0 1rem; padding: .85rem; }
+  .excel-lab-buttons { display: grid; grid-template-columns: 1fr; }
+}
