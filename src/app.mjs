@@ -129,6 +129,8 @@ function updateMonthMetrics() {
 }
 
 function showSyncStatus() {
+  $('sync-quick').hidden = demo || !signedIn;
+  $('sync-quick').disabled = pendingWrites > 0 || refreshing !== undefined;
   if (demo || !signedIn) return;
   const status = $('sync-status');
   const problem = saveFailure ?? refreshFailure;
@@ -1196,8 +1198,11 @@ $('sort-direction').addEventListener('click', () => setSort(sort));
 for (const button of document.querySelectorAll('[data-close]')) button.addEventListener('click', () => button.closest('dialog').close());
 const focusRegistrySearch = () => {
   const input = $('search');
-  input.scrollIntoView({block:'center', behavior:'instant'});
+  // Keep the fixed mobile dock and nearby toolbar controls in place.
   input.focus({preventScroll:true});
+  if (window.matchMedia('(max-width: 740px)').matches) {
+    input.scrollIntoView({block:'nearest', inline:'nearest'});
+  }
   input.select();
 };
 mountCommandPalette({
@@ -1314,6 +1319,7 @@ function showWorkspace(visible) {
   $('workspace').hidden = !visible;
   $('workspace-nav').hidden = !visible;
   $('mobile-dock').hidden = !visible;
+  $('sync-quick').hidden = !visible || demo;
   $('sign-in').hidden = visible;
 }
 
@@ -1509,6 +1515,7 @@ $('sign-out').addEventListener('click', async event => {
 });
 
 $('sync-refresh').addEventListener('click', refresh);
+$('sync-quick').addEventListener('click', () => $('sync-refresh').click());
 $('local-import').addEventListener('click', async event => {
   const operation = startImport(event.currentTarget);
   if (!operation) return;
