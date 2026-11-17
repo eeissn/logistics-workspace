@@ -2358,7 +2358,7 @@ main#workspace .intro {
 .intro-title #new {
   min-height: 42px;
   font-weight: 680;
-  font-size: .85rem;
+  font-size: .92rem;
   letter-spacing: -.008em;
   border-radius: 10px;
 }
@@ -2476,7 +2476,7 @@ dialog .dialog-foot button { min-height: 42px; font-weight: 610; }
   .intro-title #new {
     padding: .45rem .55rem;
     min-height: 44px;
-    font-size: .79rem;
+    font-size: .88rem;
   }
   .registry-command {
     padding: .35rem;
