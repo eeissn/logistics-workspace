@@ -64,3 +64,27 @@ test('timeline: trip and ETRN are independent and explicit',()=>{
   assert.equal(etrnTimeline(order).at(-1).state,'current');
   assert.equal(tripTimeline(order)[1].state,'current');
 });
+
+test('ETRN timeline: agreement created is distinct, ordered and never fabricated', () => {
+  const order=sample('T','2026-11-18',3000);
+  order.etrn={required:true,orderForm:false,created:false,number:'T'};
+  const stages=['К созданию','Заказ-заявка создана','В работе','Подписана'];
+  const states=()=>etrnTimeline(order).map(step=>step.state);
+  assert.deepEqual(etrnTimeline(order).map(step=>step.title),stages);
+  assert.deepEqual(states(),['current','pending','pending','pending']);
+
+  order.etrn.orderForm=true;
+  assert.deepEqual(states(),['done','current','pending','pending']);
+
+  order.etrn.created=true;
+  assert.deepEqual(states(),['done','done','current','pending']);
+
+  order.etrn.allSigned=true;
+  assert.deepEqual(states(),['done','done','done','current']);
+
+  order.etrn.manualComplete=true;
+  assert.deepEqual(states(),['manual','manual','manual','manual']);
+
+  order.etrn={required:false,orderForm:true,created:false};
+  assert.deepEqual(states(),['not-required','not-required','not-required','not-required']);
+});
