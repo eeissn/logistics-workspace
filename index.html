@@ -34,9 +34,11 @@
         <button type="button" id="ledger">Импорт Excel</button>
         <button type="button" id="ledger-export" aria-haspopup="dialog">Экспорт Excel</button>
         <button type="button" id="report">Отчёт по марже</button>
+        <button type="button" id="compare-open">Сравнить месяцы</button>
         <button type="button" id="command-launch" class="sidebar-command" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K">⌘ Поиск и действия <span aria-hidden="true">⌘K</span></button>
       </div>
       <nav class="favorite-views" aria-label="Избранные фильтры">
+        <strong>Рабочие виды</strong><button type="button" data-preset="awaiting-etrn">Ждём ЭТРН</button><button type="button" data-preset="money-issues">Финансовые риски</button><button type="button" data-preset="today-pickup">Загрузка сегодня</button><button type="button" data-preset="today-delivery">Выгрузка сегодня</button><button type="button" data-preset="issues">Проблемные рейсы</button>
         <strong>☆ Избранное</strong>
         <button type="button" data-view="pickup" aria-pressed="false">Загрузка сегодня</button>
         <button type="button" data-view="delivery" aria-pressed="false">Выгрузка сегодня</button>
@@ -117,11 +119,21 @@
   </section>
   <p id="notice" role="status" aria-live="polite"></p>
 </main>
+<aside id="order-peek" class="order-peek" hidden aria-label="Быстрый просмотр заявки"></aside>
+<dialog id="compare-dialog" class="compact-dialog" aria-labelledby="compare-title">
+  <div class="dialog-body">
+    <header class="dialog-head"><h2 id="compare-title">Сравнение месяцев</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <div class="fields"><label>Первый месяц<input id="compare-first" type="month"></label><label>Второй месяц<input id="compare-second" type="month"></label></div>
+    <div id="compare-results" role="status"></div>
+    <p class="quiet">Сорванные заявки исключены из расчёта маржи. Неуказанные ставки не принимаются за нулевую маржу.</p>
+  </div>
+</dialog>
 <nav id="mobile-dock" class="mobile-dock" aria-label="Быстрая навигация" hidden>
   <button id="dock-active" type="button" aria-current="page"><span aria-hidden="true">▦</span><small>Актуальные</small></button>
   <button id="dock-history" type="button"><span aria-hidden="true">◷</span><small>История</small></button>
   <button id="dock-search" type="button"><span aria-hidden="true">⌕</span><small>Поиск</small></button>
   <button id="dock-new" type="button"><span aria-hidden="true">＋</span><small>Заявка</small></button>
+  <button id="dock-context" type="button" hidden>◎<small>Заявка</small></button>
   <button id="dock-more" type="button" aria-expanded="false"><span aria-hidden="true">⋯</span><small>Меню</small></button>
 </nav>
 
@@ -227,6 +239,7 @@
       <option value="pickup">Загрузка сегодня</option>
       <option value="delivery">Выгрузка сегодня</option>
     </select></label>
+    <label>Финансы<select id="financial-filter"><option value="">Все заявки</option><option value="issues">Все риски</option><option value="loss">Отрицательная маржа</option><option value="low">Низкая маржа</option><option value="unknown">Ставки не указаны</option></select></label>
     <label>ЭТРН<select id="filter" aria-label="Фильтр ЭТРН"><option value="">Все ЭТРН</option><option value="pending">ЭТРН требуют внимания</option><option value="Подписана">ЭТРН подписана</option><option value="Закрыта вручную">ЭТРН закрыта вручную</option><option value="Не требуется">ЭТРН не требуется</option></select></label>
   </div>
 </dialog>
@@ -241,7 +254,15 @@
 <dialog id="settings-dialog" class="compact-dialog" aria-labelledby="settings-title">
   <div class="dialog-body">
     <header class="dialog-head"><h2 id="settings-title">Настройки</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
+    <nav class="settings-sections" aria-label="Разделы настроек">
+      <button type="button" data-settings-section="appearance" aria-pressed="true">Оформление</button>
+      <button type="button" data-settings-section="registry">Реестр</button>
+      <button type="button" data-settings-section="account">Аккаунт</button>
+      <button type="button" data-settings-section="updates">Обновления</button>
+    </nav>
     <div class="display-settings">
+      <div class="theme-preview" id="theme-preview" aria-label="Предпросмотр оформления"></div>
+      <button id="reset-appearance" type="button">Сбросить только оформление</button>
       <label>Внешний вид<select id="theme"></select></label>
       <label id="violet-palette-setting" hidden>Палитра фона и таблицы<select id="violet-palette"></select></label>
       <div class="accent-settings">
