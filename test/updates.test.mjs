@@ -57,3 +57,9 @@ test('17 ноября: тестирование 515 заявок отражен�
   assert.ok(entry?.items.some(text => text.includes('515 заявками')
     && text.includes('восстановление из резервной копии')));
 });
+
+test('17 ноября: браузерная приёмка годового реестра отражена в обновлениях', () => {
+  const entry = updates.find(group => group.title === '17 ноября 2026');
+  assert.ok(entry?.items.some(item => item.includes('браузерную проверку')
+    && item.includes('515 заявками') && item.includes('четыре варианта отображения')));
+});
