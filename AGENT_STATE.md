@@ -1,3 +1,7 @@
+# Следующий блок после релиза · 18.11.2026
+
+В ветке `fix/etrn-timeline-agreement-stage`, основанной на `feature/two-user-sync`, исправлены два подтверждённых расхождения из действующей карты: отсутствующий промежуточный этап «Заказ-заявка создана» в шкале ЭТРН и преждевременный уход выгруженной заявки с ручным закрытием ЭТРН из «Актуальных». Серверная схема, изоляция аккаунтов и существующие данные не изменяются. Тесты добавлены в `test/workspace-insights.test.mjs`, `test/order-history.test.mjs`, `test/workspace.test.mjs`. Не считать развёрнутым до отдельного выпуска; проверить CI последнего SHA и физическую приёмку.
+
 # Desktop simplification & active-ETRN ownership rule · 17.11.2026
 
 Owner's post-release feedback: the desktop page shows too many equally weighted controls and monthly cards; the saved/connection status should appear **after** the refresh button. More critical: an unloaded truck must remain in «Актуальные» until ETRN is signed by everyone. Treat an explicit «Срыв заявки» as terminal, separate from the unsigned delivery scenario.
