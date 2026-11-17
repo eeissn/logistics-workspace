@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { blankOrder } from '../src/domain.mjs';
-import { displayKey, readDisplayPreferences, selectOrders } from '../src/registry.mjs';
+import { columnKeys, displayKey, readDisplayPreferences, safeColumnOrder, selectOrders } from '../src/registry.mjs';
 
 const query = {query:'', filter:'', view:'all', today:'2026-11-13', sort:'date', ascending:false};
 const makeOrder = (number, date, trip, etrn = {required:true}) => ({
@@ -47,22 +47,22 @@ test('display settings validate theme and layout independently and handle unread
     if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor);
     else delete globalThis.localStorage;
   });
-  assert.deepEqual(readDisplayPreferences(), {theme:'sputnik', layout:'table', violetPalette:'violet', accents:{}});
+  assert.deepEqual(readDisplayPreferences(), {theme:'sputnik', layout:'table', violetPalette:'violet', accents:{}, columnOrder:[...columnKeys]});
   stored = '{"theme":"sand","layout":"kanban"}';
-  assert.deepEqual(readDisplayPreferences(), {theme:'sand', layout:'kanban', violetPalette:'violet', accents:{}});
+  assert.deepEqual(readDisplayPreferences(), {theme:'sand', layout:'kanban', violetPalette:'violet', accents:{}, columnOrder:[...columnKeys]});
   stored = '{"theme":"constructor","layout":"split"}';
-  assert.deepEqual(readDisplayPreferences(), {theme:'sputnik', layout:'split', violetPalette:'violet', accents:{}});
+  assert.deepEqual(readDisplayPreferences(), {theme:'sputnik', layout:'split', violetPalette:'violet', accents:{}, columnOrder:[...columnKeys]});
   stored = '{"theme":"sand","accents":{"violet":"#54a080","sand":"invalid"}}';
-  assert.deepEqual(readDisplayPreferences(), {theme:'sand', layout:'split', violetPalette:'violet', accents:{violet:'#54a080'}});
+  assert.deepEqual(readDisplayPreferences(), {theme:'sand', layout:'split', violetPalette:'violet', accents:{violet:'#54a080'}, columnOrder:[...columnKeys]});
   stored = '{"theme":"sand","layout":"timeline"}';
-  assert.deepEqual(readDisplayPreferences(), {theme:'sand', layout:'split', violetPalette:'violet', accents:{}});
+  assert.deepEqual(readDisplayPreferences(), {theme:'sand', layout:'split', violetPalette:'violet', accents:{}, columnOrder:[...columnKeys]});
   stored = '{"theme":"violet","violetPalette":"pink"}';
   assert.equal(readDisplayPreferences().theme, 'violet');
   assert.equal(readDisplayPreferences().violetPalette, 'pink');
   stored = '{"theme":"violet","violetPalette":"constructor"}';
   assert.equal(readDisplayPreferences().violetPalette, 'violet');
   stored = '{"theme":';
-  assert.deepEqual(readDisplayPreferences(), {theme:'sputnik', layout:'table', violetPalette:'violet', accents:{}});
+  assert.deepEqual(readDisplayPreferences(), {theme:'sputnik', layout:'table', violetPalette:'violet', accents:{}, columnOrder:[...columnKeys]});
 });
 
 test('pickup and delivery sort by the earliest valid window and put missing dates last in both directions', () => {
@@ -111,4 +111,12 @@ test('погрузки сегодня включают даты ISO, совпа�
   }));
   assert.deepEqual(selectOrders(records, {...query, view:'pickup', sort:'pickup', ascending:true})
     .map(record => record.number), ['pdf-today', 'iso-today']);
+});
+
+test('table column preference rejects duplicates and unknown keys',()=>{
+  assert.deepEqual(safeColumnOrder(undefined),columnKeys);
+  assert.deepEqual(safeColumnOrder(['number','number']),columnKeys);
+  assert.deepEqual(safeColumnOrder([...columnKeys.slice(1),'nonexistent']),columnKeys);
+  const reverse=[...columnKeys].reverse();
+  assert.deepEqual(safeColumnOrder(reverse),reverse);
 });
