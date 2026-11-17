@@ -510,6 +510,7 @@ function inspectOrder(number) {
 }
 $('order-inspector').addEventListener('close',()=>{
   $('dock-context').hidden=true;
+  $('dock-more').hidden=false;
 });
 $('dock-context').addEventListener('click',()=>inspectOrder(inspectedNumber));
 
@@ -638,7 +639,14 @@ function renderRows(container, rows) {
     stage.append(tripControl(order));
     const etrn = node('div', null, 'etrn-cell');
     etrn.append(etrnAction(order));
-    row.append(label, date, customer, carrier, direction, ...windows, etrn, stage, contactsCell(order), financeSummary(order));
+    const rates=financeSummary(order);
+    const problems=financialFlags(order);
+    if(problems.length){
+      const badge=node('span','⚑ '+problems.map(flag=>flag.label).join(' · '),'financial-flag');
+      badge.title='Проверьте ставки заявки перед принятием решения.';
+      rates.append(badge);
+    }
+    row.append(label, date, customer, carrier, direction, ...windows, etrn, stage, contactsCell(order), rates);
     for (const cell of row.children) cell.setAttribute('role', 'cell');
     table.append(row);
   }
@@ -803,7 +811,11 @@ function renderSplit(container, rows) {
   actions.append(contactsCell(order),
     action('Просмотр',()=>inspectOrder(order.number)),
     action('Открыть заявку', () => openOrder(order.number), 'primary'));
-  if(inline){inspectedNumber=order.number;$('dock-context').hidden=false;}
+  if(inline && matched && selection.expanded){
+    inspectedNumber=order.number;
+    $('dock-context').hidden=false;
+    $('dock-more').hidden=true;
+  }
   panel.append(actions);
   split.append(list);
   if (inline) {
@@ -843,6 +855,8 @@ function shortPeriodDate(value) {
 }
 
 function render() {
+  $('dock-context').hidden=true;
+  $('dock-more').hidden=false;
   updateMonthMetrics();
   renderSavedViews();
   closeContacts();
