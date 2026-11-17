@@ -1425,7 +1425,7 @@ function applyPersonalView(entry) {
   $('filter').value=entry.etrn;
   $('financial-filter').value=entry.financial;
   $('search').value='';
-  $('workspace-menu').open=false;
+  if (mobileNav?.matches) $('workspace-menu').open = false;
   render();
 }
 function renderCustomViews() {
@@ -1485,7 +1485,7 @@ for(const button of document.querySelectorAll('[data-preset]')) {
     $('search').value='';
     $('filter').value=preset.etrn;
     $('financial-filter').value=preset.financial||'';
-    $('workspace-menu').open=false;
+    if (mobileNav?.matches) $('workspace-menu').open = false;
     render();
   });
 }
