@@ -1,4 +1,4 @@
-import {etrnStatus, monthReport, orderMargin, tripStatus} from './domain.mjs';
+import {etrnStatus, monthReport, orderMargin, scheduledToday, tripStatus} from './domain.mjs';
 
 export const viewPresets = Object.freeze([
   {id:'today', label:'Сегодня'},
@@ -20,8 +20,8 @@ export function financialFlags(order, minimum=5000) {
 export function matchesPreset(order,preset,day,minimum=5000) {
   switch(preset) {
     case 'today': return order.date === day ||
-      (order.points || []).some(point => String(point.schedule || '').includes(day) ||
-        String(point.schedule || '').includes(day.split('-').reverse().join('.')));
+      scheduledToday({...order,points:order.points||[]},'Погрузка',day) ||
+      scheduledToday({...order,points:order.points||[]},'Выгрузка',day);
     case 'etrn': return ['К созданию','В работе'].includes(etrnStatus(order.etrn)) &&
       tripStatus(order) !== 'failed';
     // Existing records do not contain authoritative paid/unpaid data.
