@@ -717,6 +717,15 @@ def workspace_design(page, mobile):
         expect(page.locator("#search")).to_be_focused()
         page.locator("#active-nav").click()
         expect(page.locator("#view-title")).to_have_text("Актуальные заявки")
+        # Applying desktop quick filters must not collapse the entire navigation.
+        page.locator('[data-preset="awaiting-etrn"]').click()
+        expect(page.locator("#workspace-menu")).to_have_attribute("open", "")
+        expect(page.locator("#calculator")).to_be_visible()
+        expect(page.locator("#reset-workspace-view")).to_be_visible()
+        page.locator("#reset-workspace-view").click()
+        expect(page.locator("#view-title")).to_have_text("Актуальные заявки")
+        expect(page.locator("#workspace-menu")).to_have_attribute("open", "")
+        expect(page.locator("#filters-count")).to_be_hidden()
 
 
 def smoke(browser_type, origin, chromium, number, report_total, device=None):
