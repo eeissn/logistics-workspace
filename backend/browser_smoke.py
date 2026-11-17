@@ -685,21 +685,23 @@ def workspace_design(page, mobile):
     # Visual quality gate for all browser engines: controls stay within the
     # viewport, text is not reduced to unreadable icon-sized labels, and
     # the primary action stays discoverable across desktop and mobile.
-    assert page.evaluate("""() => {
+    geometry = page.evaluate("""() => {
         const ids = ['#view-title', '#new', '#sync-quick', '#filters-open', '#search'];
-        const fit = ids.every(selector => {
+        const bounds = Object.fromEntries(ids.map(selector => {
             const el = document.querySelector(selector);
             const box = el.getBoundingClientRect();
-            return box.width > 0 && box.height >= 20 &&
-                   box.left >= -1 && box.right <= innerWidth + 1;
-        });
-        const px = selector => parseFloat(getComputedStyle(document.querySelector(selector)).fontSize);
-        const primary = document.querySelector('#new').getBoundingClientRect();
-        const headline = document.querySelector('#view-title').getBoundingClientRect();
-        return fit && px('#new') >= 12.5 && px('#view-title') >= 20 &&
-               primary.top >= headline.top - 2 &&
-               document.documentElement.scrollWidth <= innerWidth + 1;
-    }"""), "Visual hierarchy or viewport overflow regression"
+            return [selector, {left:box.left,right:box.right,top:box.top,height:box.height,width:box.width,
+                font:parseFloat(getComputedStyle(el).fontSize)}];
+        }));
+        return {bounds,viewport:innerWidth,scrollWidth:document.documentElement.scrollWidth};
+    }""")
+    assert all(box["width"] > 0 and box["height"] >= 20 and
+               box["left"] >= -1 and box["right"] <= geometry["viewport"] + 1
+               for box in geometry["bounds"].values()), f"Control outside viewport: {geometry}"
+    assert geometry["bounds"]["#new"]["font"] >= 12.5, f"Small primary label: {geometry}"
+    assert geometry["bounds"]["#view-title"]["font"] >= 20, f"Small heading: {geometry}"
+    assert geometry["bounds"]["#new"]["top"] >= geometry["bounds"]["#view-title"]["top"] - 2, f"Action above heading: {geometry}"
+    assert geometry["scrollWidth"] <= geometry["viewport"] + 1, f"Horizontal overflow: {geometry}"
     if not mobile:
         assert page.evaluate("""() => {
             const nav = document.querySelector('#workspace-nav');
