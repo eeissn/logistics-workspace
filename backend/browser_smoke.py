@@ -262,7 +262,7 @@ def import_fixtures(chromium, number):
 def click_workspace_action(page, button, mobile):
     menu = page.locator("#workspace-menu")
     if mobile and menu.get_attribute("open") is None:
-        menu.locator("summary").click()
+        menu.locator(":scope > summary").click()
     page.locator(button).click()
 
 
