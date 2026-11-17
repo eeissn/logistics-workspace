@@ -135,7 +135,7 @@ function updateMonthMetrics() {
     el.append(part);
   }
   el.title = 'Маржа по действующим правилам отчёта, без сорванных заявок. Количество включает все заявки месяца.';
-  $('metrics-summary').textContent = `${label} · ${count} заявок · Маржа ${money(total)}`;
+  $('metrics-summary').textContent = `${label} · Маржа ${money(total)}`;
   $('metrics-disclosure').hidden = !signedIn && !demo;
   el.hidden = !signedIn && !demo;
 }
