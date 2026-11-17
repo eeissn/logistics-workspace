@@ -6,7 +6,7 @@ export const layoutLabels = {
   kanban: 'Канбан',
   split: 'Список + детали',
 };
-export const themeLabels = {sputnik: 'Sputnik', violet: 'Violet', sand: 'Sand'};
+export const themeLabels = {sputnik: 'Sputnik', violet: 'Violet', sand: 'Sand', graphite:'Graphite'};
 export const violetPalettes = {
   violet: 'Фиолетовая',
   gray: 'Серая',
@@ -16,7 +16,7 @@ export const violetPalettes = {
   pink: 'Розовая',
   red: 'Красная',
 };
-export const defaultAccents = {sputnik:'#27313e', violet:'#6035c6', sand:'#252525'};
+export const defaultAccents = {sputnik:'#27313e', violet:'#6035c6', sand:'#252525', graphite:'#32445b'};
 export const statusColors = {new:'#9695a8', signed:'#e3ad39', loaded:'#7544da', unloaded:'#369658', failed:'#cd575a'};
 export const validAccent = value => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
 export const displayKey = import.meta.env?.VITE_EXCEL_LAB === 'true'
