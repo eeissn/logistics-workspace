@@ -342,6 +342,7 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     expect(dialog.locator('[name="etrnNumber"]')).not_to_have_value(f"ETRN-{number}")
     # Owner regression: preparing an agreement must change the ETRN badge immediately
     # and the stage must survive a complete authenticated page reload.
+    required.check()
     dialog.locator('[name="orderForm"]').check()
     expect(dialog.locator("#etrn-status")).to_have_text("Заказ-заявка создана")
     page.locator("#etrn-save").click()
