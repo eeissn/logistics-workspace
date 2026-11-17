@@ -1,3 +1,14 @@
+# Desktop simplification & active-ETRN ownership rule · 17.11.2026
+
+Owner's post-release feedback: the desktop page shows too many equally weighted controls and monthly cards; the saved/connection status should appear **after** the refresh button. More critical: an unloaded truck must remain in «Актуальные» until ETRN is signed by everyone. Treat an explicit «Срыв заявки» as terminal, separate from the unsigned delivery scenario.
+
+Implementation in `fix/active-etrn-desktop-focus-20261117`:
+- `src/order-history.mjs` active predicate and `src/domain.mjs` archival predicate now agree: active if not canceled and not (unloaded AND ETRN «Подписана»). Manual closure / «Не требуется» are **not** equivalent to signing for the active queue. This deliberately leaves such unloaded cases visible for document follow-up until explicitly resolved. **No** auto-mutating ETRN or order status, no cross-user data access.
+- Desktop header: refresh button comes before the saved-state indicator; compact month+margin disclosure replaces three always-visible KPI cards. Month, order count and margin remain available in one click; on iPhone existing full KPI chips remain. Duplicate «Актуальные/История» tabs are hidden **on desktop only**, because persistent sidebar links already navigate. Desktop view/sort and bulk action share one quiet row.
+- Regression gate: delivered-but-unsigned order remains active through save/reload and remains in active count; full ETRN signing moves it out; canceled trips remain terminal; 515-row fixtures retain expected proportions using explicit fully signed synthetic ETRN.
+- Non-goals: re-architecting API, deleting records, changing SQLite schema/owners, replacing iPhone navigation, or modifying production VPS directly. History continues to be an **all-records** cross-month browser; it is not made exclusive to archived records in this patch.
+- Desktop design principle (Apple HIG progressive disclosure / Attio): one primary action per page, controls at point of use, hide duplicate navigation, keep documentary exceptions conspicuous. Future pass should inspect operator flow and screenshot visual results rather than adding more permanent buttons.
+
 # Post-release QA · 17.11.2026 (owner's five screenshots)
 
 - Owner verified production symptoms after release: ETRN agreement-created checkbox is saved but badge remains «К созданию»; page toolbar has poor visual hierarchy; tiny «◫» quick-inspection action is not legible; sidebar is cluttered, duplicated navigation; applying quick filters or saved views collapses the entire desktop sidebar. Their separate account and colleague's account are isolated, so **do not equate combined backup order count (527) with either individual user's visible registry count**.

@@ -1,9 +1,9 @@
-import { tripStatus } from './domain.mjs';
+import { archived } from './domain.mjs';
 
-// Keep the operational queue independent of archival and ETRN completion rules.
+// One definition of completion for active queue, counters and archival.
+// An unloaded trip stays actionable until ETRN has been signed by everyone.
 export function isActionable(order) {
-  const stage = tripStatus(order);
-  return stage !== 'unloaded' && stage !== 'failed';
+  return !archived(order);
 }
 
 export function monthOf(order) {

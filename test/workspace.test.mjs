@@ -79,6 +79,9 @@ test('архив ждёт выгрузку и завершение ЭТРН, м�
   assert.equal(archived(finished), true);
   const failed = {...base, number:'2', trip:{stage:'failed'}};
   assert.equal(archived(failed), true);
+  assert.equal(archived({...base, etrn:{required:false}}), false);
+  assert.equal(archived({...base, etrn:{required:true,manualComplete:true}}), false);
+  assert.equal(archived({...base, trip:{stage:'loaded'}, etrn:{...base.etrn,allSigned:true}}), false);
   assert.equal(monthReport([finished, failed, {...base, number:'3', date:'2026-12-01'}], '2026-11').total, 700);
 });
 

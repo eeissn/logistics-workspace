@@ -266,6 +266,13 @@ def click_workspace_action(page, button, mobile):
     page.locator(button).click()
 
 
+def click_scope(page, scope, mobile=False):
+    if mobile:
+        page.locator(f'[data-scope="{scope}"]').click()
+    else:
+        page.locator("#active-nav" if scope == "active" else "#history-nav").click()
+
+
 def click_registry_action(page, selector, mobile):
     if mobile and page.locator("#registry-more").get_attribute("open") is None:
         page.locator("#registry-more summary").click()
@@ -312,14 +319,14 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     expect(page.locator("#ledger-preview")).to_contain_text("Выгрузился (1)")
     page.locator('#ledger-form [type="submit"]').click()
     expect(page.locator("#ledger-dialog")).to_be_hidden()
-    page.locator('[data-scope="history"]').click()
+    click_scope(page, "history", mobile)
     page.locator("#history-month").select_option("all")
     excel_row = page.locator("#table .order").filter(has_text=f"EXCEL-{number}")
     expect(excel_row.locator(".trip-status")).to_have_value("unloaded")
     excel_row.locator(".trip-status").select_option("new")
     expect(page.locator("#notice")).to_have_text("Статус рейса сохранён.")
     expect(page.locator("#table")).to_contain_text(f"EXCEL-{number}")
-    page.locator('[data-scope="active"]').click()
+    click_scope(page, "active", mobile)
 
     registry_views(page, number, order_a, mobile)
 
@@ -355,12 +362,24 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     page.locator("#etrn-save").click()
     expect(page.locator("#etrn-dialog")).to_be_hidden()
     expect(row.locator(".etrn-link")).to_have_text("Закрыта вручную")
+    active_before_unload = int(page.locator("#active-count").inner_text())
     row.locator(".trip-status").select_option("unloaded")
+    # Unloading does not remove an order that lacks a fully signed ETRN.
+    expect(row).to_be_visible()
+    expect(page.locator("#active-count")).to_have_text(str(active_before_unload))
+    row.locator(".etrn-link").click()
+    dialog.locator('[name="manualComplete"]').uncheck()
+    dialog.locator('[name="orderForm"]').check()
+    dialog.locator('[name="created"]').check()
+    dialog.locator('[name="allSigned"]').check()
+    dialog.locator('[name="etrnNumber"]').fill(f"ETRN-{number}")
+    page.locator("#etrn-save").click()
+    expect(page.locator("#active-count")).to_have_text(str(active_before_unload - 1))
     expect(page.locator("#table")).not_to_contain_text(f"№ {number}")
-    page.locator('[data-scope="history"]').click()
+    click_scope(page, "history", mobile)
     page.locator("#history-month").select_option("all")
     expect(page.locator("#table")).to_contain_text(str(number))
-    page.locator('[data-scope="active"]').click()
+    click_scope(page, "active", mobile)
 
     click_workspace_action(page, "#report", mobile)
     page.locator("#report-month").fill("2026-11")
@@ -573,8 +592,11 @@ def registry_views(page, number, order_a, mobile):
     trip.select_option("unloaded")
     expect(page.locator("#notice")).to_have_text("Статус рейса сохранён.")
     expect(page.locator("#sync-status")).to_have_text("Сохранено")
+    # Pending ETRN stays in active registry once the trip-only view filter is cleared.
     expect(card).to_have_count(0)
-    page.locator('[data-scope="history"]').click()
+    set_trip_view(page, "all")
+    expect(card).to_have_count(1)
+    click_scope(page, "history", mobile)
     page.locator("#history-month").select_option("all")
     expect(card.locator(".trip-status")).to_have_value("unloaded")
     expect(card.locator(".etrn-link")).to_have_text("К созданию")
@@ -582,7 +604,7 @@ def registry_views(page, number, order_a, mobile):
     card.locator(".trip-status").select_option(original)
     expect(card.locator(".trip-status")).to_have_value(original)
     expect(page.locator("#notice")).to_have_text("Статус рейса сохранён.")
-    page.locator('[data-scope="active"]').click()
+    click_scope(page, "active", mobile)
     layout.select_option("table")
     theme("violet")
     assert page.locator("html").evaluate("(root) => root.style.getPropertyValue('--custom-accent')") == ""
@@ -718,6 +740,25 @@ def workspace_design(page, mobile):
                    parseFloat(getComputedStyle(button).fontSize) >= 13.5;
         }"""), "Desktop navigation legibility regression"
 
+    if mobile:
+        expect(page.locator("#metrics-disclosure")).to_have_attribute("open", "")
+    else:
+        expect(page.locator("#metrics-disclosure")).not_to_have_attribute("open", "")
+        expect(page.locator("#metrics-summary")).to_be_visible()
+        page.locator("#metrics-summary").click()
+        expect(page.locator("#metrics-disclosure")).to_have_attribute("open", "")
+        expect(page.locator("#month-metrics")).to_be_visible()
+        page.locator("#metrics-summary").click()
+        expect(page.locator("#metrics-disclosure")).not_to_have_attribute("open", "")
+        # The persistent desktop sidebar replaces redundant registry tabs.
+        expect(page.locator("#active-nav")).to_be_visible()
+        expect(page.locator("#history-nav")).to_be_visible()
+        expect(page.locator(".registry-tabs")).to_be_hidden()
+        assert page.evaluate("""() => {
+            const refresh = document.querySelector('#sync-quick').getBoundingClientRect();
+            const status = document.querySelector('#sync-status').getBoundingClientRect();
+            return refresh.right <= status.left + 1;
+        }""")
     if mobile:
         expect(page.locator("#mobile-dock")).to_be_visible()
         page.locator("#dock-history").click()
@@ -905,7 +946,8 @@ def large_year_browser(chromium, origin):
                 date: index < 200 ? '2025-12-15' : index < 400 ? '2026-01-15' : '2026-11-15',
                 customer: 'Synthetic year ' + index, carrier: 'Synthetic carrier',
                 route: 'Москва → Казань', points: [], contacts: [], differences: [],
-                payment: {}, etrn: {}, trip: {stage: index % 7 === 0 ? 'loaded' : 'unloaded'}
+                payment: {}, etrn: {required:true,created:true,number:'YEAR-'+index,allSigned:true},
+                trip: {stage: index % 7 === 0 ? 'loaded' : 'unloaded'}
             }));
             const response = await fetch('/api/records', {
                 method: 'PUT',
@@ -919,7 +961,7 @@ def large_year_browser(chromium, origin):
         expect(page.locator("#active-count")).to_have_text("74")
         expect(page.locator("#history-count")).to_have_text("515")
         expect(page.locator("#table .order")).to_have_count(74)
-        page.locator('[data-scope="history"]').click()
+        click_scope(page, "history")
         # History intentionally opens the most recent month first.
         expect(page.locator("#table .order")).to_have_count(115)
         expect(page.locator("#history-month option")).to_have_count(4)

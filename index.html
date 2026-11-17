@@ -83,9 +83,12 @@
   <header class="intro">
     <div class="intro-title"><h1 id="view-title">Актуальные заявки</h1><button id="new" class="primary" type="button" aria-label="Новая заявка"><span aria-hidden="true">+</span> <span class="action-label">Новая заявка</span></button></div>
     <div class="intro-metrics">
-      <p id="month-metrics" class="month-metrics" aria-label="Показатели текущего месяца" hidden></p>
-      <p id="sync-status" class="quiet" role="status"></p>
+      <details id="metrics-disclosure" class="metrics-disclosure" open>
+        <summary id="metrics-summary" aria-label="Показатели месяца">Показатели месяца</summary>
+        <p id="month-metrics" class="month-metrics" aria-label="Показатели текущего месяца" hidden></p>
+      </details>
       <button type="button" id="sync-quick" class="sync-quick" hidden aria-label="Синхронизировать заявки">↻ Обновить</button>
+      <p id="sync-status" class="quiet" role="status"></p>
     </div>
   </header>
   <div class="registry-command">
