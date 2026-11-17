@@ -26,10 +26,11 @@ test('margin warnings never recalculate or mutate the underlying invoice amounts
   assert.equal(low.customerAmount,2000);
 });
 test('monthly comparison excludes failed trips and unknown margins from averages',()=>{
-  const rows=[order('A','2026-10-03',6000),order('B','2026-10-05',11000),
-    order('C','2026-11-03',15000),
+  const rows=[order('A','2026-10-03',6000,{ledgerMargin:5000}),
+    order('B','2026-10-05',11000,{ledgerMargin:10000}),
+    order('C','2026-11-03',15000,{ledgerMargin:14000}),
     order('D','2026-11-05',null),
-    order('E','2026-11-15',20000,{trip:{stage:'failed'}})];
+    order('E','2026-11-15',20000,{trip:{stage:'failed'},ledgerMargin:19000})];
   const result=monthComparison(rows,'2026-10','2026-11');
   assert.equal(result.first.count,2);
   assert.equal(result.first.total,15000);
