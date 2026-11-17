@@ -1314,7 +1314,7 @@ for(const button of document.querySelectorAll('[data-settings-tab]')){
 for(const [theme,label] of Object.entries(themeLabels)){
   const button=action(label,()=>setDisplay('theme',theme),'theme-preview');
   button.dataset.themePreview=theme;
-  button.style.setProperty('--sample-accent',defaultAccents[theme]);
+  button.style?.setProperty?.('--sample-accent',defaultAccents[theme]);
   $('theme-previews').append(button);
 }
 $('reset-appearance').addEventListener('click',()=>{
