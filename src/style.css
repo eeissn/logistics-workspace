@@ -2123,3 +2123,7 @@ dialog :is(input,select,textarea) { scroll-margin-block: 5rem; }
  .theme-preview{grid-template-columns:repeat(2,minmax(0,1fr));}
  .comparison-row{grid-template-columns:minmax(0,1.05fr) repeat(2,minmax(0,1fr));}
 }
+
+/* Wider status indicator without altering user-configured status colors. */
+:root:not([data-theme=sand]) .order-table .order-id { padding-inline-start: 1rem; }
+:root:not([data-theme=sand]) .order-table .order-id::before { width: 7px; min-width: 7px; border-radius: 4px; }
