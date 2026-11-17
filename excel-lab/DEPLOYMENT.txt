@@ -1,0 +1,4 @@
+Logistics Workspace Excel Lab
+Public test environment: isolated offline Vite demo (VITE_DEMO=true, VITE_EXCEL_LAB=true).
+All workbook samples are synthetic. No production API, credentials, or user records.
+Build source branch: feature/p1-excel-lab, revision 6ff90ee9b6d315c7b05cc6735469245398ea6908.
