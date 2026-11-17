@@ -1177,7 +1177,8 @@ document.addEventListener('focusin', event => {
 document.addEventListener('pointerdown', event => {
   if (contactAnchor && !contactAnchor.contains(event.target) && !contactPanel.contains(event.target)) closeContacts();
   const menu = $('workspace-menu');
-  if (mobileNav?.matches && menu.open && !menu.contains(event.target)) menu.open = false;
+  if (mobileNav?.matches && menu.open && !menu.contains(event.target) &&
+      !$('dock-more').contains(event.target)) menu.open = false;
 });
 $('sort').addEventListener('change', event => {
   sort = event.currentTarget.value;
