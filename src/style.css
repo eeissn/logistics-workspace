@@ -2586,3 +2586,7 @@ dialog .dialog-foot button { min-height: 42px; font-weight: 610; }
 @media (prefers-reduced-motion: reduce) {
   .metrics-disclosure > summary::after { transition: none; }
 }
+
+/* Wider status marker while retaining custom stage colors. */
+:root:not([data-theme=sand]) .order-table .order-id { padding-inline-start: 1rem; }
+:root:not([data-theme=sand]) .order-table .order-id::before { width: 7px; min-width: 7px; border-radius: 4px; }
