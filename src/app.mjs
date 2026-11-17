@@ -319,7 +319,13 @@ function positionContacts() {
   const left = (viewport?.offsetLeft ?? 0) + inset;
   const top = (viewport?.offsetTop ?? 0) + inset;
   const right = left + (viewport?.width ?? document.documentElement.clientWidth) - inset * 2;
-  const bottom = top + (viewport?.height ?? document.documentElement.clientHeight) - inset * 2;
+  let bottom = top + (viewport?.height ?? document.documentElement.clientHeight) - inset * 2;
+  // The iPhone dock is fixed to the bottom and must never cover contact links.
+  // Use the actually rendered edge rather than guessing a safe-area height.
+  const dock = $('mobile-dock');
+  if (!dock.hidden && window.matchMedia('(max-width: 740px)').matches) {
+    bottom = Math.min(bottom, dock.getBoundingClientRect().top - inset);
+  }
   if (anchor.bottom <= top || anchor.top >= bottom || anchor.right <= left || anchor.left >= right) return closeContacts();
 
   contactPanel.style.width = Math.min(304, right - left) + 'px';
