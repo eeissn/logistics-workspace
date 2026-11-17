@@ -73,4 +73,29 @@ expect_failure 'missing worker artifact'
 touch "$temp/dist/assets/pdf.worker-first.mjs" "$temp/dist/assets/pdf.worker-second.mjs"
 expect_failure 'ambiguous worker artifacts'
 
+# DNS-independent release mode must preserve HTTPS verification and the
+# original hostname while injecting only the explicit local IP mapping.
+touch "$temp/dist/assets/pdf.worker-test.mjs"
+rm -f "$temp/dist/assets/pdf.worker-first.mjs" "$temp/dist/assets/pdf.worker-second.mjs"
+cat > "$temp/bin/curl" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+args=" $* "
+[[ "$args" == *"--resolve example.test:443:127.0.0.1"* ]]
+[[ "$args" == *"--noproxy *"* ]]
+[[ "$args" != *" -k "* ]]
+for arg in "$@"; do url=$arg; done
+case "$url" in
+  */api/records) printf '401' ;;
+  */assets/pdf.worker*.mjs) printf '200 application/javascript' ;;
+  *) printf '200' ;;
+esac
+SH
+chmod +x "$temp/bin/curl"
+RELEASE_RESOLVE_IP=127.0.0.1 run_check
+if RELEASE_RESOLVE_IP='invalid;host' run_check; then
+    echo 'Expected invalid RELEASE_RESOLVE_IP to be rejected' >&2
+    exit 1
+fi
+
 echo 'Release readiness and PDF worker MIME tests passed'
