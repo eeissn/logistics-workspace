@@ -36,6 +36,9 @@ test('finance: imported margin is authoritative and alerts never adjust numbers'
   const original=structuredClone(order);
   assert.deepEqual(financialFlags(order),['loss']);
   assert.deepEqual(financialFlags({...order,ledgerMargin:4000}),['low']);
+  assert.deepEqual(financialFlags({...order,ledgerMargin:6500}),[]); // exactly 10%
+  assert.deepEqual(financialFlags({...order,ledgerMargin:6499.99}),['low']);
+  assert.deepEqual(financialFlags({...order,ledgerMargin:4107,carrierAmount:31000}),[]); // #7379
   assert.deepEqual(financialFlags({...order,ledgerMargin:10000}),[]);
   assert.deepEqual(financialFlags({...order,ledgerMargin:null,
     customerAmount:null}),['unknown']);
@@ -47,7 +50,7 @@ test('finance: imported margin is authoritative and alerts never adjust numbers'
 test('saved views: stable unique IDs, no guesswork about unpaid requests',()=>{
   assert.equal(new Set(savedViewPresets.map(item=>item.id)).size,savedViewPresets.length);
   assert.ok(savedViewPresets.some(item=>item.id==='awaiting-etrn' && item.etrn==='pending'));
-  assert.ok(savedViewPresets.some(item=>item.id==='money-issues'));
+  assert.equal(savedViewPresets.some(item=>item.id==='money-issues'),false);
   assert.equal(savedViewPresets.some(item=>item.id==='unpaid'),false);
 });
 
