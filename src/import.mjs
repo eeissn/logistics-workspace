@@ -145,7 +145,8 @@ export function importPair(firstText, secondText) {
     ...blankOrder(), number: customer.number, date: carrier.date,
     customer: customer.customer.name, carrier: carrier.performer.name,
     driver, passport: driverDocs.find(doc => doc.passport)?.passport || '',
-    vehicle: carrier.vehicle || customer.vehicle,
+    // Only use tractor/trailer details from a document naming this same driver.
+    vehicle: (driver ? driverDocs.find(doc => doc.vehicle)?.vehicle : carrier.vehicle || customer.vehicle) || '',
     cargo: carrier.cargo || customer.cargo,
     customerAmount: customer.amount, carrierAmount: carrier.amount,
     customerTax: customer.tax, carrierTax: carrier.tax,
