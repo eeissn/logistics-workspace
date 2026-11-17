@@ -2235,7 +2235,7 @@ dialog :is(input,select,textarea) { scroll-margin-block: 5rem; }
   .intro-title { width: 100%; justify-content: space-between; align-items: flex-start; }
   .intro-title h1 { flex: 1 1 11rem; }
   .intro-title #new { flex: 0 0 auto; min-height: 44px; }
-  .intro-title #new .action-label { display: inline; }
+  .intro-title #new .action-label { display: inline; position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
   .registry-command { grid-template-columns: minmax(0,1fr) 44px 44px; }
   .registry-command .registry-search { grid-column: 1; width: 100%; min-width: 0; }
   .registry-command #filters-open { grid-column: 2; width: 44px; }
