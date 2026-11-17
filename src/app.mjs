@@ -1281,10 +1281,41 @@ function showUpdates() {
 }
 $('updates-open').addEventListener('click', showUpdates);
 
+const settingsPanels={
+  appearance:'settings-appearance',registry:'settings-registry',
+  notifications:'settings-notifications',account:'settings-account-pane',
+  updates:'settings-updates',
+};
+function openSettingsTab(tab){
+  for(const [name,id] of Object.entries(settingsPanels)){
+    $(id).hidden=name!==tab;
+  }
+  for(const button of document.querySelectorAll('[data-settings-tab]')){
+    button.setAttribute('aria-pressed',String(button.dataset.settingsTab===tab));
+  }
+}
+for(const button of document.querySelectorAll('[data-settings-tab]')){
+  button.addEventListener('click',()=>openSettingsTab(button.dataset.settingsTab));
+}
+for(const [theme,label] of Object.entries(themeLabels)){
+  const button=action(label,()=>setDisplay('theme',theme),'theme-preview');
+  button.dataset.themePreview=theme;
+  button.style.setProperty('--sample-accent',defaultAccents[theme]);
+  $('theme-previews').append(button);
+}
+$('reset-appearance').addEventListener('click',()=>{
+  display.theme='sputnik';display.layout='table';
+  display.violetPalette='violet';display.accents={};
+  display.statusColors={};display.themeLayouts={};
+  applyDisplay();applyStatusColors();saveDisplay();render();
+  $('settings-status').textContent='Сброшено только оформление; заявки не изменены.';
+});
+
 $('settings').addEventListener('click', () => {
   const email = $('account-email').textContent;
   $('settings-account').textContent = email;
   $('settings-account').hidden = !email;
+  openSettingsTab('appearance');
   $('settings-dialog').showModal();
 });
 let calculator;
@@ -1560,6 +1591,7 @@ async function showAccount(account) {
   accountGeneration++;
   signedIn = true;
   $('account-email').textContent = account.email;
+  customViews=readCustomViews();activePreset='';
   $('sync-tools').hidden = false;
   $('sign-out').hidden = false;
   try {
@@ -2083,6 +2115,35 @@ $('ledger-form').addEventListener('submit', async event => {
 function reportData() {
   return monthReport(orders, $('report-month').value);
 }
+function renderComparison(){
+  const first=$('compare-first').value,second=$('compare-second').value;
+  const target=$('compare-results');
+  target.replaceChildren();
+  if(!first||!second)return;
+  try{
+    const {first:a,second:b,delta,changePercent}=monthComparison(orders,first,second);
+    const table=node('table',null,'comparison-table');
+    const header=node('tr');['Показатель',first,second].forEach(x=>header.append(node('th',x)));
+    table.append(header);
+    for(const [name,x,y] of [
+      ['Рейсы',a.count,b.count],
+      ['Маржа',money(a.total),money(b.total)],
+      ['Средняя (из рассчитанных)',a.average===null?'—':money(a.average),b.average===null?'—':money(b.average)],
+      ['Медиана (из рассчитанных)',a.median===null?'—':money(a.median),b.median===null?'—':money(b.median)],
+      ['Без маржи',a.unknown,b.unknown],
+    ]){
+      const row=node('tr');
+      [name,String(x),String(y)].forEach(v=>row.append(node('td',v)));
+      table.append(row);
+    }
+    target.append(table,node('p','Изменение маржи: '+money(delta)+
+      (changePercent===null?' · сравнение в процентах недоступно':
+      ' · '+changePercent.toFixed(1)+'%')));
+    target.append(node('p','Срывы исключены. Неизвестная маржа не считается нулевой при вычислении средней и медианы.','quiet'));
+  }catch(error){target.append(node('p',error.message,'error'));}
+}
+for(const id of ['compare-first','compare-second'])$(id).addEventListener('change',renderComparison);
+
 function refreshReport() {
   const {rows,total} = reportData();
   const unknown = rows.filter(order => orderMargin(order) === null).length;
@@ -2093,7 +2154,11 @@ function refreshReport() {
 }
 $('report').addEventListener('click', () => {
   $('report-month').value = today().slice(0,7);
-  refreshReport();
+  $('compare-second').value = today().slice(0,7);
+  const previous=new Date(today().slice(0,7)+'-01T12:00:00');
+  previous.setMonth(previous.getMonth()-1);
+  $('compare-first').value=previous.toISOString().slice(0,7);
+  refreshReport();renderComparison();
   $('report-dialog').showModal();
 });
 $('report-month').addEventListener('input', refreshReport);
