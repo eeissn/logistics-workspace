@@ -56,6 +56,7 @@ export function etrnStatus(etrn) {
   if (!etrn?.required) return 'Не требуется';
   if (etrn.created && etrn.number?.trim() && (etrn.allSigned ?? etrnSteps.every(([id]) => etrn[id]))) return 'Подписана';
   if (etrn.created) return 'В работе';
+  if (etrn.orderForm) return 'Заказ-заявка создана';
   return 'К созданию';
 }
 
@@ -94,14 +95,41 @@ export function tripStatus(order) {
 export function archived(order) {
   const stage = tripStatus(order);
   return stage === 'failed' || (stage === 'unloaded' &&
-    ['Подписана', 'Закрыта вручную', 'Не требуется'].includes(etrnStatus(order.etrn)));
+    ['Подписана', 'Закрыта вручную'].includes(etrnStatus(order.etrn)));
 }
 
 export function dateRange(schedule, reference = '') {
-  const fallback = reference.slice(0,4);
-  const dates = [...String(schedule || '').matchAll(/\b(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?\b/g)]
-    .map(([, day, month, year]) => year || fallback ? `${year || fallback}-${month.padStart(2,'0')}-${day.padStart(2,'0')}` : '');
-  return dates.filter(Boolean);
+  const fallback = /^\d{4}-/.test(reference) ? Number(reference.slice(0, 4)) : null;
+  // Both PDF's DD.MM.YYYY and ISO YYYY-MM-DD / YYYY-MM-DDTHH:MM
+  // windows must participate in today's pickup/delivery filters.
+  const parts = [...String(schedule || '').matchAll(/\b(?:(\d{4})-(\d{2})-(\d{2})|(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?)(?!\d)/g)]
+    .map(([, isoYear, isoMonth, isoDay, day, month, year]) => ({
+      day: Number(isoDay || day), month: Number(isoMonth || month),
+      year: isoYear || year ? Number(isoYear || year) : null,
+    }));
+  const dates = [];
+  for (let index = 0; index < parts.length; index++) {
+    const part = parts[index];
+    let year = part.year;
+    if (year === null) {
+      // A range such as 13.11-14.11.2027 belongs to 2027 even when the
+      // order was created in 2026. For 31.12-01.01.2027, infer 2026.
+      const following = parts.slice(index + 1).find(item => item.year !== null);
+      const previous = [...parts.slice(0, index)].reverse().find(item => item.year !== null);
+      if (following) year = following.year - (part.month > following.month ? 1 : 0);
+      else if (previous) year = previous.year + (part.month < previous.month ? 1 : 0);
+      else if (dates.length) {
+        const last = dates.at(-1);
+        year = Number(last.slice(0, 4)) + (part.month < parts[index - 1].month ? 1 : 0);
+      } else year = fallback;
+    }
+    if (year === null || year < 1000 || year > 9999 || part.month < 1 || part.month > 12) continue;
+    const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (part.day < 1 || part.day > days[part.month - 1]) continue;
+    dates.push(`${year}-${String(part.month).padStart(2, '0')}-${String(part.day).padStart(2, '0')}`);
+  }
+  return dates;
 }
 
 export function scheduledToday(order, kind, today) {
@@ -115,6 +143,12 @@ export function scheduledToday(order, kind, today) {
 export function orderMargin(order) {
   if (Number.isFinite(order.ledgerMargin)) return order.ledgerMargin;
   return hasMargin(order) ? margin(order.customerAmount, order.customerTax, order.carrierAmount, order.carrierTax).realProfit : null;
+}
+
+// Count all requests for the period; margin follows the established report (failed trips excluded).
+export function monthSnapshot(orders, month, asOf = month + '-31') {
+  const elapsed = orders.filter(order => order.date?.startsWith(month + '-') && order.date <= asOf);
+  return {count: elapsed.length, total: monthReport(elapsed, month).total};
 }
 
 export function monthReport(orders, month) {

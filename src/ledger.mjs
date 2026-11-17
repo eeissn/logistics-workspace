@@ -1,8 +1,49 @@
 import { blankOrder } from './domain.mjs';
 
-const required = ['Дата','Номер заявки','Заказчик','Перевозчик','Направление','Ставка с Заказчиком','Ставка с Перевозчиком','Маржа','Загрузка','Выгрузка','Заказ-заявка','ЭТРН'];
+const required = ['Номер заявки','Заказчик','Перевозчик','Направление','Ставка с Заказчиком','Ставка с Перевозчиком','Маржа','Загрузка','Выгрузка'];
 const normalized = value => String(value ?? '').trim().replace(/\s+/g, ' ');
+
+// Conservative aliases for other logistics spreadsheets. No positional guessing:
+// ambiguous or absent required columns are rejected by ledgerHeader.
+const aliases = {
+  'Дата': ['Дата', 'Дата заявки', 'Дата создания', 'Дата перевозки'],
+  'Номер заявки': ['Номер заявки', '№ заявки', 'Номер', 'Заявка №', 'Номер рейса'],
+  'Заказчик': ['Заказчик', 'Клиент', 'Грузоотправитель'],
+  'Перевозчик': ['Перевозчик', 'Транспортная компания', 'ТК', 'Исполнитель'],
+  'Направление': ['Направление', 'Маршрут', 'Рейс'],
+  'Ставка с Заказчиком': ['Ставка с Заказчиком', 'Ставка клиента', 'Стоимость клиенту', 'Доход'],
+  'Ставка с Перевозчиком': ['Ставка с Перевозчиком', 'Ставка перевозчика', 'Стоимость перевозчика', 'Расход'],
+  'Маржа': ['Маржа', 'Прибыль', 'Разница ставок'],
+  'Загрузка': ['Загрузка', 'Погрузка', 'Дата погрузки'],
+  'Выгрузка': ['Выгрузка', 'Разгрузка', 'Дата выгрузки'],
+  'Заказ-заявка': ['Заказ-заявка', 'Заказ заявка'],
+  'ЭТРН': ['ЭТРН', 'Электронная накладная'],
+};
+const headerLookup = new Map(Object.entries(aliases).flatMap(([canonical, alternatives]) =>
+  alternatives.map(name => [normalized(name).toLocaleLowerCase('ru'), canonical])));
+const canonicalHeader = value =>
+  headerLookup.get(normalized(value).toLocaleLowerCase('ru')) ?? normalized(value);
+const headerIndices = row => {
+  const indices = {};
+  const ambiguous = new Set();
+  row.forEach((value, index) => {
+    const key = canonicalHeader(value);
+    if (!key) return;
+    if (Object.hasOwn(indices, key)) ambiguous.add(key);
+    else indices[key] = index;
+  });
+  return ambiguous.size ? null : indices;
+};
 const checked = value => value === true || /^(да|true|✓|✔|1)$/iu.test(normalized(value));
+
+export function ledgerHeader(rows) {
+  return rows.findIndex(row => {
+    const indices = headerIndices(row);
+    return indices && required.every(name => Object.hasOwn(indices, name)) &&
+      (Object.hasOwn(indices, 'Дата') ||
+        (canonicalHeader(row[1]) === 'Номер заявки' && (normalized(row[0]) === '' || typeof row[0] === 'number')));
+  });
+}
 
 function formatDate(value) {
   if (value instanceof Date && !Number.isNaN(value.valueOf())) return value.toISOString().slice(0,10);
@@ -29,24 +70,37 @@ function tax(value) {
   return text.match(/НДС\s*(5|22)\s*%/i)?.[1] ?? '';
 }
 
-export function parseLedger(rows, month) {
-  const header = rows.findIndex(row => required.every(name => row.map(normalized).includes(name)));
+export function parseLedger(rows, month, diagnostics, colors) {
+  const header = ledgerHeader(rows);
   if (header < 0) throw new Error('Не найдены колонки реестра «Заявки 2026».');
-  const indices = Object.fromEntries(rows[header].map((name, index) => [normalized(name), index]));
+  const indices = headerIndices(rows[header]);
   const orders = [];
   const seen = new Set();
-  for (const row of rows.slice(header + 1)) {
+  const dateColumn = indices['Дата'] ?? indices['Дата заявки'] ?? 0;
+  for (const [index, row] of rows.slice(header + 1).entries()) {
     const value = key => row[indices[key]];
     const number = normalized(value('Номер заявки'));
-    const date = formatDate(value('Дата'));
-    if (!number || !date.startsWith(month + '-')) continue;
-    if (seen.has(number)) throw new Error('В таблице повторяется заявка № ' + number + '.');
+    const date = formatDate(row[dateColumn]);
+    if (diagnostics && !number && !normalized(row[dateColumn]) &&
+        !['Заказчик','Перевозчик','Направление'].some(key => normalized(value(key)))) continue;
+    if (diagnostics) diagnostics.found++;
+    if (!number || number.length > 48 || !date || new Date(date + 'T00:00:00Z').toJSON()?.slice(0,10) !== date) {
+      if (diagnostics) diagnostics.invalid++;
+      continue;
+    }
+    if (month && !date.startsWith(month + '-')) continue;
+    if (seen.has(number)) {
+      if (!diagnostics) throw new Error('В таблице повторяется заявка № ' + number + '.');
+      diagnostics.duplicates++;
+      continue;
+    }
     seen.add(number);
     const original = value('Ставка с Заказчиком');
     const carrier = value('Ставка с Перевозчиком');
     const orderForm = checked(value('Заказ-заявка'));
-    const etrnCreated = checked(value('ЭТРН'));
+    const etrnCreated = Object.hasOwn(indices, 'Заказ-заявка') && checked(value('ЭТРН'));
     const order = blankOrder();
+    const stage = colors?.get(header + index + 2);
     const points = [['Загрузка','Погрузка'],['Выгрузка','Выгрузка']]
       .filter(([key]) => schedule(value(key)))
       .map(([key,kind]) => ({kind,address:'',schedule:schedule(value(key)),scheduleSource:'Из Excel',contacts:[]}));
@@ -54,7 +108,7 @@ export function parseLedger(rows, month) {
       carrier:normalized(value('Перевозчик')), route:normalized(value('Направление')),
       customerAmount:amount(original), carrierAmount:amount(carrier),
       customerTax:tax(original), carrierTax:tax(carrier),
-      ledgerMargin:amount(value('Маржа')), points,
+      ledgerMargin:amount(value('Маржа')), points, trip:stage ? {stage} : order.trip,
       etrn:{...order.etrn, required:true, orderForm, created:etrnCreated},
     });
   }
@@ -64,4 +118,42 @@ export function parseLedger(rows, month) {
 export function addLedgerOrders(existing, imported) {
   const ids = new Set(existing.map(order => order.number));
   return [...imported.filter(order => !ids.has(order.number)).reverse(), ...existing];
+}
+
+export function previewLedger(rows, month, existing, colors) {
+  return previewLedgerWorkbook([{data:rows, colors}], existing, month);
+}
+
+export function previewLedgerWorkbook(sheets, existing, month) {
+  const diagnostics = {found:0, invalid:0, duplicates:0};
+  const ids = new Set(existing.map(order => order.number));
+  const orders = [];
+  const included = [];
+  const skipped = [];
+  for (const {sheet, data, colors} of sheets) {
+    if (ledgerHeader(data) < 0) {
+      skipped.push(sheet);
+      continue;
+    }
+    included.push(sheet);
+    for (const order of parseLedger(data, month, diagnostics, colors)) {
+      if (ids.has(order.number)) diagnostics.duplicates++;
+      else {
+        ids.add(order.number);
+        orders.push(order);
+      }
+    }
+  }
+  if (!included.length) throw new Error('В книге нет листов с колонками реестра заявок.');
+  const missing = new Map();
+  for (const order of orders) {
+    for (const [key, label] of [
+      ['customer','Заказчик'], ['carrier','Перевозчик'], ['route','Маршрут'],
+      ['customerAmount','Ставка заказчика'], ['carrierAmount','Ставка перевозчика'],
+      ['customerTax','НДС заказчика'], ['carrierTax','НДС перевозчика'],
+    ]) {
+      if (order[key] === '' || order[key] === null) missing.set(label, (missing.get(label) ?? 0) + 1);
+    }
+  }
+  return {...diagnostics, orders, missing, included, skipped};
 }

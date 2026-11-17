@@ -5,6 +5,19 @@ const unique = values => [...new Set(values.filter(Boolean))];
 const trim = value => value?.replace(/\s+/g, ' ').trim() || '';
 const phonePattern = /(?:\+7|8)[ \t(-]*\d{3}[ \t)-]*\d{3}[ \t-]*\d{2}[ \t-]*\d{2}/g;
 
+export function normalizePassport(value = '', issueDate = '') {
+  let passport = trim(value);
+  if (!passport) return '';
+  // "К.П." is the issuing office subdivision code, not needed in the driver message.
+  passport = passport.replace(/(?:[,;]?\s*к\.?\s*п\.?\s*(?:[:№]?\s*\d{3}[-–]\d{3})?)\s*$/i, '').trim();
+  const dated = passport.match(/(?:^|\s)(?:от\s+)?(\d{2}\.\d{2}\.\d{4})\s*$/);
+  if (dated) {
+    passport = passport.slice(0, dated.index).trim();
+    issueDate = dated[1];
+  }
+  return issueDate ? passport + ' от ' + issueDate : passport;
+}
+
 export function phones(value = '') {
   return unique([...value.matchAll(phonePattern)].map(([phone]) => '+7' + phone.replace(/\D/g, '').slice(-10)));
 }
@@ -38,12 +51,20 @@ export function parseLogistor(text) {
   const stake = paymentLine.match(/^(\d[\d ]*(?:[,.]\d+)?)\s*(?:руб|₽)/i);
   const tax = /без\s+НДС/i.test(paymentLine) ? '0' : paymentLine.match(/НДС\s*(22|5)\s*%/i)?.[1] ?? '';
   const [day, month, year] = (heading?.[2] || '').split('.');
+  const passport = trim(clean.match(/^[ \t]*Паспорт:[ \t]*(.*?)(?:[ \t]+Номер тягача:|$)/mi)?.[1]);
+  const issueDate = clean.match(/^[ \t]*(?:Дата выдачи(?: паспорта)?|Паспорт выдан)[ \t]*:?[ \t]*(\d{2}\.\d{2}\.\d{4})/mi)?.[1];
+  // Logistor sometimes wraps the passport issue date onto the very next line.
+  // Only accept a standalone date (with an optional subdivision code) adjacent
+  // to the passport line; never take loading, unloading or application dates.
+  const passportLine = clean.match(/^[ \t]*Паспорт:[ \t]*[^\n]*/mi);
+  const followingLine = passportLine ? clean.slice(passportLine.index + passportLine[0].length).match(/^\n[ \t]*(\d{2}\.\d{2}\.\d{4})(?:[ \t]+к\.?\s*п\.?(?:[ \t]*\d{3}[-–]\d{3})?)?[ \t]*(?:\n|$)/i) : null;
+  const passportWithDate = normalizePassport(passport, issueDate || followingLine?.[1] || '');
   const fields = {
     number: heading?.[1] || '', date: heading ? `${year}-${month}-${day}` : '',
     customer: party(head, 'Заказчик'), performer: party(head, 'Исполнитель'),
     points: pointsFrom(clean),
     driver: trim(clean.match(/^[ \t]*ФИО:[ \t]*(.*?)(?:[ \t]{2,}Марка тягача:|$)/mi)?.[1]),
-    passport: trim(clean.match(/^[ \t]*Паспорт:[ \t]*(.*?)(?:[ \t]+Номер тягача:|$)/mi)?.[1]),
+    passport: passportWithDate,
     driverContact: trim(clean.match(/^[ \t]*Контактный телефон:[ \t]*(.*?)(?:[ \t]{2,}Номер прицепа:|$)/mi)?.[1]),
     vehicle: [
       trim(clean.match(/Марка тягача:[ \t]*([^\n]+)/i)?.[1]),
@@ -124,7 +145,8 @@ export function importPair(firstText, secondText) {
     ...blankOrder(), number: customer.number, date: carrier.date,
     customer: customer.customer.name, carrier: carrier.performer.name,
     driver, passport: driverDocs.find(doc => doc.passport)?.passport || '',
-    vehicle: carrier.vehicle || customer.vehicle,
+    // Only use tractor/trailer details from a document naming this same driver.
+    vehicle: (driver ? driverDocs.find(doc => doc.vehicle)?.vehicle : carrier.vehicle || customer.vehicle) || '',
     cargo: carrier.cargo || customer.cargo,
     customerAmount: customer.amount, carrierAmount: carrier.amount,
     customerTax: customer.tax, carrierTax: carrier.tax,

@@ -1,10 +1,21 @@
 import './style.css';
-import { archived, blankOrder, etrnProgress, etrnStatus, margin, mergeImport, monthReport, orderMargin, scheduledToday, tripStatus, tripStatuses, upsert } from './domain.mjs';
+import { updates } from './updates.mjs';
+import { mountCalculator } from './calculator.mjs';
+import { parseSheetText } from './sheet-preview.mjs';
+import { archived, blankOrder, etrnProgress, etrnStatus, margin, mergeImport, monthReport, monthSnapshot, orderMargin, tripStatus, tripStatuses, upsert } from './domain.mjs';
 import { importPair, phones } from './import.mjs';
-import { addLedgerOrders, parseLedger } from './ledger.mjs';
-import { auth, demo, localOrders, store } from './storage.mjs';
+import { addLedgerOrders, previewLedgerWorkbook } from './ledger.mjs';
+import { checkImportFile, readExcelArchive } from './import-files.mjs';
+import { auth, demo, localOrders, sessionChangeKey, store } from './storage.mjs';
 import { driverMessage } from './driver.mjs';
-import { demoOrder } from './demo.mjs';
+import { isActionable, monthGroups, scopeOrders } from './order-history.mjs';
+import { demoOrders } from './demo.mjs';
+import { attachExcelLab } from './excel-lab.mjs';
+import { mountWorkspacePanel, mountComparison } from './workspace-panels.mjs';
+import { financialFlags, flagLabels, savedViewPresets } from './workspace-insights.mjs';
+import { readSavedViews, writeSavedViews } from './saved-views.mjs';
+import { mountCommandPalette } from './command-palette.mjs';
+import { columnKeys, columnTitles, safeColumnOrder, defaultAccents, displayKey, layoutLabels, matchesTripView, pendingEtrn, readDisplayPreferences, readStatusColors, readThemeLayouts, routeText, selectOrders, statusColors, themeLabels, validAccent, violetPalettes } from './registry.mjs';
 
 const $ = id => document.getElementById(id);
 const currency = new Intl.NumberFormat('ru', {style:'currency', currency:'RUB', maximumFractionDigits:0});
@@ -13,7 +24,6 @@ const fieldNames = ['number','date','customer','carrier','driver','passport','ve
 const paymentNames = ['originals','edo','unit','conditions'];
 const contactRoles = ['Заказчик','Перевозчик','Водитель'];
 const etrnKeys = ['required','manualComplete','orderForm','created','allSigned'];
-const pending = order => ['К созданию','В работе'].includes(etrnStatus(order.etrn));
 const splitLines = text => text.split('\n').map(line => line.trim()).filter(Boolean);
 const editor = $('editor');
 const form = $('editor-form');
@@ -30,11 +40,62 @@ let reviewStamp;
 let editorStamp;
 let etrnStamp;
 let signedIn = false;
+let signingIn = false;
 let refreshing;
+let pendingWrites = 0;
+let saveFailure;
+let refreshFailure;
+let serverConfirmed = false;
+let sheetActor;
+let liveSheet = false;
+let ledgerPreview;
 let accountGeneration = 0;
+const pendingImports = new Map();
 let view = 'all';
+let registryScope = 'active';
+let bulkMode = false;
+const bulkNumbers = new Set();
+let bulkVisible = [];
+let bulkPreview = null;
+let historyMonth = 'all';
+let sort = 'delivery';
+let ascending = true;
+const display = readDisplayPreferences();
+display.statusColors = readStatusColors();
+display.themeLayouts = readThemeLayouts();
+let period = {};
+const contactPanel = $('contact-popover');
+let contactAnchor;
+let contactFrame;
+let contactObserver;
+const selections = new Map();
+const savingTrips = new Set();
+const tripTitles = new Map(tripStatuses);
 let driverOrder;
 const today = () => new Intl.DateTimeFormat('sv-SE', {timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const desktopMetrics = window.matchMedia?.('(min-width: 851px)');
+function syncMetricsDisclosure() {
+  $('metrics-disclosure').open = !desktopMetrics?.matches;
+}
+syncMetricsDisclosure();
+desktopMetrics?.addEventListener?.('change', syncMetricsDisclosure);
+
+
+function startImport(button, key = button, label) {
+  if ((!signedIn && !demo) || pendingImports.has(key)) return;
+  const generation = accountGeneration;
+  const originalLabel = button.textContent;
+  const reset = () => {
+    button.disabled = false;
+    if (label) button.textContent = originalLabel;
+    pendingImports.delete(key);
+  };
+  pendingImports.set(key, reset);
+  button.disabled = true;
+  if (label) button.textContent = label;
+  const active = () => generation === accountGeneration;
+  return {active, finish() { if (active()) reset(); }};
+}
 
 function node(tag, text, className) {
   const el = document.createElement(tag);
@@ -58,17 +119,132 @@ function assertUnchanged(current, number, stamp) {
   }
 }
 
-async function updateOrder(number, stamp, update) {
-  const current = await store.list();
-  assertUnchanged(current, number, stamp);
-  const order = current.find(item => item.number === number);
-  const saved = upsert(current, update(order), number);
-  orders = await store.save(saved, current);
+function updateMonthMetrics() {
+  const el = $('month-metrics');
+  const month = today().slice(0, 7);
+  const {count, total} = monthSnapshot(orders, month, today());
+  const label = new Date(month + '-01T12:00:00').toLocaleDateString('ru-RU', {month:'long', year:'numeric'});
+  el.replaceChildren();
+  for (const [key, caption, value] of [
+    ['month', 'Период', label], ['count', 'Заявки', String(count)],
+    ['margin', 'Маржа', money(total)],
+  ]) {
+    const part = node('span', null, 'metric-chip');
+    part.dataset.metric = key;
+    part.append(node('small', caption), node('strong', value));
+    el.append(part);
+  }
+  el.title = 'Маржа по действующим правилам отчёта, без сорванных заявок. Количество включает все заявки месяца.';
+  $('metrics-summary').textContent = `${label} · Маржа ${money(total)}`;
+  $('metrics-disclosure').hidden = !signedIn && !demo;
+  el.hidden = !signedIn && !demo;
 }
 
-function tripControl(order) {
+let lastSyncWarning = '';
+const syncWarningKey=()=>displayKey+':sync-notice:'+
+  encodeURIComponent(($('account-email').textContent||'demo').toLowerCase());
+function syncNotificationsEnabled() {
+  try{return localStorage.getItem(syncWarningKey())==='true';}
+  catch{return false;}
+}
+function notifySyncProblem(state) {
+  if(!state||!['offline','failed','unavailable'].includes(state)) {
+    lastSyncWarning='';return;
+  }
+  if(state===lastSyncWarning||!document.hidden||!syncNotificationsEnabled()||
+    !globalThis.Notification||Notification.permission!=='granted')return;
+  lastSyncWarning=state;
+  try{new Notification('Logistics Workspace',{body:'Синхронизация требует внимания. Откройте рабочую вкладку.'});}
+  catch{/* Browser notifications may be blocked by the OS. */}
+}
+function showSyncStatus() {
+  $('sync-quick').hidden = demo || !signedIn;
+  $('sync-quick').disabled = pendingWrites > 0 || refreshing !== undefined;
+  if (demo || !signedIn) return;
+  const status = $('sync-status');
+  const problem = saveFailure ?? refreshFailure;
+  const state = pendingWrites || refreshing !== undefined ? 'busy'
+    : problem?.network || problem?.status >= 500 ? 'offline'
+    : saveFailure ? 'failed' : refreshFailure ? 'unavailable'
+    : serverConfirmed ? 'saved' : '';
+  status.dataset.state = state;
+  notifySyncProblem(state);
+  status.textContent = ({
+    busy: 'Синхронизация', offline: 'Нет соединения',
+    failed: 'Ошибка сохранения', unavailable: 'Реестр недоступен', saved: 'Сохранено',
+  })[state] ?? '';
+  status.title = saveFailure?.network
+    ? 'Сервер не подтвердил запись. Проверьте заявку после восстановления связи.'
+    : problem?.message ?? '';
+}
+
+async function saveRecords(records, current) {
+  if (demo) return store.save(records, current);
+  const generation = accountGeneration;
+  pendingWrites++;
+  showSyncStatus();
+  try {
+    const saved = await store.save(records, current);
+    if (generation === accountGeneration) {
+      saveFailure = refreshFailure = undefined;
+      serverConfirmed = true;
+    }
+    return saved;
+  } catch (error) {
+    if (generation === accountGeneration) saveFailure = error;
+    throw error;
+  } finally {
+    if (generation === accountGeneration) {
+      pendingWrites--;
+      showSyncStatus();
+    }
+  }
+}
+
+async function saveEtrn(number, stamp, etrn, generation) {
+  if (demo) {
+    await updateOrder(number, stamp, order => ({...order, etrn}), generation);
+    return;
+  }
+  pendingWrites++;
+  showSyncStatus();
+  try {
+    const saved = await store.updateEtrn(number, stamp, etrn);
+    if (generation === accountGeneration) {
+      orders = saved;
+      saveFailure = refreshFailure = undefined;
+      serverConfirmed = true;
+    }
+  } catch (error) {
+    if (generation === accountGeneration) saveFailure = error;
+    throw error;
+  } finally {
+    if (generation === accountGeneration) {
+      pendingWrites--;
+      showSyncStatus();
+    }
+  }
+}
+
+async function updateOrder(number, stamp, update, generation) {
+  const current = await store.list();
+  if (generation !== accountGeneration) return;
+  assertUnchanged(current, number, stamp);
+  const order = current.find(item => item.number === number);
+  const saved = await saveRecords(upsert(current, update(order), number), current);
+  if (generation === accountGeneration) orders = saved;
+}
+
+function tripControl(order, confirmMove = false) {
   const select = node('select', null, 'trip-status');
-  const initial = tripStatus(order);
+  const stage = tripStatus(order);
+  const initial = tripTitles.has(stage) ? stage : '';
+  if (!initial) {
+    const unknown = node('option', 'Статус не распознан');
+    unknown.value = '';
+    unknown.disabled = true;
+    select.append(unknown);
+  }
   select.setAttribute('aria-label', 'Статус заявки № ' + order.number);
   for (const [key, title] of tripStatuses) {
     const option = node('option', title);
@@ -76,27 +252,34 @@ function tripControl(order) {
     select.append(option);
   }
   select.value = initial;
-  select.dataset.stage = initial;
+  select.dataset.stage = stage;
+  select.disabled = savingTrips.has(order.number);
   select.addEventListener('change', async () => {
+    const stage = select.value;
+    if (savingTrips.has(order.number) || (confirmMove &&
+        !window.confirm(`Изменить статус заявки № ${order.number} на «${tripTitles.get(stage)}»?`))) {
+      select.value = initial;
+      return;
+    }
+    const generation = accountGeneration;
+    savingTrips.add(order.number);
+    select.disabled = true;
     try {
-      const stage = select.value;
-      const archiveWasOpen = $('archive').open;
-      await updateOrder(order.number, order.updatedAt, current => ({...current, trip:{...current.trip, stage}}));
-      render();
-      $('archive').open = archiveWasOpen;
+      await updateOrder(order.number, order.updatedAt, current => ({...current, trip:{...current.trip, stage}}), generation);
+      if (generation !== accountGeneration) return;
       $('notice').textContent = 'Статус рейса сохранён.';
     } catch (error) {
-      select.value = initial;
+      if (generation !== accountGeneration) return;
+      if (error.status === 401 || error.status === 403) return signInScreen(error.message);
       $('notice').textContent = error.message;
+    } finally {
+      if (generation === accountGeneration) {
+        savingTrips.delete(order.number);
+        render();
+      }
     }
   });
   return select;
-}
-
-function routeText(order) {
-  if (order.route?.trim()) return order.route;
-  const places = order.points.map(point => point.address.split(' · ').at(-1).split(',')[0].replace(/\s+(?:д|г|п)\.$/u,'').trim());
-  return [...new Set(places.filter(Boolean))].join(' → ');
 }
 
 function routeDates(order) {
@@ -108,11 +291,30 @@ function contactsCell(order) {
   const important = ['Перевозчик','Водитель'].map(role => [role,
     order.contacts.filter(contact => contact.role === role).flatMap(contact => contact.values)]);
   for (const point of order.points) important.push([point.kind, point.contacts]);
-  const list = node('details', null, 'row-contacts');
+  const cell = node('div', null, 'contact-actions');
+  if (order.driver) cell.append(node('strong', order.driver, 'contact-driver'));
+  const driver = action('Данные водителя', () => openDriver(order), 'driver-link');
   const entries = important.filter(([,values]) => values.some(value => phones(value).length));
   const count = entries.reduce((sum,[,values]) => sum + new Set(values.flatMap(phones)).size,0);
-  list.append(node('summary', count ? 'Контакты · ' + count : 'Контакты'));
-  const panel = node('div', null, 'contact-panel');
+  if (!count) {
+    cell.append(node('span', 'Нет контактов', 'no-contacts'), driver);
+    return cell;
+  }
+  const trigger = action('Контакты · ' + count, () => {
+    if (contactAnchor === trigger) closeContacts(true);
+    else openContacts(trigger, entries, driver);
+  }, 'row-contacts');
+  trigger.setAttribute('aria-controls', 'contact-popover');
+  trigger.setAttribute('aria-expanded', 'false');
+  cell.append(trigger, driver);
+  return cell;
+}
+
+function openContacts(trigger, entries, nextControl) {
+  closeContacts();
+  contactAnchor = trigger;
+  trigger.setAttribute('aria-expanded', 'true');
+  contactPanel.append(node('h2', 'Контакты заявки'));
   for (const [role, values] of entries) {
     const item = node('div', null, 'contact-entry');
     item.append(node('strong', role));
@@ -123,16 +325,85 @@ function contactsCell(order) {
       entry.append(phoneLinks(value));
       item.append(entry);
     }
-    panel.append(item);
+    contactPanel.append(item);
   }
-  if (!entries.length) panel.append(node('p', 'В заявке нет телефонов для рейса.'));
-  list.append(panel);
-  const cell = node('div', null, 'contact-actions');
-  cell.append(list, action('Данные водителя', () => openDriver(order), 'driver-link'));
-  return cell;
+  const closeButton = action('Закрыть', () => closeContacts(true), 'contact-close');
+  contactPanel.append(closeButton);
+  const controls = [...contactPanel.querySelectorAll('a[href], button')];
+  contactPanel.onkeydown = event => {
+    if (event.key !== 'Tab') return;
+    const index = controls.indexOf(event.target);
+    if (index === -1) return;
+    event.preventDefault();
+    const next = controls[index + (event.shiftKey ? -1 : 1)];
+    if (next) return next.focus();
+    closeContacts();
+    (event.shiftKey ? trigger : nextControl).focus();
+  };
+  contactPanel.hidden = false;
+  positionContacts();
+  if (!contactAnchor) return;
+  controls[0].focus({preventScroll:true});
+  if (typeof IntersectionObserver === 'function') {
+    contactObserver = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting && contactAnchor === trigger) closeContacts();
+    });
+    contactObserver.observe(trigger);
+  }
+}
+
+function closeContacts(restoreFocus = false) {
+  if (!contactAnchor) return;
+  const trigger = contactAnchor;
+  contactAnchor = undefined;
+  contactObserver?.disconnect();
+  contactObserver = undefined;
+  if (contactFrame !== undefined) window.cancelAnimationFrame(contactFrame);
+  contactFrame = undefined;
+  trigger.setAttribute('aria-expanded', 'false');
+  contactPanel.hidden = true;
+  contactPanel.onkeydown = null;
+  contactPanel.replaceChildren();
+  if (restoreFocus) trigger.focus({preventScroll:true});
+}
+
+function positionContacts() {
+  contactFrame = undefined;
+  if (!contactAnchor?.isConnected) return closeContacts();
+  const anchor = contactAnchor.getBoundingClientRect();
+  const viewport = window.visualViewport;
+  const inset = 8;
+  const left = (viewport?.offsetLeft ?? 0) + inset;
+  const top = (viewport?.offsetTop ?? 0) + inset;
+  const right = left + (viewport?.width ?? document.documentElement.clientWidth) - inset * 2;
+  let bottom = top + (viewport?.height ?? document.documentElement.clientHeight) - inset * 2;
+  // The iPhone dock is fixed to the bottom and must never cover contact links.
+  // Use the actually rendered edge rather than guessing a safe-area height.
+  const dock = $('mobile-dock');
+  if (!dock.hidden && window.matchMedia('(max-width: 740px)').matches) {
+    bottom = Math.min(bottom, dock.getBoundingClientRect().top - inset);
+  }
+  if (anchor.bottom <= top || anchor.top >= bottom || anchor.right <= left || anchor.left >= right) return closeContacts();
+
+  contactPanel.style.width = Math.min(304, right - left) + 'px';
+  const below = Math.max(0, bottom - anchor.bottom - inset);
+  const above = Math.max(0, anchor.top - top - inset);
+  const flip = below < contactPanel.scrollHeight + 2 && above > below;
+  const room = flip ? above : below;
+  const fitsBeside = room >= 84;
+  contactPanel.style.maxHeight = (fitsBeside ? room : bottom - top) + 'px';
+  const panel = contactPanel.getBoundingClientRect();
+  const y = fitsBeside ? (flip ? anchor.top - inset - panel.height : anchor.bottom + inset) : top;
+  contactPanel.style.top = Math.max(top, Math.min(bottom - panel.height, y)) + 'px';
+  contactPanel.style.left = Math.max(left, Math.min(right - panel.width, anchor.right - panel.width)) + 'px';
+}
+
+function queueContactPosition() {
+  if (contactAnchor && contactFrame === undefined) contactFrame = window.requestAnimationFrame(positionContacts);
 }
 
 function openDriver(order) {
+  closeContacts();
   driverOrder = order;
   $('driver-title').textContent = 'Данные водителя · № ' + order.number;
   $('driver-message').value = driverMessage(order);
@@ -141,71 +412,477 @@ function openDriver(order) {
 }
 
 $('driver-copy').addEventListener('click', async () => {
+  const generation = accountGeneration;
   const field = $('driver-message');
   let copied = false;
   try {
     await navigator.clipboard.writeText(field.value);
     copied = true;
   } catch {
+    if (generation !== accountGeneration) return;
     field.focus();
     field.select();
     copied = document.execCommand?.('copy') === true;
   }
-  $('driver-copy-status').textContent = copied ? 'Текст скопирован.' : 'Текст выделен. Скопируй его вручную.';
+  if (generation === accountGeneration) {
+    $('driver-copy-status').textContent = copied ? 'Текст скопирован.' : 'Текст выделен. Скопируй его вручную.';
+  }
 });
 $('driver-edit').addEventListener('click', () => {
   $('driver-dialog').close();
   openEditor(driverOrder, driverOrder.number);
 });
 
-function renderRows(table, rows) {
-  table.replaceChildren();
-  if (!rows.length) {
-    const empty = node('div', null, 'empty');
-    empty.append(node('h2', orders.length ? 'Здесь пока нет заявок' : 'Добавь первую заявку'),
-      node('p', orders.length ? 'Проверь выбранный раздел или поиск.' : 'Загрузи PDF заказчика и перевозчика или импортируй реестр из Excel.'));
-    table.append(empty);
-    return;
+function openOrder(number) {
+  const current = orders.find(order => order.number === number);
+  if (!current) return;
+  const container = $(archived(current) ? 'archive-table' : 'table');
+  selections.set(container, {number, expanded:true});
+  openEditor(current, number);
+}
+
+function etrnAction(order) {
+  const progress = etrnProgress(order.etrn);
+  const button = action(progress, () => openEtrn(order.number), 'etrn-link');
+  button.dataset.state = pendingEtrn(order) ? 'pending' : 'regular';
+  button.setAttribute('aria-label', 'ЭТРН заявки № ' + order.number + ': ' + progress);
+  return button;
+}
+
+function setSort(column) {
+  ascending = column === sort ? !ascending : column !== 'date';
+  sort = column;
+  render();
+}
+
+function bulkCheckbox(order) {
+  if (!bulkMode) return null;
+  const label = node('label', null, 'bulk-checkbox');
+  const input = node('input');
+  input.type = 'checkbox';
+  input.value = order.number;
+  input.checked = bulkNumbers.has(order.number);
+  input.setAttribute('aria-label', 'Выбрать заявку № ' + order.number);
+  input.addEventListener('change', () => {
+    if (input.checked) bulkNumbers.add(order.number);
+    else bulkNumbers.delete(order.number);
+    updateBulkControls();
+  });
+  label.append(input);
+  label.addEventListener('click', event => event.stopPropagation());
+  return label;
+}
+
+function updateBulkControls() {
+  $('bulk-mode').setAttribute('aria-pressed', String(bulkMode));
+  $('bulk-mode').textContent = bulkMode ? 'Готово' : 'Выбрать заявки';
+  $('bulk-actions').hidden = !bulkMode;
+  $('bulk-selected').textContent = 'Выбрано: ' + bulkNumbers.size;
+  $('bulk-open').disabled = bulkNumbers.size === 0 || bulkNumbers.size > 200;
+  $('bulk-select-visible').disabled = bulkVisible.length === 0;
+}
+
+let workspacePanel;
+const panelFor = number => workspacePanel?.open(number);
+const financeBadges = order => {
+  const flags = financialFlags(order);
+  const box = node('span', null, 'finance-flags');
+  for (const flag of flags) {
+    const badge = node('span', flag === 'unknown' ? 'Нет ставок' :
+      flag === 'loss' ? 'Убыток' : 'Низкая маржа', 'finance-flag');
+    badge.dataset.flag = flag;
+    badge.title = flagLabels[flag];
+    box.append(badge);
   }
+  return box;
+};
+function financeSummary(order) {
+  const rates = [
+    ['Заказчик', order.customerAmount],
+    ['Перевозчик', order.carrierAmount],
+    ['Маржа', orderMargin(order)],
+  ];
+  const summary = node('span', null, 'finance-summary');
+  for (const [label, value] of rates) {
+    const metric = node('span', null, 'finance-metric' + (label === 'Маржа' ? ' finance-margin' : ''));
+    metric.append(node('span', label + ':', 'finance-label'),
+      node('strong', value == null || value === '' ? '—' : money(value), 'finance-value'));
+    if (label === 'Маржа' && value != null && value < 0) metric.dataset.negative = 'true';
+    summary.append(metric);
+  }
+  return summary;
+}
+
+function renderRows(container, rows) {
+  const table = node('div', null, 'order-table');
+  table.setAttribute('role', 'table');
+  table.setAttribute('aria-label', container.id === 'table' ? 'Активные заявки' : 'Архивные заявки');
   const header = node('div', null, 'row table-head');
-  for (const title of ['Заявка','Заказчик / перевозчик','Направление','Статус рейса','ЭТРН','Телефоны']) header.append(node('span', title));
+  header.setAttribute('role', 'row');
+  for (const [column, title] of [['number','№ заявки'], ['date','Дата'], ['customer','Заказчик'], ['carrier','Перевозчик'],
+    ['route','Маршрут'], ['pickup','Загрузка'], ['delivery','Выгрузка'], ['etrn','ЭТРН'], ['trip','Статус рейса'], ['', 'Водитель / контакты']]) {
+    const heading = node('div');
+    heading.dataset.column = column || 'contacts';
+    if(heading.style) heading.style.order = String(display.columnOrder.indexOf(column || 'contacts'));
+    heading.setAttribute('role', 'columnheader');
+    if (column === sort) heading.setAttribute('aria-sort', ascending ? 'ascending' : 'descending');
+    if (column) {
+      const button = action(title, () => {
+        setSort(column);
+        container.querySelector(`[data-sort="${column}"]`)?.focus();
+      }, 'sort-column');
+      button.dataset.sort = column;
+      if (sort === column) {
+        button.setAttribute('aria-current', 'true');
+        button.textContent += ascending ? ' ↑' : ' ↓';
+      }
+      heading.append(button);
+    } else heading.textContent = title;
+    header.append(heading);
+  }
   table.append(header);
   for (const order of rows) {
     const row = node('div', null, 'row order');
-    const label = node('span', null, 'order-id');
-    const open = () => openEditor(orders.find(item => item.number === order.number) ?? order, order.number);
-    label.append(action('№ ' + order.number, open, 'order-link'),
-      node('small', order.date ? order.date.split('-').reverse().join('.') : 'Дата не указана'));
-    const names = node('span', null, 'names');
-    names.append(node('strong', order.customer || 'Заказчик не указан'), node('small', order.carrier || 'Перевозчик не указан'));
-    const direction = node('span', null, 'destination');
+    row.setAttribute('role', 'row');
+    row.dataset.stage = tripStatus(order);
+    const label = node('div', null, 'order-id');
+    const selector = bulkCheckbox(order);
+    if (selector) label.append(selector);
+    label.append(action('№ ' + order.number, () => openOrder(order.number), 'order-link'));
+    const inspect = action('Детали', () => panelFor(order.number), 'order-peek-button');
+    inspect.setAttribute('aria-label', 'Быстрый просмотр заявки № ' + order.number);
+    label.append(inspect);
+    label.append(financeBadges(order));
+    const date = node('div', order.date ? order.date.slice(5).split('-').reverse().join('.') : '—', 'order-date');
+    const customer = node('div', order.customer || '—', 'customer-cell');
+    const carrier = node('div', order.carrier || '—', 'carrier-cell');
+    const direction = node('div', null, 'destination');
     direction.append(node('strong', routeText(order) || 'Маршрут не указан'));
-    if (routeDates(order)) direction.append(node('small', routeDates(order)));
-    const etrn = action(etrnProgress(order.etrn), () => openEtrn(order.number), 'etrn-link');
-    etrn.dataset.state = pending(order) ? 'pending' : 'regular';
-    etrn.setAttribute('aria-label', 'ЭТРН заявки № ' + order.number + ': ' + etrnProgress(order.etrn));
-    row.append(label, names, direction, tripControl(order), etrn, contactsCell(order));
+    const windows = ['Погрузка', 'Выгрузка'].map((kind, index) => {
+      const cell = node('div', null, 'route-window ' + (index === 0 ? 'pickup-window' : 'delivery-window'));
+      const schedules = order.points.filter(point => point.kind === kind && point.schedule).map(point => point.schedule);
+      if (schedules.length) {
+        const label = node('small', index === 0 ? 'Загрузка' : 'Выгрузка', 'window-label');
+        label.setAttribute('aria-hidden', 'true');
+        cell.append(label, node('span', schedules.join(' · ')));
+      } else {
+        cell.dataset.empty = 'true';
+        cell.append(node('span', '—', 'quiet'));
+      }
+      return cell;
+    });
+    const stage = node('div', null, 'status-cell');
+    stage.append(tripControl(order));
+    const etrn = node('div', null, 'etrn-cell');
+    etrn.append(etrnAction(order));
+    row.append(label, date, customer, carrier, direction, ...windows, etrn, stage, contactsCell(order), financeSummary(order));
+    [...row.children].forEach((cell,index) => {
+      cell.setAttribute('role','cell');
+      if(index<columnKeys.length) {
+        cell.dataset.column=columnKeys[index];
+        if(cell.style) cell.style.order=String(display.columnOrder.indexOf(columnKeys[index]));
+      } else if(cell.style) cell.style.order=String(columnKeys.length);
+    });
     table.append(row);
   }
+  container.append(table);
+}
+
+function orderSummary(order, open, selected, showParties = false, showDates = true) {
+  const button = action(null, open, 'order-summary');
+  button.dataset.order = order.number;
+  button.dataset.stage = tripStatus(order);
+  if (selected !== undefined) button.setAttribute('aria-pressed', String(selected));
+  button.append(node('strong', '№ ' + order.number),
+    node('span', tripTitles.get(tripStatus(order)) ?? 'Статус не распознан', 'stage-badge'),
+    node('span', routeText(order) || 'Маршрут не указан', 'summary-route'));
+  const dates = routeDates(order);
+  if (showParties) {
+    const parties = node('span', null, 'summary-parties');
+    parties.append(node('span', order.customer || '—'), node('small', order.carrier || '—'));
+    button.append(parties);
+  }
+  if (showDates && (dates || showParties)) button.append(node('small', dates || '—', 'quiet summary-dates'));
+  button.append(financeSummary(order));
+  button.append(financeBadges(order));
+  return button;
+}
+
+function renderCompact(container, rows) {
+  const list = node('ul', null, 'compact-list');
+  for (const order of rows) {
+    const item = node('li');
+    const selector = bulkCheckbox(order);
+    if (selector) item.append(selector);
+    item.append(orderSummary(order, () => openOrder(order.number), undefined, false,
+      !window.matchMedia?.('(max-width: 760px)')?.matches),
+      action('Быстрый просмотр', () => panelFor(order.number), 'peek-card-button'));
+    list.append(item);
+  }
+  container.append(list);
+}
+
+function renderKanban(container, rows, scrollLeft) {
+  const board = node('div', null, 'kanban');
+  board.tabIndex = 0;
+  board.setAttribute('role', 'region');
+  board.setAttribute('aria-label', 'Канбан по статусам рейсов');
+  const groups = new Map([...tripStatuses.map(([stage]) => [stage, []]), ['', []]]);
+  for (const order of rows) {
+    const stage = tripStatus(order);
+    (groups.get(stage) ?? groups.get('')).push(order);
+  }
+  for (const [stage, title] of [...tripStatuses, ['', 'Статус не распознан']]) {
+    const group = groups.get(stage);
+    if (!group.length && (!stage || container.id === 'archive-table')) continue;
+    const column = node('section', null, 'kanban-column');
+    column.append(node('h3', title + ' · ' + group.length));
+    for (const order of group) {
+      const card = node('article', null, 'kanban-card');
+      const selector = bulkCheckbox(order);
+      if (selector) card.append(selector);
+      card.append(orderSummary(order, () => openOrder(order.number)), tripControl(order, true), etrnAction(order),
+        action('Быстрый просмотр', () => panelFor(order.number), 'peek-card-button'));
+      column.append(card);
+    }
+    board.append(column);
+  }
+  container.append(board);
+  board.scrollLeft = scrollLeft;
+}
+
+function renderSplit(container, rows) {
+  const selection = selections.get(container);
+  const matched = rows.find(order => order.number === selection?.number);
+  const order = matched ?? rows[0];
+  const split = node('div', null, 'split-view');
+  split.dataset.expanded = String(Boolean(matched && selection.expanded));
+  const list = node('ul', null, 'split-list');
+  const inline = window.matchMedia('(max-width: 760px)').matches;
+  split.dataset.inline = String(inline);
+  const grid = display.theme === 'sand' && !inline;
+  if (grid) {
+    list.classList.add('split-grid');
+    const heading = node('li', null, 'split-grid-head');
+    for (const name of ['№ заявки', 'Заказчик / перевозчик', 'Маршрут', 'Окна', 'Статус']) {
+      heading.append(node('span', name));
+    }
+    list.append(heading);
+  }
+  let selectedEntry;
+  const panel = node('section', null, 'split-detail');
+  panel.setAttribute('aria-label', 'Детали заявки');
+  for (const item of rows) {
+    const entry = node('li');
+    const selector = bulkCheckbox(item);
+    if (selector) entry.append(selector);
+    entry.append(orderSummary(item, () => {
+      const expanded = !(inline && matched === item && selection.expanded);
+      selections.set(container, {number:item.number, expanded});
+      render();
+      if (!expanded) {
+        [...container.querySelectorAll('[data-order]')].find(button => button.dataset.order === item.number)?.focus({preventScroll:true});
+        return;
+      }
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        container.querySelector('.split-detail')?.animate?.(
+          [{opacity:.65, transform:'translateY(4px)'}, {opacity:1, transform:'translateY(0)'}],
+          {duration:190, easing:'cubic-bezier(.2,.75,.25,1)'},
+        );
+      }
+      [...container.querySelectorAll('[data-order]')].find(button => button.dataset.order === item.number)?.focus({preventScroll:true});
+    }, item.number === order.number, grid));
+    if (inline) {
+      const trigger = entry.querySelector('.order-summary');
+      trigger.removeAttribute('aria-pressed');
+      trigger.setAttribute('aria-expanded', String(item === matched && selection.expanded));
+    }
+    if (item === order) selectedEntry = entry;
+    list.append(entry);
+  }
+
+  if (!inline) panel.append(node('h2', 'Заявка № ' + order.number));
+  const status = node('div', null, 'split-status');
+  status.append(tripControl(order));
+  const journey = node('div', null, 'trip-overview');
+  if (!inline) journey.append(node('p', routeText(order) || 'Маршрут не указан', 'trip-overview-route'));
+  journey.append(status);
+  const stage = tripStatus(order);
+  const stageIndex = tripStatuses.findIndex(([key]) => key === stage);
+  if (stageIndex >= 0 && stage !== 'failed') {
+    const progress = node('ol', null, 'trip-progress');
+    progress.setAttribute('aria-label', 'Этапы рейса');
+    for (const [index, [, title]] of tripStatuses.slice(0, -1).entries()) {
+      const item = node('li', title);
+      item.dataset.progress = index < stageIndex ? 'done' : index === stageIndex ? 'current' : 'next';
+      if (index === stageIndex) item.setAttribute('aria-current', 'step');
+      progress.append(item);
+    }
+    journey.append(progress);
+  }
+  panel.append(journey);
+  if (order.points.length) {
+    const windows = node('section', null, 'split-section split-windows');
+    const points = node('ul', null, 'split-points');
+    for (const point of order.points) {
+      const item = node('li');
+      item.append(node('strong', point.kind), node('span', point.address || 'Адрес не указан'));
+      if (point.schedule) item.append(node('small', point.schedule, 'quiet'));
+      points.append(item);
+    }
+    windows.append(node('h3', 'Точки и окна'), points);
+    panel.append(windows);
+  }
+  panel.append(
+    detailFields('Участники и транспорт', [
+      ['Заказчик', order.customer], ['Перевозчик', order.carrier],
+      ['Водитель', order.driver], ['Транспорт', order.vehicle],
+    ]),
+    etrnAction(order),
+    detailFields('Дата заявки и груз', [
+      ['Дата заявки', order.date?.split('-').reverse().join('.')], ['Груз', order.cargo],
+    ]),
+  );
+  const actions = node('div', null, 'split-actions');
+  actions.append(contactsCell(order),
+    action('Открыть заявку', () => openOrder(order.number), 'primary'),
+    action('Быстрый просмотр', () => panelFor(order.number)));
+  panel.append(actions);
+  split.append(list);
+  if (inline) {
+    if (split.dataset.expanded === 'true') selectedEntry.append(panel);
+  } else split.append(panel);
+  container.append(split);
+}
+
+function detailFields(title, pairs) {
+  const group = node('section', null, 'split-section');
+  const fields = node('dl', null, 'split-fields');
+  for (const [label, value] of pairs) {
+    const field = node('div');
+    field.append(node('dt', label), node('dd', value || '—'));
+    fields.append(field);
+  }
+  group.append(node('h3', title), fields);
+  return group;
+}
+
+function renderRegistry(container, rows) {
+  const scrollLeft = container.firstElementChild?.scrollLeft ?? 0;
+  container.replaceChildren();
+  if (!rows.length) {
+    const empty = node('div', null, 'empty');
+    empty.append(node('h2', orders.length ? 'Заявки не найдены' : 'Добавь первую заявку'),
+      node('p', orders.length ? 'Проверь выбранный раздел или поиск.' : 'Создай заявку вручную или импортируй PDF или Excel.'));
+    container.append(empty);
+    return;
+  }
+  ({table:renderRows, compact:renderCompact, kanban:renderKanban, split:renderSplit})[display.layout](container, rows, scrollLeft);
+  if (display.layout === 'table' && container.firstElementChild) container.firstElementChild.scrollLeft = scrollLeft;
+}
+
+function shortPeriodDate(value) {
+  return value ? value.slice(5).split('-').reverse().join('.') : '…';
 }
 
 function render() {
-  const query = $('search').value.trim().toLocaleLowerCase('ru');
-  const filter = $('filter').value;
-  const date = today();
-  const kind = {pickup:'Погрузка', delivery:'Выгрузка'}[view];
-  const matches = orders.filter(order => {
-    const matchesText = [order.number, order.customer, order.carrier, order.driver, order.etrn?.number, routeText(order), ...order.points.map(point=>point.address)]
-      .join(' ').toLocaleLowerCase('ru').includes(query);
-    return matchesText && (!kind || scheduledToday(order, kind, date))
-      && (!filter || (filter === 'pending' ? pending(order) : etrnStatus(order.etrn) === filter));
-  }).sort((a,b) => (b.date || '').localeCompare(a.date || '') || b.number.localeCompare(a.number,'ru',{numeric:true}));
-  const active = matches.filter(order => !archived(order));
-  const past = matches.filter(archived);
-  renderRows($('table'), active);
-  $('archive').hidden = !past.length;
-  $('archive-title').textContent = 'Архив · ' + past.length;
-  if (past.length) renderRows($('archive-table'), past);
+  updateMonthMetrics();
+  closeContacts();
+  const day = today();
+  for (const button of document.querySelectorAll('[data-view]')) {
+    const current = button.dataset.view === view;
+    button.setAttribute('aria-pressed', String(current));
+    const badge = button.querySelector('.view-count');
+    if (badge) badge.textContent = orders.filter(order => matchesTripView(order, button.dataset.view, day)).length;
+  }
+  for (const button of document.querySelectorAll('[data-preset]')) {
+    const preset = savedViewPresets.find(item => item.id === button.dataset.preset);
+    const selected = preset && view === preset.view &&
+      $('filter').value === (preset.etrn || '') &&
+      $('financial-filter').value === (preset.financial || '') &&
+      registryScope === (preset.view === 'failed' ? 'history' : 'active');
+    button.setAttribute('aria-pressed', String(Boolean(selected)));
+  }
+  const viewFilter = view !== 'all' && view !== 'not-unloaded';
+  const etrnFilter = $('filter').value;
+  const financeFilter = $('financial-filter').value;
+  const filterCount = Number(viewFilter) + Number(Boolean(etrnFilter)) + Number(Boolean(financeFilter));
+  $('filter-view').value = view;
+  const activeFilters = $('active-filters');
+  const filterLabels = [];
+  if (viewFilter) filterLabels.push($('filter-view').selectedOptions?.[0]?.textContent.trim());
+  if (etrnFilter) filterLabels.push($('filter').selectedOptions?.[0]?.textContent.trim());
+  if (financeFilter) filterLabels.push($('financial-filter').selectedOptions?.[0]?.textContent.trim());
+  activeFilters.textContent = filterLabels.filter(Boolean).join(' · ');
+  activeFilters.hidden = !filterCount;
+  const hasPeriod = Boolean(period.from || period.to);
+  $('filters-count').textContent = String(filterCount);
+  $('filters-count').hidden = !filterCount;
+  $('filters-open').setAttribute('aria-label', filterCount ? 'Фильтры: ' + filterCount : 'Фильтры');
+  $('period-label').textContent = hasPeriod ? `${shortPeriodDate(period.from)}–${shortPeriodDate(period.to)}` : 'Период';
+  $('period-open').setAttribute('aria-label', hasPeriod ? `Период: ${period.from || 'без начала'} — ${period.to || 'без окончания'}` : 'Период');
+  $('period-open').dataset.active = String(hasPeriod);
+  $('sort').value = sort;
+  $('sort-direction').textContent = ascending ? '↑' : '↓';
+  $('sort-direction').setAttribute('aria-pressed', String(ascending));
+  const matches = selectOrders(orders, {
+    query:$('search').value, filter:$('filter').value, view, today:day, sort, ascending, ...period,
+  });
+  const financialMatches = financeFilter
+    ? matches.filter(order => {
+        const flags = financialFlags(order);
+        return financeFilter === 'issues' ? flags.length > 0 : flags.includes(financeFilter);
+      })
+    : matches;
+  const scoped = scopeOrders(financialMatches, {scope:registryScope, month:historyMonth, search:$('search').value});
+  const groups = monthGroups(orders);
+  $('view-title').textContent = registryScope === 'active' ? 'Актуальные заявки' : 'История заявок';
+  $('active-nav').setAttribute('aria-current', registryScope === 'active' ? 'page' : 'false');
+  $('history-nav').setAttribute('aria-current', registryScope === 'history' ? 'page' : 'false');
+  for (const button of document.querySelectorAll('[data-scope]')) {
+    button.setAttribute('aria-pressed', String(button.dataset.scope === registryScope));
+  }
+  $('dock-active').setAttribute('aria-current', registryScope === 'active' ? 'page' : 'false');
+  $('dock-history').setAttribute('aria-current', registryScope === 'history' ? 'page' : 'false');
+  $('dock-more').setAttribute('aria-expanded', String($('workspace-menu').open));
+  $('active-count').textContent = String(orders.filter(isActionable).length);
+  $('history-count').textContent = String(orders.length);
+  $('history-browser').hidden = registryScope !== 'history';
+  if (registryScope === 'history') {
+    const chooser = $('history-month');
+    chooser.replaceChildren();
+    const all = node('option', 'Все периоды · ' + orders.length);
+    all.value = 'all';
+    chooser.append(all);
+    for (const {month, count} of groups) {
+      const label = month ? new Date(month + '-01T12:00:00').toLocaleDateString('ru-RU', {month:'long', year:'numeric'}) : 'Без даты';
+      const option = node('option', label + ' · ' + count);
+      option.value = month || 'undated';
+      chooser.append(option);
+    }
+    if (![...chooser.options].some(option => option.value === historyMonth)) historyMonth = 'all';
+    chooser.value = historyMonth;
+    $('history-description').textContent = $('search').value.trim()
+      ? 'Поиск по всем периодам · найдено ' + scoped.length
+      : 'Найдено ' + scoped.length + ' из ' + orders.length;
+  }
+  const active = scoped.filter(order => !archived(order));
+  const past = scoped.filter(archived);
+  const primary = $('table');
+  const archive = $('archive-table');
+  const selected = selections.get(primary);
+  if (selected && !active.some(order => order.number === selected.number) && past.some(order => order.number === selected.number)) {
+    selections.set(archive, selected);
+  }
+  // The home queue depends solely on the trip stage; history includes every record.
+  bulkVisible = scoped;
+  // Selection survives switching layouts, but never changes any data automatically.
+  const known = new Set(orders.map(order => order.number));
+  for (const number of bulkNumbers) if (!known.has(number)) bulkNumbers.delete(number);
+  renderRegistry(primary, scoped);
+  updateBulkControls();
+  $('archive').hidden = true;
+  archive.replaceChildren();
 }
 
 function profit(order) {
@@ -234,7 +911,9 @@ function readEtrn() {
 }
 
 function refreshEtrn() {
-  $('etrn-fields').hidden = !etrnForm.elements.required.checked;
+  const etrn = readEtrn();
+  $('etrn-fields').hidden = !etrn.required;
+  $('etrn-status').textContent = etrnStatus(etrn);
 }
 
 function openEtrn(number = null) {
@@ -299,6 +978,7 @@ function addPoint(point = {kind:'Погрузка'}) {
 }
 
 function openEditor(order, original = null, stamp = order.updatedAt) {
+  $('sheet-open').hidden = !sheetActor;
   editorStamp = stamp;
   draft = structuredClone(order);
   if (!draft.route) draft.route = routeText(draft);
@@ -352,29 +1032,504 @@ function readDraft() {
   return order;
 }
 
+function applyDisplay() {
+  const root = document.documentElement;
+  if (root) {
+    root.dataset.theme = display.theme;
+    root.dataset.violetPalette = display.violetPalette;
+  }
+  $('violet-palette-setting').hidden = display.theme !== 'violet';
+  $('violet-palette').value = display.violetPalette;
+  applyAccent();
+  $('theme').value = display.theme;
+  $('layout').value = display.layout;
+  $('settings-layout').value = display.layout;
+  $('status-palette').hidden = display.theme === 'sand';
+  const preview = $('theme-preview');
+  preview.replaceChildren();
+  for (const [id,title] of Object.entries(themeLabels)) {
+    const button = action(null, () => setDisplay('theme',id), 'theme-swatch');
+    button.dataset.swatch = id;
+    button.setAttribute('aria-pressed',String(display.theme === id));
+    button.append(node('span',null,'swatch-bars'),node('strong',title));
+    preview.append(button);
+  }
+}
+
+function applyAccent() {
+  const accent = display.accents[display.theme];
+  $('accent-color').value = accent ?? defaultAccents[display.theme];
+  $('reset-accent').disabled = !accent;
+  const root = document.documentElement;
+  if (!root) return;
+  if (!accent) {
+    root.style.removeProperty('--custom-accent');
+    root.style.removeProperty('--custom-accent-text');
+    root.style.removeProperty('--custom-accent-hover');
+    root.style.removeProperty('--custom-focus');
+    return;
+  }
+  const channels = accent.slice(1).match(/../g).map(channel => {
+    const value = parseInt(channel, 16) / 255;
+    return value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4;
+  });
+  const luminance = channels[0] * .2126 + channels[1] * .7152 + channels[2] * .0722;
+  root.style.setProperty('--custom-accent', accent);
+  root.style.setProperty('--custom-accent-text', luminance > .179 ? '#000' : '#fff');
+  root.style.setProperty('--custom-accent-hover', `color-mix(in srgb, ${accent}, ${luminance > .179 ? '#fff' : '#000'} 10%)`);
+  root.style.setProperty('--custom-focus', luminance > .25 ? '#45454d' : accent);
+}
+
+function saveDisplay() {
+  try {
+    localStorage.setItem(displayKey, JSON.stringify(display));
+    $('settings-status').textContent = 'Настройки сохраняются в этом браузере.';
+  } catch {
+    $('settings-status').textContent = 'Браузер не сохранил настройки. Они действуют до закрытия страницы.';
+  }
+}
+
+$('accent-color').addEventListener('input', event => {
+  const accent = event.currentTarget.value;
+  if (!validAccent(accent)) return;
+  display.accents[display.theme] = accent;
+  applyAccent();
+  saveDisplay();
+});
+$('reset-accent').addEventListener('click', () => {
+  $('accent-color').focus();
+  delete display.accents[display.theme];
+  applyAccent();
+  saveDisplay();
+});
+
+function setDisplay(key, value) {
+  if (key === 'theme' && value !== display.theme) {
+    display.themeLayouts[display.theme] = display.layout;
+    display.layout = display.themeLayouts[value] ?? (value === 'sand' ? 'split' : 'table');
+  }
+  display[key] = value;
+  applyDisplay();
+  saveDisplay();
+  render();
+}
+
+const colorInputs = new Map();
+function applyStatusColors() {
+  for (const [stage, input] of colorInputs) {
+    input.value = display.statusColors[stage] ?? statusColors[stage];
+    document.documentElement?.style.setProperty('--status-' + stage, input.value);
+  }
+}
+for (const [stage, title] of tripStatuses) {
+  const label = node('label', stage === 'new' ? 'Заявка создана' : title);
+  const input = node('input');
+  input.type = 'color';
+  input.id = 'status-color-' + stage;
+  label.append(input);
+  $('status-colors').append(label);
+  colorInputs.set(stage, input);
+  input.addEventListener('input', () => {
+    if (!validAccent(input.value)) return;
+    display.statusColors[stage] = input.value;
+    applyStatusColors();
+    saveDisplay();
+  });
+}
+applyStatusColors();
+$('reset-status-colors').addEventListener('click', () => {
+  display.statusColors = {};
+  applyStatusColors();
+  saveDisplay();
+});
+
+$('filters-open').addEventListener('click', () => $('filters-dialog').showModal());
+$('period-open').addEventListener('click', () => {
+  $('period-from').value = period.from ?? '';
+  $('period-to').value = period.to ?? '';
+  $('period-to').min = period.from ?? '';
+  $('period-dialog').showModal();
+});
+$('period-from').addEventListener('input', () => { $('period-to').min = $('period-from').value; });
+$('period-form').addEventListener('submit', event => {
+  event.preventDefault();
+  period = {from:$('period-from').value, to:$('period-to').value};
+  $('period-dialog').close();
+  render();
+});
+$('period-reset').addEventListener('click', () => {
+  period = {};
+  $('period-dialog').close();
+  render();
+});
+
+for (const [value, label] of Object.entries(violetPalettes)) {
+  const option = node('option', label);
+  option.value = value;
+  $('violet-palette').append(option);
+}
+$('violet-palette').addEventListener('change', event => {
+  display.violetPalette = event.currentTarget.value;
+  applyDisplay();
+  saveDisplay();
+});
+
+for (const [id, labels] of [['theme', themeLabels], ['layout', layoutLabels], ['settings-layout', layoutLabels]]) {
+  for (const [value, label] of Object.entries(labels)) {
+    const option = node('option', label);
+    option.value = value;
+    $(id).append(option);
+  }
+  $(id).addEventListener('change', event => {
+    setDisplay(id === 'theme' ? 'theme' : 'layout', event.currentTarget.value);
+  });
+}
+applyDisplay();
+const settingsTabs = [...document.querySelectorAll('[data-settings-section]')];
+const showSettingsSection = name => {
+  for (const button of settingsTabs) {
+    button.setAttribute('aria-pressed',String(button.dataset.settingsSection===name));
+  }
+  for (const panel of document.querySelectorAll('[data-settings-panel]')) {
+    panel.hidden=panel.dataset.settingsPanel!==name;
+  }
+};
+settingsTabs.forEach(button => button.addEventListener('click',
+  ()=>showSettingsSection(button.dataset.settingsSection)));
+for (const key of columnKeys) {
+  const option=node('option',columnTitles[key]);
+  option.value=key;
+  $('column-choice').append(option);
+}
+function moveColumn(delta) {
+  const key=$('column-choice').value;
+  const from=display.columnOrder.indexOf(key);
+  const target=from+delta;
+  if(from<0||target<0||target>=display.columnOrder.length)return;
+  [display.columnOrder[from],display.columnOrder[target]]=
+    [display.columnOrder[target],display.columnOrder[from]];
+  saveDisplay();render();
+}
+$('column-left').addEventListener('click',()=>moveColumn(-1));
+$('column-right').addEventListener('click',()=>moveColumn(1));
+$('reset-columns').addEventListener('click',()=>{
+  display.columnOrder=[...columnKeys];saveDisplay();render();
+});
+async function setSyncNotifications(event) {
+  const input=event.currentTarget;
+  if(input.checked) {
+    if(!('Notification' in globalThis)){
+      input.checked=false;
+      $('notify-status').textContent='Этот браузер не поддерживает уведомления.';
+      return;
+    }
+    const permission=Notification.permission==='granted'?'granted':
+      await Notification.requestPermission();
+    if(permission!=='granted'){
+      input.checked=false;
+      $('notify-status').textContent='Браузер не разрешил уведомления.';
+      return;
+    }
+  }
+  try{localStorage.setItem(syncWarningKey(),String(input.checked));}
+  catch{
+    $('notify-status').textContent='Не удалось сохранить настройку.';
+    return;
+  }
+  $('notify-status').textContent=input.checked?
+    'Уведомления включены для этого аккаунта и браузера.':'Уведомления выключены.';
+}
+$('notify-sync-errors').addEventListener('change',setSyncNotifications);
+$('reset-appearance').addEventListener('click', () => {
+  // Reset only visual preferences; keep orders, accounts and user-created views.
+  display.theme='sputnik';
+  display.violetPalette='violet';
+  display.accents={};
+  display.statusColors={};
+  display.themeLayouts={};
+  display.layout='table';
+  applyStatusColors();
+  applyDisplay();
+  saveDisplay();
+  render();
+});
+const mobileNav = window.matchMedia?.('(max-width: 850px)');
+const mobileCommands = window.matchMedia?.('(max-width: 740px)');
+function placeRegistryCommands() {
+  if (!mobileCommands) return;
+  const menu = $('registry-more');
+  if (mobileCommands.matches) {
+    $('registry-more-actions').append($('period-open'), $('import'));
+  } else {
+    menu.open = false;
+    $('period-slot').append($('period-open'));
+    $('registry-actions').append($('import'));
+  }
+}
+placeRegistryCommands();
+mobileCommands?.addEventListener('change', placeRegistryCommands);
+for (const id of ['period-dialog', 'import-dialog']) {
+  $(id).addEventListener('close', () => {
+    if (!mobileCommands?.matches || !$('registry-more').open) return;
+    $('registry-more').open = false;
+    $('registry-more').querySelector('summary').focus({preventScroll:true});
+  });
+}
+function setWorkspaceMenu() {
+  $('workspace-menu').open = !mobileNav?.matches;
+}
+setWorkspaceMenu();
+mobileNav?.addEventListener('change', setWorkspaceMenu);
+
+window.matchMedia?.('(max-width: 760px)')?.addEventListener('change', () => {
+  if (display.layout === 'split' || display.layout === 'compact') render();
+});
+
+function sizeMobileDialogs() {
+  const viewport = window.visualViewport;
+  if (!viewport || viewport.scale !== 1) return;
+  const root = document.documentElement;
+  root.style.setProperty('--visible-height', viewport.height + 'px');
+  root.style.setProperty('--visible-top', viewport.offsetTop + 'px');
+}
+sizeMobileDialogs();
+window.visualViewport?.addEventListener('resize', sizeMobileDialogs);
+window.visualViewport?.addEventListener('scroll', sizeMobileDialogs);
+// Update the displayed period on month rollover even if the tab remains open.
+setInterval(updateMonthMetrics, 60_000);
+
+function showUpdates() {
+  const list = $('updates-list');
+  list.replaceChildren();
+  for (const release of updates) {
+    const group = node('li', null, 'updates-group');
+    group.append(node('h3', release.title));
+    const items = node('ul');
+    for (const item of release.items) items.append(node('li', item));
+    group.append(items);
+    list.append(group);
+  }
+  $('settings-dialog').close();
+  $('updates-dialog').showModal();
+}
+$('updates-open').addEventListener('click', showUpdates);
+
+$('settings').addEventListener('click', () => {
+  showSettingsSection('appearance');
+  const email = $('account-email').textContent;
+  $('settings-account').textContent = email;
+  $('settings-account').hidden = !email;
+  $('settings-dialog').showModal();
+});
+let calculator;
+$('calculator').addEventListener('click', () => {
+  calculator ??= mountCalculator($('calculator-dialog'));
+  calculator.open();
+});
+let cargoSection;
+$('cargo-open').addEventListener('click', async () => {
+  const generation = accountGeneration;
+  const dialog = $('cargo-dialog');
+  if (dialog.open) return;
+  try {
+    const {createCargoSection} = await import('./cargo/section.mjs');
+    if (generation !== accountGeneration || dialog.open) return;
+    cargoSection ??= createCargoSection(dialog);
+    cargoSection.open();
+  } catch {
+    if (generation === accountGeneration) $('notice').textContent = 'Не удалось открыть размещение груза. Повторите действие.';
+  }
+});
+for (const id of ['settings-dialog', 'updates-dialog', 'ledger-dialog', 'export-dialog', 'report-dialog', 'calculator-dialog', 'cargo-dialog']) {
+  $(id).addEventListener('close', () => {
+    if (!mobileNav?.matches) return;
+    const menu = $('workspace-menu');
+    menu.open = false;
+    menu.querySelector('summary').focus();
+  });
+}
+
+window.addEventListener('scroll', queueContactPosition, {capture:true, passive:true});
+window.addEventListener('resize', queueContactPosition);
+window.visualViewport?.addEventListener('resize', queueContactPosition);
+window.visualViewport?.addEventListener('scroll', queueContactPosition);
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape' || !contactAnchor) return;
+  event.preventDefault();
+  closeContacts(true);
+});
+document.addEventListener('focusin', event => {
+  if (contactAnchor && event.target !== contactAnchor && !contactPanel.contains(event.target)) closeContacts();
+});
+document.addEventListener('pointerdown', event => {
+  if (contactAnchor && !contactAnchor.contains(event.target) && !contactPanel.contains(event.target)) closeContacts();
+  const menu = $('workspace-menu');
+  if (mobileNav?.matches && menu.open && !menu.contains(event.target) &&
+      !$('dock-more').contains(event.target)) menu.open = false;
+});
+$('sort').addEventListener('change', event => {
+  sort = event.currentTarget.value;
+  ascending = sort !== 'date';
+  render();
+});
+$('sort-direction').addEventListener('click', () => setSort(sort));
+
 for (const button of document.querySelectorAll('[data-close]')) button.addEventListener('click', () => button.closest('dialog').close());
+const focusRegistrySearch = () => {
+  const input = $('search');
+  // Keep the fixed mobile dock and nearby toolbar controls in place.
+  input.focus({preventScroll:true});
+  if (window.matchMedia('(max-width: 740px)').matches) {
+    input.scrollIntoView({block:'nearest', inline:'nearest'});
+  }
+  input.select();
+};
+mountCommandPalette({
+  dialog:$('command-dialog'), input:$('command-search'),
+  results:$('command-results'), opener:$('command-launch'),
+  available:() => demo || signedIn,
+  hasSelection:()=>Boolean(workspacePanel?.selected()),
+  actions:{
+    search:focusRegistrySearch,
+    active:() => changeRegistryScope('active'),
+    history:() => changeRegistryScope('history'),
+    new:() => $('new').click(),
+    pdf:() => $('import').click(),
+    excel:() => $('ledger').click(),
+    report:() => $('report').click(),
+    table:() => setDisplay('layout','table'),
+    split:() => setDisplay('layout','split'),
+    settings:() => $('settings').click(),
+    selected:() => panelFor(workspacePanel?.selected()),
+    'selected-driver':() => {
+      const number=workspacePanel?.selected();
+      const order=orders.find(item=>item.number===number);
+      if(order){workspacePanel.close();openDriver(order);}
+    },
+    'selected-etrn':() => {
+      const number=workspacePanel?.selected();
+      if(number){workspacePanel.close();openEtrn(number);}
+    },
+  },
+});
+$('dock-active').addEventListener('click', () => changeRegistryScope('active'));
+$('dock-history').addEventListener('click', () => changeRegistryScope('history'));
+$('dock-search').addEventListener('click', focusRegistrySearch);
+$('dock-new').addEventListener('click', () => $('new').click());
+$('dock-more').addEventListener('click', () => {
+  const menu = $('workspace-menu');
+  menu.open = !menu.open;
+  $('dock-more').setAttribute('aria-expanded', String(menu.open));
+  if (menu.open) menu.querySelector('summary').focus({preventScroll:true});
+});
+$('workspace-menu').addEventListener('toggle', () =>
+  $('dock-more').setAttribute('aria-expanded', String($('workspace-menu').open)));
 $('search').addEventListener('input', render);
+$('filter-view').addEventListener('change', event => {
+  view = event.currentTarget.value;
+  if (view === 'completed' || view === 'failed') {
+    registryScope = 'history';
+    historyMonth = 'all';
+  }
+  render();
+});
 $('filter').addEventListener('change', render);
+$('financial-filter').addEventListener('change', render);
+const ownerViewKey=()=>demo?'demo':$('account-email').textContent;
+function applyPersonalView(entry) {
+  view=entry.view;registryScope=entry.scope;historyMonth='all';period={};
+  sort=entry.sort;ascending=entry.ascending;
+  $('filter').value=entry.etrn;
+  $('financial-filter').value=entry.financial;
+  $('search').value='';
+  if (mobileNav?.matches) $('workspace-menu').open = false;
+  render();
+}
+function renderCustomViews() {
+  const box=$('custom-views');
+  box.replaceChildren();
+  for(const item of readSavedViews(ownerViewKey())) {
+    const row=node('div',null,'custom-view-row');
+    const open=action(item.name,()=>applyPersonalView(item));
+    const remove=action('×',()=>{
+      if(!window.confirm('Удалить сохранённый вид «'+item.name+'»?'))return;
+      const views=readSavedViews(ownerViewKey()).filter(entry=>entry.name!==item.name);
+      writeSavedViews(ownerViewKey(),views);renderCustomViews();
+    });
+    remove.setAttribute('aria-label','Удалить вид '+item.name);
+    row.append(open,remove);box.append(row);
+  }
+}
+$('reset-workspace-view').addEventListener('click', () => {
+  registryScope = 'active';
+  view = 'all';
+  historyMonth = 'all';
+  period = {};
+  $('filter').value = '';
+  $('financial-filter').value = '';
+  $('search').value = '';
+  $('workspace-menu').open = !mobileNav?.matches;
+  render();
+  $('notice').textContent = 'Показаны актуальные заявки без дополнительных фильтров.';
+});
+$('save-view').addEventListener('click',()=>{
+  const requested=window.prompt('Название вида (до 45 символов)');
+  if(!requested)return;
+  const name=requested.trim().slice(0,45);
+  if(!name)return;
+  const items=readSavedViews(ownerViewKey());
+  if(items.some(item=>item.name.toLowerCase()===name.toLowerCase())) {
+    $('notice').textContent='Вид с таким названием уже существует.';return;
+  }
+  if(items.length>=25) {
+    $('notice').textContent='Можно сохранить не больше 25 видов.';return;
+  }
+  items.push({name,scope:registryScope,view,etrn:$('filter').value,
+    financial:$('financial-filter').value,sort,ascending});
+  $('notice').textContent=writeSavedViews(ownerViewKey(),items)?
+    'Вид сохранён только для этого аккаунта и браузера.':
+    'Не удалось сохранить вид в браузере.';
+  renderCustomViews();
+});
+for(const button of document.querySelectorAll('[data-preset]')) {
+  button.addEventListener('click',()=>{
+    const preset=savedViewPresets.find(item=>item.id===button.dataset.preset);
+    if(!preset)return;
+    view=preset.view;
+    registryScope=preset.view==='failed'?'history':'active';
+    historyMonth='all';
+    period={};
+    $('search').value='';
+    $('filter').value=preset.etrn;
+    $('financial-filter').value=preset.financial||'';
+    if (mobileNav?.matches) $('workspace-menu').open = false;
+    render();
+  });
+}
+
 $('add-point').addEventListener('click', () => addPoint());
 $('new').addEventListener('click', () => openEditor(blankOrder()));
 $('editor-etrn').addEventListener('click', () => openEtrn());
 etrnForm.addEventListener('input', refreshEtrn);
 etrnForm.addEventListener('submit', async event => {
   event.preventDefault();
+  const generation = accountGeneration;
   const etrn = readEtrn();
   try {
     if (etrnOrderNumber === null) {
       draft.etrn = etrn;
       editorPreview();
     } else {
-      await updateOrder(etrnOrderNumber, etrnStamp, order => ({...order, etrn}));
+      await saveEtrn(etrnOrderNumber, etrnStamp, etrn, generation);
+      if (generation !== accountGeneration) return;
       render();
       $('notice').textContent = 'Статус ЭТРН сохранён.';
     }
     etrnDialog.close();
-  } catch (error) { $('etrn-error').textContent = error.message; }
+  } catch (error) { if (generation === accountGeneration) $('etrn-error').textContent = error.message; }
 });
 $('import').addEventListener('click', () => {
+  if (pendingImports.has($('import-form'))) return;
   $('import-form').reset();
   $('import-error').textContent = '';
   importDialog.showModal();
@@ -382,44 +1537,52 @@ $('import').addEventListener('click', () => {
 form.addEventListener('input', editorPreview);
 form.addEventListener('submit', async event => {
   event.preventDefault();
+  const generation = accountGeneration;
   $('editor-error').textContent = '';
   try {
     const current = await store.list();
+    if (generation !== accountGeneration) return;
     assertUnchanged(current, previousNumber, editorStamp);
-    orders = await store.save(upsert(current, readDraft(), previousNumber), current);
+    const saved = await saveRecords(upsert(current, readDraft(), previousNumber), current);
+    if (generation !== accountGeneration) return;
+    orders = saved;
     editor.close();
     render();
     $('notice').textContent = 'Заявка сохранена.';
-  } catch (error) { $('editor-error').textContent = error.message; }
+  } catch (error) { if (generation === accountGeneration) $('editor-error').textContent = error.message; }
 });
 $('import-form').addEventListener('submit', async event => {
   event.preventDefault();
   const files = [$('customer-pdf').files[0], $('carrier-pdf').files[0]];
   const submit = event.submitter;
+  const operation = startImport(submit, event.currentTarget, 'Читаем PDF…');
+  if (!operation) return;
   $('import-error').textContent = '';
-  if (files.some(file => !file)) {
-    $('import-error').textContent = 'Выбери ровно два PDF.';
-    return;
-  }
-  submit.disabled = true;
-  submit.textContent = 'Читаем PDF…';
   try {
+    if (files.some(file => !file)) throw new Error('Выбери ровно два PDF.');
+    for (const file of files) checkImportFile(file, 'PDF', 20);
     const { readPdf } = await import('./pdf.mjs');
-    const imported = importPair(...await Promise.all(files.map(readPdf)));
-    const current = (await store.list()).find(item => item.number === imported.number);
+    if (!operation.active()) return;
+    const documents = await Promise.all(files.map(readPdf));
+    if (!operation.active()) return;
+    const imported = importPair(...documents);
+    const saved = await store.list();
+    if (!operation.active()) return;
+    const current = saved.find(item => item.number === imported.number);
     importDialog.close();
     openReview(mergeImport(imported, current), current?.number ?? null, current?.updatedAt);
   } catch (error) {
-    $('import-error').textContent = error.message || 'Не удалось прочитать PDF.';
+    if (operation.active()) $('import-error').textContent = error.message || 'Не удалось прочитать PDF.';
   } finally {
-    submit.disabled = false;
-    submit.textContent = 'Проверить и открыть заявку';
+    operation.finish();
   }
 });
 
 function showWorkspace(visible) {
   $('workspace').hidden = !visible;
   $('workspace-nav').hidden = !visible;
+  $('mobile-dock').hidden = !visible;
+  $('sync-quick').hidden = !visible || demo;
   $('sign-in').hidden = visible;
 }
 
@@ -427,20 +1590,56 @@ function signInScreen(message = '') {
   signedIn = false;
   accountGeneration++;
   refreshing = undefined;
+  pendingWrites = 0;
+  saveFailure = refreshFailure = undefined;
+  serverConfirmed = false;
+  sheetActor = undefined;
+  liveSheet = false;
+  $('sheet-actor').value = '';
+  $('sheet-form').reset();
   auth.clear();
+  calculator?.reset();
+  cargoSection?.reset();
+  $('sign-out').disabled = false;
+  setWorkspaceMenu();
+  for (const reset of pendingImports.values()) reset();
   for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
+  workspacePanel?.close();
   orders = [];
+  period = {};
+  view = 'all';
+  $('filter').value = '';
+  selections.clear();
+  savingTrips.clear();
+  $('settings-account').textContent = '';
+  $('settings-account').hidden = true;
   draft = reviewOrder = driverOrder = null;
+  previousNumber = etrnOrderNumber = reviewPrevious = null;
+  editorStamp = etrnStamp = reviewStamp = undefined;
+  $('review-title').textContent = 'Результат распознавания';
+  for (const id of ['import-error', 'ledger-error', 'review-error', 'editor-error', 'etrn-error', 'driver-copy-status']) {
+    $(id).textContent = '';
+  }
   $('account-email').textContent = '';
+  $('custom-views').replaceChildren();
   $('sync-status').textContent = '';
+  $('sync-status').title = '';
   $('notice').textContent = '';
   $('print-report').replaceChildren();
   $('editor-form').reset();
+  $('import-form').reset();
+  $('ledger-form').reset();
+  clearLedgerPreview();
+  $('etrn-form').reset();
+  $('report-preview').replaceChildren();
   $('review-card').replaceChildren();
   $('points').replaceChildren();
   $('contacts').replaceChildren();
   $('difference-list').replaceChildren();
   $('driver-message').value = '';
+  $('driver-title').textContent = 'Данные водителя';
+  $('archive').open = false;
+  $('archive-table').replaceChildren();
   render();
   $('sign-in-error').textContent = message;
   showWorkspace(false);
@@ -450,6 +1649,7 @@ async function refresh() {
   if (!signedIn || refreshing !== undefined) return;
   const generation = accountGeneration;
   refreshing = generation;
+  showSyncStatus();
   try {
     const saved = await store.list();
     if (!signedIn || generation !== accountGeneration) return;
@@ -459,13 +1659,19 @@ async function refresh() {
       render();
       $('archive').open = archiveOpen;
     }
-    $('sync-status').textContent = '';
+    refreshFailure = undefined;
+    serverConfirmed = true;
   } catch (error) {
     if (generation !== accountGeneration) return;
-    if (signedIn && error.status === 401) signInScreen('Сеанс закончился. Войдите снова.');
-    else if (signedIn) $('sync-status').textContent = error.message;
+    if (signedIn && (error.status === 401 || error.status === 403)) {
+      if (!$('sign-out').disabled) signInScreen('Сеанс закончился. Войдите снова.');
+    }
+    else if (signedIn) refreshFailure = error;
   } finally {
-    if (generation === accountGeneration) refreshing = undefined;
+    if (generation === accountGeneration) {
+      refreshing = undefined;
+      showSyncStatus();
+    }
   }
 }
 
@@ -473,90 +1679,348 @@ async function showAccount(account) {
   accountGeneration++;
   signedIn = true;
   $('account-email').textContent = account.email;
+  $('notify-sync-errors').checked=syncNotificationsEnabled();
+  renderCustomViews();
   $('sync-tools').hidden = false;
+  $('sign-out').hidden = false;
   try {
     $('local-import').hidden = localOrders().length === 0;
   } catch {
     $('local-import').hidden = true;
   }
-  $('sync-status').textContent = 'Загружаем заявки…';
   showWorkspace(true);
+  const generation = accountGeneration;
+  if (import.meta.env?.VITE_SHEET_PREVIEW === 'true') {
+    auth.sheetPreview().then(result => {
+      if (generation !== accountGeneration) return;
+      sheetActor = result.actor;
+      liveSheet = result.mode === 'live';
+      $('sheet-title').textContent = liveSheet ? 'Добавить в Google-таблицу' : 'Google-таблица · тестовый предпросмотр';
+      $('sheet-hint').textContent = liveSheet ? 'Даты без года заполните вручную.' : 'Даты без года заполните вручную. Данные отправляются в тестовый получатель.';
+      $('sheet-submit').textContent = liveSheet ? 'Добавить строку' : 'Подтвердить тестовую запись';
+      $('sheet-open').hidden = !sheetActor;
+    }).catch(() => {});
+  }
   await refresh();
 }
+
+const sheetFields = ['number', 'title', 'amount', 'requested', 'promised'];
+$('sheet-open').addEventListener('click', () => {
+  if (!sheetActor) return;
+  const fields = $('sheet-form').elements;
+  $('sheet-form').reset();
+  $('sheet-status').textContent = '';
+  $('sheet-actor').value = sheetActor;
+  fields.number.value = form.elements.number.value;
+  fields.title.value = form.elements.cargo.value;
+  fields.amount.value = form.elements.customerAmount.value;
+  $('sheet-dialog').showModal();
+});
+$('sheet-parse').addEventListener('click', () => {
+  const values = parseSheetText($('sheet-paste').value);
+  for (const key of sheetFields) {
+    if (values[key] !== undefined) $('sheet-form').elements[key].value = values[key];
+  }
+  $('sheet-status').textContent = 'Проверьте распознанные поля перед подтверждением.';
+});
+$('sheet-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!sheetActor) return;
+  const operation = startImport(event.submitter);
+  if (!operation) return;
+  const data = Object.fromEntries(sheetFields.map(key => [key, event.currentTarget.elements[key].value.trim()]));
+  try {
+    const result = await auth.sheetPreview(data);
+    if (operation.active()) $('sheet-status').textContent = result.duplicate
+      ? (liveSheet ? 'Эта строка уже была отправлена.' : 'Эта строка уже принята тестовым получателем.')
+      : (liveSheet ? 'Строка добавлена в Google-таблицу.' : 'Тестовая строка принята.');
+  } catch (error) {
+    if (operation.active()) $('sheet-status').textContent = error.message;
+  } finally {
+    operation.finish();
+  }
+});
 
 $('sign-in-form').addEventListener('submit', async event => {
   event.preventDefault();
   const login = event.currentTarget;
   const button = event.submitter;
+  if (signedIn || signingIn) return;
+  const generation = ++accountGeneration;
+  signingIn = true;
   button.disabled = true;
   $('sign-in-error').textContent = '';
   try {
     const account = await auth.login(login.elements.email.value.trim(), login.elements.password.value);
+    if (generation !== accountGeneration) return;
     login.reset();
-    await showAccount(account);
-  } catch (error) {
-    $('sign-in-error').textContent = error.message;
-  } finally {
     button.disabled = false;
+    return showAccount(account);
+  } catch (error) {
+    if (generation === accountGeneration) $('sign-in-error').textContent = error.message;
+  } finally {
+    signingIn = false;
+    if (generation === accountGeneration) button.disabled = false;
   }
 });
 
 $('sign-out').addEventListener('click', async event => {
   const button = event.currentTarget;
+  if (!signedIn || button.disabled) return;
+  const generation = accountGeneration;
   button.disabled = true;
   try {
     await auth.logout();
-    signInScreen();
+    if (generation === accountGeneration) signInScreen();
   } catch (error) {
-    if (error.status === 401) signInScreen();
+    if (generation !== accountGeneration) return;
+    if (error.status === 401 || error.status === 403) signInScreen();
     else $('sync-status').textContent = error.message;
   } finally {
-    button.disabled = false;
+    if (generation === accountGeneration) button.disabled = false;
   }
 });
 
 $('sync-refresh').addEventListener('click', refresh);
+$('sync-quick').addEventListener('click', () => $('sync-refresh').click());
+const comparison = mountComparison({
+  dialog:$('compare-dialog'),orders:() => orders,
+  first:$('compare-first'),second:$('compare-second'),results:$('compare-results'),
+});
+$('compare-open').addEventListener('click', comparison.open);
+workspacePanel = mountWorkspacePanel({
+  root:$('order-peek'),
+  getOrder:number=>orders.find(order=>order.number===number),
+  edit:openOrder,
+  openEtrn,
+  openDriver:number=>{const order=orders.find(order=>order.number===number);if(order)openDriver(order);},
+  openContacts:number=>{const order=orders.find(order=>order.number===number);
+    if(order)openEditor(order,order.number);
+  },
+});
+$('dock-context').addEventListener('click',()=>{if(workspacePanel?.selected())panelFor(workspacePanel.selected());});
+
 $('local-import').addEventListener('click', async event => {
-  const button = event.currentTarget;
-  button.disabled = true;
+  const operation = startImport(event.currentTarget);
+  if (!operation) return;
   try {
     const local = localOrders();
     if (!window.confirm(`Перенести ${local.length} заявок в реестр аккаунта ${$('account-email').textContent}? Совпадающие номера будут пропущены.`)) return;
     const current = await store.list();
+    if (!operation.active()) return;
     const unique = [...new Map(local.map(order => [order.number, order])).values()];
     const saved = addLedgerOrders(current, unique);
     if (saved.length > current.length) {
-      orders = await store.save(saved, current);
+      const result = await saveRecords(saved, current);
+      if (!operation.active()) return;
+      orders = result;
       render();
     }
     $('notice').textContent = `Добавлено: ${saved.length - current.length}. Пропущено: ${local.length - saved.length + current.length}.`;
   } catch (error) {
-    $('notice').textContent = error.message;
+    if (operation.active()) $('notice').textContent = error.message;
   } finally {
-    button.disabled = false;
+    operation.finish();
   }
 });
 
 if (demo) {
+  renderCustomViews();
+  attachExcelLab();
   $('demo-note').hidden = false;
   showWorkspace(true);
   store.list().then(async saved => {
-    orders = saved.length ? saved : await store.save([demoOrder(today())]);
+    orders = saved.length ? saved : await store.save(demoOrders(today()));
     render();
   }).catch(error => { $('notice').textContent = error.message; });
 } else {
-  auth.restore().then(showAccount).catch(error => signInScreen(error.status === 401 ? '' : error.message));
+  window.addEventListener('storage', event => {
+    if (event.key === sessionChangeKey && event.newValue && !signingIn) {
+      signInScreen('Сеанс изменился в другой вкладке. Войдите снова.');
+    }
+  });
+  const generation = accountGeneration;
+  auth.restore().then(account => {
+    if (generation === accountGeneration) return showAccount(account);
+  }).catch(error => {
+    if (generation === accountGeneration) signInScreen(error.status === 401 ? '' : error.message);
+  });
   window.addEventListener('online', refresh);
   window.addEventListener('focus', refresh);
+  window.addEventListener('pageshow', refresh);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
   setInterval(() => { if (!document.hidden) refresh(); }, 15000);
 }
 
+$('bulk-mode').addEventListener('click', () => {
+  bulkMode = !bulkMode;
+  bulkNumbers.clear();
+  bulkPreview = null;
+  render();
+});
+$('bulk-clear').addEventListener('click', () => {
+  bulkNumbers.clear();
+  render();
+});
+$('bulk-select-visible').addEventListener('click', () => {
+  const visible = bulkVisible.slice(0, 200);
+  for (const order of visible) bulkNumbers.add(order.number);
+  if (bulkVisible.length > 200) $('notice').textContent = 'Можно выбрать не более 200 заявок за операцию.';
+  render();
+});
+let bulkPreviewRequest = 0;
+function drawBulkNumbers() {
+  const choice = $('bulk-choice').value;
+  const editable = choice === 'created' || choice === 'signed';
+  $('bulk-numbers').hidden = !editable;
+  const list = $('bulk-number-list');
+  list.replaceChildren();
+  if (!editable) return;
+  for (const order of orders.filter(item => bulkNumbers.has(item.number))) {
+    const label = node('label', null, 'bulk-number-entry');
+    label.append(node('span', 'Заявка № ' + order.number));
+    const input = node('input');
+    input.type = 'text';
+    input.required = true;
+    input.maxLength = 80;
+    input.autocomplete = 'off';
+    input.value = order.etrn?.number?.trim() || order.number;
+    input.dataset.order = order.number;
+    input.setAttribute('aria-label', 'Номер ЭТРН заявки № ' + order.number);
+    input.addEventListener('input', () => {
+      bulkPreviewRequest++;
+      bulkPreview = null;
+      $('bulk-apply').disabled = true;
+      $('bulk-preview').textContent = 'Номер изменён. Повторная проверка после ввода.';
+    });
+    input.addEventListener('change', previewBulkEtrn);
+    label.append(input);
+    list.append(label);
+  }
+}
+function selectedEtrnItems() {
+  const editable = ['created', 'signed'].includes($('bulk-choice').value);
+  const inputs = new Map([...$('bulk-number-list').querySelectorAll('input')]
+    .map(input => [input.dataset.order, input]));
+  return orders.filter(order => bulkNumbers.has(order.number)).map(order => {
+    const item = {number: order.number, updatedAt: order.updatedAt || ''};
+    if (editable) {
+      const value = inputs.get(order.number)?.value.trim();
+      if (!value || value.length > 80 || /[\x00-\x1f]/.test(value)) {
+        throw new Error('Проверь номер ЭТРН заявки № ' + order.number + '.');
+      }
+      const original = order.etrn?.number?.trim() || order.number;
+      if (value !== original) item.etrnNumber = value;
+    }
+    return item;
+  });
+}
+function drawBulkPreview(result) {
+  const box = $('bulk-preview');
+  box.replaceChildren();
+  const ready = result.results.filter(item => item.result === 'ready');
+  const skipped = result.results.filter(item => item.result !== 'ready');
+  box.append(node('p', 'Готово к изменению: ' + ready.length + ' · без изменений/пропущено: ' + skipped.length));
+  if (skipped.length) {
+    const details = node('details');
+    details.append(node('summary', 'Показать пропущенные заявки'));
+    const list = node('ul');
+    for (const item of skipped) list.append(node('li', '№ ' + item.number + ' — ' + (item.reason || item.result)));
+    details.append(list);
+    box.append(details);
+  }
+  $('bulk-apply').disabled = ready.length === 0;
+}
+async function previewBulkEtrn() {
+  const requestId = ++bulkPreviewRequest;
+  bulkPreview = null;
+  $('bulk-apply').disabled = true;
+  $('bulk-preview').textContent = 'Проверяем выбранные заявки…';
+  if (demo) {
+    $('bulk-preview').textContent = 'Массовые изменения доступны после входа.';
+    return;
+  }
+  try {
+    const items = selectedEtrnItems();
+    const choice = $('bulk-choice').value;
+    const response = await store.bulkEtrn(items, choice, true);
+    if (requestId !== bulkPreviewRequest || !$('bulk-dialog').open) return;
+    bulkPreview = {items, choice};
+    drawBulkPreview(response);
+  } catch (error) {
+    if (requestId === bulkPreviewRequest) $('bulk-preview').textContent = error.message;
+  }
+}
+$('bulk-open').addEventListener('click', () => {
+  if (!bulkNumbers.size || bulkNumbers.size > 200) return;
+  $('bulk-summary').textContent = 'Выбрано заявок: ' + bulkNumbers.size;
+  drawBulkNumbers();
+  $('bulk-dialog').showModal();
+  previewBulkEtrn();
+});
+$('bulk-choice').addEventListener('change', () => {
+  drawBulkNumbers();
+  previewBulkEtrn();
+});
+$('bulk-dialog').addEventListener('close', () => { bulkPreviewRequest++; bulkPreview = null; });
+$('bulk-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!bulkPreview || $('bulk-apply').disabled) return;
+  const button = $('bulk-apply');
+  const operation = startImport(button, button, 'Сохраняем…');
+  if (!operation) return;
+  try {
+    if (bulkPreview.choice !== $('bulk-choice').value ||
+        JSON.stringify(bulkPreview.items) !== JSON.stringify(selectedEtrnItems())) {
+      throw new Error('Номера изменились. Повтори предпросмотр.');
+    }
+    const result = await store.bulkEtrn(bulkPreview.items, bulkPreview.choice, false);
+    if (!operation.active()) return;
+    bulkPreview = null;
+    $('bulk-dialog').close();
+    bulkNumbers.clear();
+    bulkMode = false;
+    await refresh();
+    $('notice').textContent = 'Изменено ЭТРН: ' + result.updated +
+      ' · пропущено: ' + result.results.filter(item => item.result !== 'updated').length;
+    render();
+  } catch (error) {
+    if (operation.active()) {
+      $('bulk-preview').textContent = error.message;
+      bulkPreview = null;
+    }
+  } finally {
+    operation.finish();
+  }
+});
+function changeRegistryScope(next) {
+  if (next !== 'active' && next !== 'history') return;
+  registryScope = next;
+  view = 'all';
+  period = {};
+  if (next === 'history') historyMonth = monthGroups(orders).find(group => group.month)?.month || 'all';
+  $('filter').value = '';
+  if (mobileNav?.matches) $('workspace-menu').open = false;
+  render();
+}
+for (const button of document.querySelectorAll('[data-scope]')) {
+  button.addEventListener('click', () => changeRegistryScope(button.dataset.scope));
+}
+$('active-nav').addEventListener('click', () => changeRegistryScope('active'));
+$('history-nav').addEventListener('click', () => changeRegistryScope('history'));
+$('history-month').addEventListener('change', event => {
+  historyMonth = event.currentTarget.value;
+  render();
+});
 for (const button of document.querySelectorAll('[data-view]')) {
+  button.append(node('span', null, 'view-count'));
   button.addEventListener('click', () => {
     view = button.dataset.view;
-    for (const tab of document.querySelectorAll('[data-view]')) tab.setAttribute('aria-pressed', String(tab === button));
-    $('view-title').textContent = view === 'all' ? 'Заявки' : button.textContent;
+    if (view === 'failed' || view === 'completed') {
+      registryScope = 'history';
+      historyMonth = 'all';
+    }
+    if (mobileNav?.matches) $('workspace-menu').open = false;
     render();
   });
 }
@@ -567,6 +2031,11 @@ function openReview(order, previous, stamp) {
   reviewPrevious = previous;
   $('review-title').textContent = 'Результат распознавания · № ' + order.number;
   $('review-error').textContent = '';
+  const existing = $('review-existing');
+  existing.hidden = previous == null;
+  existing.textContent = previous == null ? '' :
+    `Заявка № ${order.number} уже существует. Новая запись не будет создана. Проверьте данные перед обновлением существующей заявки.`;
+  $('review-save').textContent = previous == null ? 'Сохранить заявку' : 'Обновить заявку';
   const card = $('review-card');
   card.replaceChildren(node('h3', routeText(order) || 'Маршрут не указан'));
   if (routeDates(order)) card.append(node('p', routeDates(order), 'quiet'));
@@ -588,47 +2057,166 @@ function openReview(order, previous, stamp) {
 }
 
 $('review-edit').addEventListener('click', () => {
+  if (!reviewOrder || pendingImports.has($('review-save'))) return;
   $('review-dialog').close();
   openEditor(reviewOrder, reviewPrevious, reviewStamp);
 });
 $('review-save').addEventListener('click', async () => {
-  const button = $('review-save');
-  button.disabled = true;
+  if (!reviewOrder) return;
+  const operation = startImport($('review-save'));
+  if (!operation) return;
+  const order = reviewOrder;
+  const previous = reviewPrevious;
+  const stamp = reviewStamp;
+  const active = () => operation.active() && reviewOrder === order;
   try {
     const current = await store.list();
-    assertUnchanged(current, reviewPrevious, reviewStamp);
-    orders = await store.save(upsert(current, reviewOrder, reviewPrevious), current);
+    if (!active()) return;
+    assertUnchanged(current, previous, stamp);
+    const saved = await saveRecords(upsert(current, order, previous), current);
+    if (!active()) return;
+    orders = saved;
     $('review-dialog').close();
     render();
     $('notice').textContent = 'Заявка сохранена.';
-  } catch (error) { $('review-error').textContent = error.message; }
-  finally { button.disabled = false; }
+  } catch (error) { if (active()) $('review-error').textContent = error.message; }
+  finally { operation.finish(); }
 });
 
 $('ledger').addEventListener('click', () => {
+  if (pendingImports.has($('ledger-form'))) return;
   $('ledger-form').reset();
+  clearLedgerPreview();
   $('ledger-error').textContent = '';
   $('ledger-dialog').showModal();
 });
+$('ledger-export').addEventListener('click', () => {
+  $('export-form').reset();
+  $('export-status').textContent = '';
+  $('export-dialog').showModal();
+});
+$('export-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const operation = startImport(event.submitter, event.currentTarget);
+  if (!operation) return;
+  const {scope, parties, money} = event.currentTarget.elements;
+  const selection = scope.value === 'filtered' ? selectOrders(orders, {
+    query:$('search').value, filter:$('filter').value, view, today:today(), sort, ascending, ...period,
+  }) : orders.filter(order => archived(order) === (scope.value === 'archive'));
+  const columns = {parties:parties.checked, money:money.checked};
+  const dialog = $('export-dialog');
+  try {
+    if (!selection.length) throw new Error('Нет заявок для выбранной выгрузки.');
+    const {exportLedger} = await import('./ledger-export.mjs');
+    if (!operation.active() || !dialog.open) return;
+    const bytes = exportLedger(selection, columns);
+    const url = URL.createObjectURL(new Blob([bytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+    const link = node('a');
+    link.href = url;
+    link.download = `sputnik-${today()}.xlsx`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    $('export-status').textContent = `Заявок в файле: ${selection.length}.`;
+  } catch (error) {
+    if (operation.active()) $('export-status').textContent = error.message;
+  } finally {
+    operation.finish();
+  }
+});
+$('ledger-file').addEventListener('change', clearLedgerPreview);
+function clearLedgerPreview() {
+  ledgerPreview = undefined;
+  $('ledger-preview').replaceChildren();
+  $('ledger-submit').textContent = 'Проверить файл';
+}
 $('ledger-form').addEventListener('submit', async event => {
   event.preventDefault();
-  const button = event.submitter;
-  button.disabled = true;
+  const operation = startImport(event.submitter, event.currentTarget);
+  if (!operation) return;
+  const file = $('ledger-file').files[0];
   $('ledger-error').textContent = '';
   try {
-    const {readSheet} = await import('read-excel-file/browser');
-    const file = $('ledger-file').files[0];
-    const imported = parseLedger(await readSheet(file, 'Ноябрь'), '2026-11');
-    if (!imported.length) throw new Error('В листе нет заявок за ноябрь 2026.');
+    if (ledgerPreview?.file !== file || !ledgerPreview) {
+      const archive = await readExcelArchive(file);
+      if (!operation.active()) return;
+      $('ledger-preview').textContent = 'Проверяем листы книги…';
+      const {default: readWorkbook} = await import('read-excel-file/browser');
+      if (!operation.active()) return;
+      const sheets = await readWorkbook(archive);
+      if (!operation.active()) return;
+      const current = await store.list();
+      if (!operation.active() || $('ledger-file').files[0] !== file) return;
+      let readColors;
+      if (typeof DOMParser === 'function') {
+        const {createLedgerColorReader} = await import('./ledger-colors.mjs');
+        if (!operation.active() || $('ledger-file').files[0] !== file) return;
+        readColors = createLedgerColorReader(archive);
+      }
+      const preview = previewLedgerWorkbook(sheets.map(sheet => ({
+        ...sheet, colors:readColors?.(sheet.sheet, sheet.data),
+      })), current);
+      $('ledger-preview').replaceChildren(node('p', `Найдено: ${preview.found}. К импорту: ${preview.orders.length}. Дубли: ${preview.duplicates}. Ошибки: ${preview.invalid}.`));
+      $('ledger-preview').append(node('p', 'Проверены листы: ' + preview.included.join(', '), 'quiet'));
+      if (preview.skipped.length) $('ledger-preview').append(node('p', 'Пропущены листы без колонок реестра: ' + preview.skipped.join(', '), 'quiet'));
+      if (!preview.orders.length) $('ledger-preview').append(node('p', 'Новых заявок для импорта нет.'));
+      if (preview.missing.size) {
+        $('ledger-preview').append(node('p', 'Пустые или нераспознанные поля: ' +
+          [...preview.missing].map(([label, count]) => `${label} (${count})`).join(', '), 'quiet'));
+      }
+      const stages = new Map();
+      for (const order of preview.orders) {
+        const label = tripTitles.get(tripStatus(order));
+        stages.set(label, (stages.get(label) ?? 0) + 1);
+      }
+      if (stages.size) {
+        $('ledger-preview').append(node('p', 'Статусы: ' +
+          [...stages].map(([label, count]) => `${label} (${count})`).join(', '), 'quiet'));
+      }
+      if (preview.orders.length) {
+        const details = node('details', null, 'ledger-example-preview');
+        details.append(node('summary', 'Пример распознанных заявок · первые ' +
+          Math.min(preview.orders.length, 5)));
+        const list = node('ol');
+        for (const item of preview.orders.slice(0, 5)) {
+          const row = node('li');
+          row.append(node('strong', '№ ' + item.number + ' · ' + (item.date || 'без даты')),
+            node('p', (item.route || 'Маршрут не указан') + ' · ' +
+              (item.customer || 'Заказчик не указан') + ' / ' +
+              (item.carrier || 'Перевозчик не указан')),
+            node('p', 'Ставки: ' +
+              (item.customerAmount == null ? '—' : money(item.customerAmount)) +
+              ' / ' + (item.carrierAmount == null ? '—' : money(item.carrierAmount)),
+              'quiet'));
+          list.append(row);
+        }
+        details.append(list);
+        $('ledger-preview').append(details);
+        ledgerPreview = {file, ...preview};
+        $('ledger-submit').textContent = 'Подтвердить импорт';
+      }
+      return;
+    }
+    const preview = ledgerPreview;
     const current = await store.list();
-    const saved = addLedgerOrders(current, imported);
-    orders = await store.save(saved, current);
+    if (!operation.active() || ledgerPreview !== preview) return;
+    const saved = addLedgerOrders(current, preview.orders);
+    const added = saved.length - current.length;
+    const result = added ? await saveRecords(saved, current) : current;
+    if (!operation.active()) return;
+    orders = result;
     $('ledger-dialog').close();
     render();
-    const added = saved.length - current.length;
-    $('notice').textContent = `Добавлено: ${added}. Уже в реестре: ${imported.length - added}.`;
-  } catch (error) { $('ledger-error').textContent = error.message; }
-  finally { button.disabled = false; }
+    clearLedgerPreview();
+    $('notice').textContent = `Добавлено: ${added}. Уже в реестре: ${preview.duplicates + preview.orders.length - added}.`;
+  } catch (error) {
+    if (operation.active()) {
+      if (!ledgerPreview) $('ledger-preview').replaceChildren();
+      $('ledger-error').textContent = error.message;
+    }
+  }
+  finally { operation.finish(); }
 });
 
 function reportData() {

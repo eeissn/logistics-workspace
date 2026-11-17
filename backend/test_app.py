@@ -1,9 +1,11 @@
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -80,12 +82,71 @@ class WorkspaceTests(unittest.TestCase):
         self.second.cookies.set("__Host-logistics", cookie)
         self.assertEqual(self.second.get("/api/records").status_code, 401)
 
+    def test_single_etrn_patch_persists_without_reposting_registry(self):
+        first = self.writer(self.first)
+        other = self.writer(self.second, "second")
+        saved = self.put(self.first, first, 0, [order("7371"), order("7372")]).json()
+        original = saved["orders"][0]
+        second_original = saved["orders"][1]
+        payload = {
+            "number": original["number"], "updatedAt": original["updatedAt"],
+            "etrn": {**original["etrn"], "orderForm": True, "created": True, "allSigned": True},
+        }
+        response = self.first.patch("/api/etrn", headers=first, json=payload)
+        self.assertEqual(response.status_code, 200)
+        after = response.json()
+        self.assertEqual(after["revision"], 2)
+        self.assertEqual(after["orders"][0]["etrn"], payload["etrn"])
+        self.assertEqual(after["orders"][1], second_original)
+        self.assertEqual(self.first.get("/api/records", headers=first).json(), after)
+        self.assertEqual(self.second.get("/api/records", headers=other).json()["orders"], [])
+        self.assertEqual(self.second.patch("/api/etrn", headers=other, json=payload).status_code, 404)
+        self.assertEqual(self.first.patch("/api/etrn", headers=first, json=payload).status_code, 409)
+        self.assertEqual(self.first.patch("/api/etrn", json=payload).status_code, 403)
+        current = after["orders"][0]
+        unchanged = self.first.patch("/api/etrn", headers=first, json={
+            "number": current["number"], "updatedAt": current["updatedAt"],
+            "etrn": current["etrn"],
+        })
+        self.assertEqual(unchanged.status_code, 200)
+        self.assertEqual(unchanged.json()["revision"], 2)
+
     def test_accounts_use_salted_hashes_and_are_limited_to_two(self):
         with self.assertRaisesRegex(ValueError, "two accounts"):
             add_user(self.path, "third@example.test", PASSWORD)
         with database(self.path) as db:
             first, second = db.execute("SELECT password FROM users").fetchall()
         self.assertNotEqual(first[0], second[0])
+
+    def test_old_tab_cannot_use_the_replacement_cookie_with_its_old_csrf(self):
+        old_tab = self.writer(self.first)
+        self.assertEqual(self.put(self.first, old_tab, 0, [order("A")]).status_code, 200)
+
+        # Both tabs share one cookie jar. The new login replaces its cookie,
+        # while the older tab still holds the previous CSRF token in memory.
+        new_tab = self.writer(self.first, "second")
+        self.assertEqual(self.put(self.first, new_tab, 0, [order("B")]).status_code, 200)
+        self.assertEqual(self.first.get("/api/records", headers=old_tab).status_code, 401)
+        self.assertEqual(self.put(self.first, old_tab, 1, [order("A-stale")]).status_code, 403)
+        self.assertEqual(self.first.post("/api/logout", headers=old_tab).status_code, 403)
+        current = self.first.get("/api/records", headers=new_tab).json()
+        self.assertEqual([item["number"] for item in current["orders"]], ["B"])
+        self.assertEqual(current["revision"], 1)
+
+    def test_in_flight_write_cannot_commit_after_session_revocation(self):
+        from backend.app import validate_orders
+
+        headers = self.writer(self.first)
+        peer = self.writer(self.second)
+
+        def revoke_before_save(orders):
+            validate_orders(orders)
+            with database(self.path, write=True) as db:
+                db.execute("DELETE FROM sessions WHERE csrf=?", (headers["X-CSRF-Token"],))
+
+        with patch("backend.app.validate_orders", side_effect=revoke_before_save):
+            self.assertEqual(self.put(self.first, headers, 0, [order()]).status_code, 401)
+        self.assertEqual(self.second.get("/api/records", headers=peer).json(), {"revision": 0, "orders": []})
 
     def test_crud_and_sync_with_two_sessions(self):
         first = self.writer(self.first)
@@ -169,6 +230,71 @@ class WorkspaceTests(unittest.TestCase):
         winner = a.result() if a.result().status_code == 200 else b.result()
         self.assertEqual(self.first.get("/api/records", headers=first).json(), winner.json())
 
+    def test_full_year_515_orders_round_trip_and_account_isolation(self):
+        """A realistic yearly registry must remain complete through sync and edits."""
+        first = self.writer(self.first)
+        second = self.writer(self.second, "second")
+        yearly = [
+            {
+                **order(f"2026-{index:04d}"),
+                "date": f"2026-{index % 12 + 1:02d}-{index % 28 + 1:02d}",
+                "customer": f"Customer {index}",
+                "trip": {"stage": "unloaded" if index % 3 else "loaded"},
+            }
+            for index in range(515)
+        ]
+        saved = self.put(self.first, first, 0, yearly)
+        self.assertEqual(saved.status_code, 200, saved.text)
+        initial = saved.json()
+        self.assertEqual(initial["revision"], 1)
+        self.assertEqual(len(initial["orders"]), 515)
+        self.assertEqual(len({item["number"] for item in initial["orders"]}), 515)
+        self.assertEqual(initial["orders"][0]["number"], "2026-0000")
+        self.assertEqual(initial["orders"][-1]["number"], "2026-0514")
+        self.assertEqual(self.first.get("/api/records", headers=first).json(), initial)
+
+        # Equal numbers must not make different users share one owner's records.
+        peer = self.put(self.second, second, 0, [
+            {**order("2026-0000"), "customer": "Second account only"},
+        ])
+        self.assertEqual(peer.status_code, 200, peer.text)
+        self.assertEqual(len(peer.json()["orders"]), 1)
+        self.assertEqual(self.first.get("/api/records", headers=first).json(), initial)
+
+        edited = [dict(item) for item in initial["orders"]]
+        edited[257] = {**edited[257], "customer": "Updated customer"}
+        changed = self.put(self.first, first, initial["revision"], edited)
+        self.assertEqual(changed.status_code, 200, changed.text)
+        result = changed.json()
+        self.assertEqual(result["revision"], 2)
+        self.assertEqual(len(result["orders"]), 515)
+        self.assertEqual(result["orders"][257]["customer"], "Updated customer")
+        self.assertNotEqual(result["orders"][257]["updatedAt"], initial["orders"][257]["updatedAt"])
+        self.assertEqual(result["orders"][0]["updatedAt"], initial["orders"][0]["updatedAt"])
+        self.assertEqual(result["orders"][-1]["updatedAt"], initial["orders"][-1]["updatedAt"])
+
+        stale = self.put(self.first, first, initial["revision"], initial["orders"])
+        self.assertEqual(stale.status_code, 409)
+        self.assertEqual(self.first.get("/api/records", headers=first).json(), result)
+        self.assertEqual(self.second.get("/api/records", headers=second).json(), peer.json())
+
+        with TemporaryDirectory() as directory:
+            restored_path = Path(directory) / "yearly.sqlite3"
+            backup(self.path, restored_path)
+            with database(restored_path) as db:
+                self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM orders").fetchone()[0], 516)
+            restored = create_app(restored_path, ORIGIN)
+            with TestClient(restored, base_url=ORIGIN) as client:
+                first_after_restore = self.writer(client)
+                self.assertEqual(
+                    client.get("/api/records", headers=first_after_restore).json(), result
+                )
+                second_after_restore = self.writer(client, "second")
+                self.assertEqual(
+                    client.get("/api/records", headers=second_after_restore).json(), peer.json()
+                )
+
     def test_bad_data_size_and_duplicate_numbers(self):
         headers = self.writer(self.first)
         for invalid in ([order(), order()], [{**order(), "contacts": [{"role": "x", "values": "x"}]}], [{"number": "1"}]):
@@ -185,9 +311,106 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(self.first.get("/api/me").status_code, 401)
         self.assertEqual(self.login(self.first).status_code, 429)
 
+    def test_bulk_etrn_preview_write_isolation_conflicts(self):
+        h1 = self.writer(self.first)
+        h2 = self.writer(self.second, "second")
+        initial = self.put(self.first, h1, 0, [order("A"), order("B")]).json()
+        self.put(self.second, h2, 0, [order("A")])
+        items = [{"number": row["number"], "updatedAt": row["updatedAt"]} for row in initial["orders"]]
+        payload = {"choice": "manual", "items": items, "revision": initial["revision"]}
+        path = "/api/etrn/bulk"
+        self.assertEqual(self.first.post(path, json={**payload, "preview": False}).status_code, 403)
+        self.assertEqual(self.first.post(path, headers={"Origin": ORIGIN}, json=payload).status_code, 403)
+        preview = self.first.post(path, headers=h1, json={**payload, "preview": True})
+        self.assertEqual(preview.status_code, 200)
+        self.assertEqual(preview.json()["ready"], 2)
+        self.assertFalse(self.first.get("/api/records", headers=h1).json()["orders"][0]["etrn"].get("manualComplete"))
+        changed = self.first.post(path, headers=h1, json={**payload, "preview": False})
+        self.assertEqual(changed.status_code, 200)
+        self.assertEqual(changed.json()["updated"], 2)
+        owned = self.first.get("/api/records", headers=h1).json()
+        self.assertTrue(all(row["etrn"]["manualComplete"] for row in owned["orders"]))
+        self.assertFalse(self.second.get("/api/records", headers=h2).json()["orders"][0]["etrn"].get("manualComplete"))
+        self.assertEqual(self.first.post(path, headers=h1, json=payload).status_code, 409)
+        bad = {**payload, "revision": owned["revision"], "choice": "not-required"}
+        self.assertEqual(self.first.post(path, headers=h1, json=bad).json()["ready"], 0)
+        self.assertEqual(self.first.post(path, headers=h1, json={**payload, "items": items + items}).status_code, 422)
+        self.assertEqual(self.second.post(path, headers=h2, json={
+            "choice": "created", "revision": 1, "items": [items[0]], "preview": False
+        }).json()["results"][0]["result"], "conflict")
+
+    def test_bulk_signed_71_uses_agreement_numbers_and_safe_individual_override(self):
+        h1 = self.writer(self.first)
+        h2 = self.writer(self.second, "second")
+        sample = []
+        for index in range(71):
+            item = order(f"AGR-{index:03d}")
+            item["etrn"] = {"required": True, "number": "", "created": False}
+            sample.append(item)
+        sample[5]["etrn"]["number"] = "EXISTING-5"
+        sample[5]["etrn"]["sender"] = True
+        initial = self.put(self.first, h1, 0, sample).json()
+        self.put(self.second, h2, 0, [order("AGR-000")])
+        items = [{"number": row["number"], "updatedAt": row["updatedAt"]}
+                 for row in initial["orders"]]
+        items[6]["etrnNumber"] = "CUSTOM-6"
+        payload = {"choice": "signed", "revision": initial["revision"], "items": items}
+        url = "/api/etrn/bulk"
+        preview = self.first.post(url, headers=h1, json={**payload, "preview": True})
+        self.assertEqual(preview.status_code, 200, preview.text)
+        self.assertEqual(preview.json()["ready"], 71)
+        self.assertEqual(self.first.get("/api/records", headers=h1).json(), initial)
+        applied = self.first.post(url, headers=h1, json={**payload, "preview": False})
+        self.assertEqual(applied.status_code, 200, applied.text)
+        self.assertEqual(applied.json()["updated"], 71)
+        updated = self.first.get("/api/records", headers=h1).json()
+        values = updated["orders"]
+        self.assertEqual(values[0]["etrn"]["number"], "AGR-000")
+        self.assertEqual(values[5]["etrn"]["number"], "EXISTING-5")
+        self.assertTrue(values[5]["etrn"]["sender"])
+        self.assertEqual(values[6]["etrn"]["number"], "CUSTOM-6")
+        self.assertTrue(all(row["etrn"]["created"] and row["etrn"]["allSigned"] for row in values))
+        self.assertFalse(any(row["etrn"].get("recipient") for row in values))
+        self.assertFalse(self.second.get("/api/records", headers=h2).json()
+                         ["orders"][0]["etrn"].get("allSigned"))
+        self.assertEqual(self.first.post(url, headers=h1, json=payload).status_code, 409)
+        for bad in ("", "bad\nnumber", "x" * 81):
+            broken = [{**items[0], "etrnNumber": bad}]
+            invalid = self.first.post(url, headers=h1, json={
+                "choice": "signed", "revision": updated["revision"],
+                "items": broken, "preview": False,
+            })
+            self.assertEqual(invalid.status_code, 422)
+        invalid_choice = self.first.post(url, headers=h1, json={
+            "choice": "manual", "revision": updated["revision"],
+            "items": [items[6]], "preview": True,
+        })
+        self.assertEqual(invalid_choice.status_code, 422)
+
+    def test_bulk_etrn_can_correct_accidental_signed_status(self):
+        headers = self.writer(self.first)
+        original = order("TEST-CORRECTION")
+        original["etrn"]["allSigned"] = True
+        snapshot = self.put(self.first, headers, 0, [original]).json()
+        item = snapshot["orders"][0]
+        request = {"choice": "created", "revision": snapshot["revision"],
+                   "items": [{"number": item["number"], "updatedAt": item["updatedAt"]}]}
+        preview = self.first.post("/api/etrn/bulk", headers=headers, json=request)
+        self.assertEqual(preview.status_code, 200)
+        self.assertEqual(preview.json()["ready"], 1)
+        result = self.first.post("/api/etrn/bulk", headers=headers, json={**request, "preview": False})
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json()["updated"], 1)
+        saved = self.first.get("/api/records", headers=headers).json()["orders"][0]
+        self.assertFalse(saved["etrn"]["allSigned"])
+        self.assertTrue(saved["etrn"]["created"])
+        self.assertEqual(saved["etrn"]["number"], original["etrn"]["number"])
+
     def test_schema_backup_and_reopen(self):
         headers = self.writer(self.first)
-        self.put(self.first, headers, 0, [order()])
+        second = self.writer(self.second, "second")
+        first_snapshot = self.put(self.first, headers, 0, [order()]).json()
+        second_snapshot = self.put(self.second, second, 0, [{**order(), "customer": "Second"}]).json()
         with TemporaryDirectory() as directory:
             path = Path(directory) / "backup.sqlite3"
             backup(self.path, path)
@@ -195,9 +418,34 @@ class WorkspaceTests(unittest.TestCase):
             with database(path) as db:
                 self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 2)
                 self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0], "ok")
-                self.assertEqual(db.execute("SELECT number FROM orders").fetchone()[0], "7123")
-                self.assertEqual(db.execute("SELECT COUNT(*) FROM users").fetchone()[0], 2)
-            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM orders").fetchone()[0], 2)
+            restored = create_app(path, ORIGIN)
+            with TestClient(restored, base_url=ORIGIN) as first, TestClient(restored, base_url=ORIGIN) as other:
+                self.assertEqual(first.get("/api/records", headers=headers).status_code, 401)
+                restored_first = self.writer(first)
+                restored_second = self.writer(other, "second")
+                self.assertEqual(first.get("/api/records", headers=restored_first).json(), first_snapshot)
+                self.assertEqual(other.get("/api/records", headers=restored_second).json(), second_snapshot)
+                # Restoring a snapshot must preserve server-side tenancy on writes,
+                # even when both owners have exactly the same order number.
+                self.assertEqual(first.get("/api/records?owner=second%40example.test",
+                                           headers=restored_first).json(), first_snapshot)
+                self.assertEqual(other.get("/api/records?owner=first%40example.test",
+                                           headers=restored_second).json(), second_snapshot)
+                updated_second = self.put(other, restored_second, second_snapshot["revision"], [
+                    {**second_snapshot["orders"][0], "customer": "Second after restore"},
+                ])
+                self.assertEqual(updated_second.status_code, 200)
+                self.assertEqual(first.get("/api/records", headers=restored_first).json(), first_snapshot)
+                self.assertEqual(self.put(first, restored_first, first_snapshot["revision"],
+                                          []).status_code, 200)
+                self.assertEqual(other.get("/api/records", headers=restored_second).json(),
+                                 updated_second.json())
+                self.assertEqual(self.put(other, restored_first, updated_second.json()["revision"],
+                                          []).status_code, 403)
+            if os.name == "posix":
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             with self.assertRaises(FileExistsError):
                 backup(self.path, path)
 

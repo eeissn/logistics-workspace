@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { margin, etrnSteps, etrnStatus, etrnProgress, markTrip, mergeImport, upsert, archived, monthReport, scheduledToday } from '../src/domain.mjs';
+import { margin, etrnSteps, etrnStatus, etrnProgress, markTrip, mergeImport, upsert, archived, monthReport, monthSnapshot, dateRange, scheduledToday } from '../src/domain.mjs';
 import { parseLedger, addLedgerOrders } from '../src/ledger.mjs';
 import { driverMessage } from '../src/driver.mjs';
-import { importPair, phones } from '../src/import.mjs';
+import { importPair, phones, normalizePassport } from '../src/import.mjs';
 import { linesFromItems } from '../src/pdf-lines.mjs';
 
 const client = `Заявка № 1234 от 09.11.2026
@@ -79,6 +79,10 @@ test('архив ждёт выгрузку и завершение ЭТРН, м�
   assert.equal(archived(finished), true);
   const failed = {...base, number:'2', trip:{stage:'failed'}};
   assert.equal(archived(failed), true);
+  assert.equal(archived({...base, etrn:{required:false}}), false);
+  assert.equal(archived({...base, etrn:{required:true,manualComplete:true}}), true);
+  assert.equal(archived({...base, trip:{stage:'loaded'}, etrn:{required:true,manualComplete:true}}), false);
+  assert.equal(archived({...base, trip:{stage:'loaded'}, etrn:{...base.etrn,allSigned:true}}), false);
   assert.equal(monthReport([finished, failed, {...base, number:'3', date:'2026-12-01'}], '2026-11').total, 700);
 });
 
@@ -129,6 +133,15 @@ test('маржа совпадает с формулой калькулятора
   assert.equal(margin(10000,'0',20000,'0').realProfit,-8500);
 });
 
+test('созданная заказ-заявка видна отдельным статусом до создания ЭТРН', () => {
+  const draft = {required:true,number:'7372',orderForm:true,created:false,allSigned:false};
+  assert.equal(etrnStatus(draft), 'Заказ-заявка создана');
+  assert.equal(etrnProgress(draft), 'Заказ-заявка создана');
+  assert.equal(etrnStatus({...draft,created:true}), 'В работе');
+  assert.equal(etrnStatus({...draft,created:true,allSigned:true}), 'Подписана');
+  assert.equal(etrnStatus({required:true,number:'7372',created:false}), 'К созданию');
+});
+
 test('ЭТРН требует номер и все подписи, ручное закрытие отдельное', () => {
   const etrn = {required:true, ...Object.fromEntries(etrnSteps.map(([key]) => [key,true]))};
   assert.equal(etrnStatus(etrn), 'В работе');
@@ -165,4 +178,118 @@ test('повторный импорт сохраняет отметки рейс
   assert.equal(merged.etrn.number, 'Э-12');
   assert.equal(etrnProgress(merged.etrn), '1/4 подписи');
   assert.equal(etrnProgress({...merged.etrn, pickupCarrier:true, recipient:true, deliveryCarrier:true, number:''}), 'Нужен номер');
+});
+
+
+test('импорт PDF сохраняет дату выдачи паспорта и отделяет номер прицепа', () => {
+  const modified = carrier.replace('ФИО: Водитель Тестовый    Марка тягача: КАМАЗ',
+    'ФИО: Водитель Тестовый    Марка тягача: VOLVO\nПаспорт: 0000 000000 Учебный отдел    Номер тягача: А000АА 00\nДата выдачи: 16.06.2006')
+    .replace('Номер прицепа:', 'Номер прицепа: ВЕ0000 00');
+  const order = importPair(client, modified);
+  assert.equal(order.passport, '0000 000000 Учебный отдел от 16.06.2006');
+  assert.match(driverMessage(order), /Паспорт: 0000 000000 Учебный отдел от 16\.06\.2006/);
+  assert.match(driverMessage(order), /Транспорт: VOLVO А000АА 00\nПрицеп: ВЕ0000 00/);
+  assert.doesNotMatch(driverMessage(order), /Транспорт:[^\n]*ВЕ0000/);
+  assert.deepEqual(importPair(modified, client), order);
+});
+
+test('пустой прицеп не выводится, существующая дата паспорта не удваивается', () => {
+  const modified = carrier.replace('ФИО: Водитель Тестовый    Марка тягача: КАМАЗ',
+    'ФИО: Водитель Тестовый    Марка тягача: VOLVO\nПаспорт: 0000 000000 Учебный отдел от 16.06.2006    Номер тягача: А000АА 00\nДата выдачи: 16.06.2006');
+  const order = importPair(client, modified);
+  const result = driverMessage(order);
+  assert.equal(result.match(/16\.06\.2006/g)?.length, 1);
+  assert.doesNotMatch(result, /Прицеп:/);
+  assert.match(result, /Транспорт: VOLVO А000АА 00/);
+});
+
+test('месячная сводка считает все заявки, но маржу по правилам отчёта', () => {
+  const data = [
+    {number:'1',date:'2026-11-01',ledgerMargin:100,trip:{stage:'unloaded'}},
+    {number:'2',date:'2026-11-30',ledgerMargin:50,trip:{stage:'failed'}},
+    {number:'3',date:'2026-11-02',customerAmount:null,carrierAmount:null},
+    {number:'4',date:'2026-12-01',ledgerMargin:70},
+  ];
+  assert.deepEqual(monthSnapshot(data,'2026-11'), {count:3,total:100});
+  assert.deepEqual(monthSnapshot(data,'2026-12'), {count:1,total:70});
+  assert.deepEqual(monthSnapshot(data,'2027-01'), {count:0,total:0});
+  assert.deepEqual(monthSnapshot(data,'2026-11','2026-11-01'), {count:1,total:100});
+});
+
+test('паспорт с датой и кодом подразделения нормализуется при импорте', () => {
+  const modified = carrier.replace('ФИО: Водитель Тестовый    Марка тягача: КАМАЗ',
+    'ФИО: Водитель Тестовый    Марка тягача: SCANIA\nПаспорт: 3419 285118 УМВД России по Костромской области 25.06.2019 к.п. 440-021    Номер тягача: О749КВ 44');
+  const order = importPair(client, modified);
+  assert.equal(order.passport, '3419 285118 УМВД России по Костромской области от 25.06.2019');
+  assert.match(driverMessage(order), /Паспорт: 3419 285118 УМВД России по Костромской области от 25\.06\.2019/);
+  assert.doesNotMatch(driverMessage(order), /к\.п\./i);
+});
+
+test('ранее сохранённый паспорт исправляется при показе, без изменения заявки', () => {
+  const saved = {driver:'Тестовый', passport:'3419 285118 УМВД России по Костромской области 25.06.2019 к.п. 440-021'};
+  assert.match(driverMessage(saved), /области от 25\.06\.2019/);
+  assert.equal(saved.passport, '3419 285118 УМВД России по Костромской области 25.06.2019 к.п. 440-021');
+  assert.equal(normalizePassport('4022 388621 ГУ МВД России по г. Санкт-Петербургу и Ленинградской области'),
+    '4022 388621 ГУ МВД России по г. Санкт-Петербургу и Ленинградской области');
+});
+
+test('дата выдачи без двоеточия подхватывается из отдельного реквизита', () => {
+  const modified = carrier.replace('ФИО: Водитель Тестовый    Марка тягача: КАМАЗ',
+    'ФИО: Водитель Тестовый    Марка тягача: КАМАЗ\nПаспорт: 0000 000000 Учебный отдел    Номер тягача: А000АА 00\nДата выдачи паспорта 16.06.2006');
+  assert.equal(importPair(client, modified).passport, '0000 000000 Учебный отдел от 16.06.2006');
+});
+
+test('дата выдачи на следующей строке PDF: без попадания номера подразделения', () => {
+  const modified = carrier.replace('ФИО: Водитель Тестовый    Марка тягача: КАМАЗ',
+    'ФИО: Водитель Тестовый    Марка тягача: MAN\nПаспорт: 0000 000000 Учебное управление    Номер тягача: А000АА 00\n12.01.2023 к.п. 780-039');
+  const order = importPair(client, modified);
+  assert.equal(order.passport, '0000 000000 Учебное управление от 12.01.2023');
+  assert.match(driverMessage(order), /управление от 12\.01\.2023/);
+  assert.doesNotMatch(driverMessage(order), /780-039/);
+});
+
+test('не подставляет постороннюю дату из соседних разделов в паспорт', () => {
+  const modified = carrier.replace('ФИО: Водитель Тестовый    Марка тягача: КАМАЗ',
+    'ФИО: Водитель Тестовый    Марка тягача: MAN\nПаспорт: 0000 000000 Учебное управление    Номер тягача: А000АА 00\nКонтактный телефон: 89000000005');
+  assert.equal(importPair(client, modified).passport, '0000 000000 Учебное управление');
+});
+
+
+test('окна рейса: год из конечной даты, Новый год и невозможные даты', () => {
+  assert.deepEqual(dateRange('13.11–14.11.2027', '2026-11-01'), ['2027-11-13', '2027-11-14']);
+  assert.deepEqual(dateRange('31.12–01.01.2027', '2026-12-01'), ['2026-12-31', '2027-01-01']);
+  assert.deepEqual(dateRange('31.12/01.01', '2026-12-01'), ['2026-12-31', '2027-01-01']);
+  assert.deepEqual(dateRange('28.02–01.03.2027', '2026-12-01'), ['2027-02-28', '2027-03-01']);
+  assert.deepEqual(dateRange('29.02.2028', '2026-11-01'), ['2028-02-29']);
+  assert.deepEqual(dateRange('29.02.2027', '2026-11-01'), []);
+  assert.deepEqual(dateRange('31.04.2027', '2026-11-01'), []);
+  assert.deepEqual(dateRange('32.11.2027', '2026-11-01'), []);
+  assert.deepEqual(dateRange('13.11', ''), []);
+
+  const trip = {date: '2026-11-01', points: [
+    {kind: 'Выгрузка', schedule: '31.12–01.01.2027', address: 'Тест'},
+  ]};
+  assert.equal(scheduledToday(trip, 'Выгрузка', '2026-12-31'), true);
+  assert.equal(scheduledToday(trip, 'Выгрузка', '2027-01-01'), true);
+  assert.equal(scheduledToday(trip, 'Выгрузка', '2027-01-02'), false);
+});
+
+test('фильтр на сегодня учитывает ISO-время и смешанные диапазоны дат', () => {
+  assert.deepEqual(dateRange('2026-11-12T10:00'), ['2026-11-12']);
+  assert.deepEqual(dateRange('2026-12-31T23:00 — 2027-01-01T08:00'),
+    ['2026-12-31', '2027-01-01']);
+  assert.deepEqual(dateRange('31.12.2026 — 2027-01-01T08:00'),
+    ['2026-12-31', '2027-01-01']);
+  assert.deepEqual(dateRange('2027-02-29T10:00'), []);
+  assert.deepEqual(dateRange('2028-02-29T10:00'), ['2028-02-29']);
+
+  const order = {date:'2026-11-01', points:[
+    {kind:'Погрузка', address:'Тест', schedule:'2026-11-12T10:00'},
+    {kind:'Выгрузка', address:'Тест', schedule:'2026-12-31T23:00 — 2027-01-01T08:00'},
+  ]};
+  assert.equal(scheduledToday(order, 'Погрузка', '2026-11-12'), true);
+  assert.equal(scheduledToday(order, 'Погрузка', '2026-11-13'), false);
+  assert.equal(scheduledToday(order, 'Выгрузка', '2026-12-31'), true);
+  assert.equal(scheduledToday(order, 'Выгрузка', '2027-01-01'), true);
+  assert.equal(scheduledToday(order, 'Выгрузка', '2027-01-02'), false);
 });

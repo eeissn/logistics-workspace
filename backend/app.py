@@ -1,12 +1,13 @@
 import argparse
 from contextlib import closing, contextmanager
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import getpass
 import hashlib
 import hmac
 import json
 import math
 import os
+import re
 from pathlib import Path
 import secrets
 import sqlite3
@@ -16,6 +17,7 @@ from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from starlette.concurrency import run_in_threadpool
+from backend.bulk_etrn import apply_bulk_etrn, CHOICES
 
 COOKIE = "__Host-logistics"
 SESSION_AGE = 12 * 3600
@@ -220,7 +222,7 @@ def replace_orders(db, owner, revision, orders):
     return snapshot(db, owner)
 
 
-def create_app(path, origin):
+def create_app(path, origin, sheet_preview=None):
     path = database_path(path)
     url = urlsplit(origin)
     if not url.hostname or origin != f"{url.scheme}://{url.netloc}" or url.username or url.password:
@@ -280,6 +282,33 @@ def create_app(path, origin):
             db.execute("DELETE FROM login_attempts WHERE ip=?", (ip,))
         return user["email"]
 
+    if sheet_preview is not None:
+        @app.get("/api/sheet-preview")
+        def preview_sheet_capability(request: Request):
+            row = session(request, bind=True)
+            return sheet_preview(row["email"], None)
+
+        @app.post("/api/sheet-preview")
+        async def preview_sheet_row(request: Request):
+            session(request, mutate=True)
+            data = await read_json(request, 4096)
+            keys = ("number", "title", "amount", "requested", "promised")
+            if not isinstance(data, dict) or set(data) != set(keys):
+                raise HTTPException(422, "Invalid row")
+            if not all(isinstance(data[key], str) and 0 < len(data[key].strip()) <= 200 for key in keys):
+                raise HTTPException(422, "Invalid row")
+            data = {key: value.strip() for key, value in data.items()}
+            if len(data["number"]) > 48 or not re.fullmatch(r"[0-9]{1,12}(?:\.[0-9]{1,2})?", data["amount"]):
+                raise HTTPException(422, "Invalid amount or order number")
+            try:
+                for key in ("requested", "promised"):
+                    if date.fromisoformat(data[key]).isoformat() != data[key]:
+                        raise ValueError
+            except ValueError:
+                raise HTTPException(422, "Invalid dates") from None
+            user = session(request, mutate=True)
+            return await run_in_threadpool(sheet_preview, user["email"], data)
+
     @app.post("/api/login")
     async def login(request: Request, response: Response):
         check_origin(request)
@@ -323,7 +352,7 @@ def create_app(path, origin):
 
     @app.put("/api/records")
     async def put_records(request: Request):
-        owner = session(request, mutate=True)["email"]
+        active = session(request, mutate=True)
         data = await read_json(request, MAX_BODY)
         revision, orders = data.get("revision"), data.get("orders")
         if type(revision) is not int or not 0 <= revision < 2**63 - 1:
@@ -332,15 +361,155 @@ def create_app(path, origin):
         def save():
             validate_orders(orders)
             with database(path, write=True) as db:
-                return replace_orders(db, owner, revision, orders)
+                # The request body may have been in flight when another tab logged out.
+                current = db.execute("SELECT 1 FROM sessions WHERE token=? AND email=? AND expires>?",
+                                     (active["token"], active["email"], int(time.time()))).fetchone()
+                if current is None:
+                    raise HTTPException(401, "Sign in required")
+                return replace_orders(db, active["email"], revision, orders)
 
         return await run_in_threadpool(save)
+
+    @app.patch("/api/etrn")
+    async def patch_etrn(request: Request):
+        """Update a single owned order without reposting the entire registry."""
+        active = session(request, mutate=True)
+        data = await read_json(request, 16384)
+        if not isinstance(data, dict) or set(data) != {"number", "updatedAt", "etrn"}:
+            raise HTTPException(422, "Invalid ETRN update")
+        number, stamp, etrn = data["number"], data["updatedAt"], data["etrn"]
+        if (not isinstance(number, str) or not 1 <= len(number) <= 48 or
+            not isinstance(stamp, str) or not 1 <= len(stamp) <= 80 or
+            not isinstance(etrn, dict) or not isinstance(etrn.get("number", ""), str)):
+            raise HTTPException(422, "Invalid ETRN update")
+        if any(type(value) is not bool for key, value in etrn.items() if key != "number"):
+            raise HTTPException(422, "Invalid ETRN flags")
+
+        def save_one():
+            with database(path, write=True) as db:
+                valid_session = db.execute(
+                    "SELECT 1 FROM sessions WHERE token=? AND email=? AND expires>?",
+                    (active["token"], active["email"], int(time.time())),
+                ).fetchone()
+                if valid_session is None:
+                    raise HTTPException(401, "Sign in required")
+                row = db.execute(
+                    "SELECT payload, updated_at FROM orders WHERE owner=? AND number=?",
+                    (active["email"], number),
+                ).fetchone()
+                if row is None:
+                    raise HTTPException(404, "Order not found")
+                if row["updated_at"] != stamp:
+                    raise HTTPException(409, "Order changed")
+                current = json.loads(row["payload"])
+                current["etrn"] = etrn
+                validate_orders([current])
+                payload = json.dumps(current, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+                if payload != row["payload"]:
+                    updated = datetime.now(timezone.utc).isoformat(timespec="microseconds")
+                    db.execute(
+                        "UPDATE orders SET payload=?, updated_at=? WHERE owner=? AND number=?",
+                        (payload, updated, active["email"], number),
+                    )
+                    db.execute(
+                        "UPDATE registry SET revision=revision+1 WHERE owner=?",
+                        (active["email"],),
+                    )
+                return snapshot(db, active["email"])
+
+        return await run_in_threadpool(save_one)
+
+    @app.post("/api/etrn/bulk")
+    async def bulk_etrn(request: Request):
+        active = session(request, mutate=True)
+        data = await read_json(request, 65536)
+        if not isinstance(data, dict):
+            raise HTTPException(422, "Invalid request")
+        choice, items = data.get("choice"), data.get("items")
+        preview = data.get("preview", True)
+        revision = data.get("revision")
+        if choice not in CHOICES or type(preview) is not bool:
+            raise HTTPException(422, "Invalid ETRN status")
+        if type(revision) is not int or not 0 <= revision < 2**63 - 1:
+            raise HTTPException(422, "Invalid revision")
+        if not isinstance(items, list) or not 1 <= len(items) <= 200:
+            raise HTTPException(422, "Select between 1 and 200 orders")
+        numbers = set()
+        for item in items:
+            if (not isinstance(item, dict) or
+                not {"number", "updatedAt"} <= set(item) <= {"number", "updatedAt", "etrnNumber"}):
+                raise HTTPException(422, "Invalid selection")
+            number, stamp = item["number"], item["updatedAt"]
+            override = item.get("etrnNumber")
+            if (not isinstance(number, str) or not 1 <= len(number) <= 48 or
+                number in numbers or not isinstance(stamp, str) or len(stamp) > 80 or
+                ("etrnNumber" in item and
+                 (choice not in ("created", "signed") or not isinstance(override, str) or
+                  not 1 <= len(override) <= 80 or override != override.strip() or
+                  any(ord(char) < 32 for char in override)))):
+                raise HTTPException(422, "Invalid or repeated selection")
+            numbers.add(number)
+
+        def run():
+            with database(path, write=not preview) as db:
+                current = db.execute(
+                    "SELECT 1 FROM sessions WHERE token=? AND email=? AND expires>?",
+                    (active["token"], active["email"], int(time.time())),
+                ).fetchone()
+                if current is None:
+                    raise HTTPException(401, "Sign in required")
+                state = snapshot(db, active["email"])
+                if state["revision"] != revision:
+                    raise HTTPException(409, "Registry changed")
+                owned = {entry["number"]: entry for entry in state["orders"]}
+                modifications, results = {}, []
+                for item in items:
+                    number = item["number"]
+                    original = owned.get(number)
+                    if original is None:
+                        results.append({"number": number, "result": "not-found"})
+                        continue
+                    if original.get("updatedAt") != item["updatedAt"]:
+                        results.append({"number": number, "result": "conflict"})
+                        continue
+                    try:
+                        updated = apply_bulk_etrn(original, choice, item.get("etrnNumber"))
+                    except ValueError as exc:
+                        results.append({"number": number, "result": "skipped", "reason": str(exc)})
+                        continue
+                    if updated["etrn"] == original["etrn"]:
+                        results.append({"number": number, "result": "unchanged"})
+                        continue
+                    modifications[number] = updated
+                    results.append({"number": number, "result": "ready" if preview else "updated"})
+                if preview or not modifications:
+                    return {"results": results, "updated": 0 if preview else 0,
+                            "ready": len(modifications), "preview": preview}
+                updated_orders = [
+                    modifications.get(entry["number"], entry).copy()
+                    for entry in state["orders"]
+                ]
+                # validate_orders removes client-managed updatedAt and never edits the originals.
+                validate_orders(updated_orders)
+                saved = replace_orders(db, active["email"], revision, updated_orders)
+                return {"results": results, "updated": len(modifications),
+                        "ready": len(modifications), "preview": False,
+                        "revision": saved["revision"]}
+        return await run_in_threadpool(run)
 
     return app
 
 
 def from_env():
-    return create_app(os.environ["DATABASE_PATH"], os.environ["APP_ORIGIN"])
+    path = os.environ["DATABASE_PATH"]
+    writer = None
+    if os.getenv("WORKSPACE_SHEETS_ENABLED") == "true":
+        from backend.sheets import SheetWriter
+        config = json.loads(Path(os.environ["WORKSPACE_SHEETS_CONFIG"]).read_text(encoding="utf-8"))
+        token_file = Path(config["token_file"])
+        writer = SheetWriter(path, config["spreadsheet"], config["tab"], config["headers"],
+                             config["actors"], lambda: token_file.read_text(encoding="utf-8").strip())
+    return create_app(path, os.environ["APP_ORIGIN"], writer)
 
 
 def backup(path, target):
