@@ -94,8 +94,10 @@ export function tripStatus(order) {
 
 export function archived(order) {
   const stage = tripStatus(order);
+  // Manual ETRN closure is an administrative override, not four signatures.
+  // Keep unloaded trips visible for follow-up until fully signed.
   return stage === 'failed' || (stage === 'unloaded' &&
-    ['Подписана', 'Закрыта вручную'].includes(etrnStatus(order.etrn)));
+    etrnStatus(order.etrn) === 'Подписана');
 }
 
 export function dateRange(schedule, reference = '') {
