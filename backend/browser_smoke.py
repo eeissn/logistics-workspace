@@ -381,7 +381,9 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     row.locator(".etrn-link").click()
     dialog.locator('[name="manualComplete"]').uncheck()
     page.locator("#etrn-save").click()
+    expect(row.locator(".etrn-link")).to_have_text("Заказ-заявка создана")
     row.locator(".trip-status").select_option("unloaded")
+    expect(row.locator(".trip-status")).to_have_value("unloaded")
     # With no manual closure or full signatures, unloading is not enough.
     expect(row).to_be_visible()
     row.locator(".etrn-link").click()
@@ -389,6 +391,7 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     dialog.locator('[name="created"]').check()
     dialog.locator('[name="allSigned"]').check()
     dialog.locator('[name="etrnNumber"]').fill(f"ETRN-{number}")
+    expect(dialog.locator("#etrn-status")).to_have_text("Подписана")
     page.locator("#etrn-save").click()
     expect(page.locator("#active-count")).to_have_text(str(active_before_unload - 1))
     expect(page.locator("#table")).not_to_contain_text(f"№ {number}")
