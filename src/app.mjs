@@ -579,7 +579,8 @@ function renderCompact(container, rows) {
     const selector = bulkCheckbox(order);
     if (selector) item.append(selector);
     item.append(orderSummary(order, () => openOrder(order.number), undefined, false,
-      !window.matchMedia?.('(max-width: 760px)')?.matches));
+      !window.matchMedia?.('(max-width: 760px)')?.matches),
+      action('Быстрый просмотр', () => panelFor(order.number), 'peek-card-button'));
     list.append(item);
   }
   container.append(list);
