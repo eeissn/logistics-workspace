@@ -306,6 +306,8 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     page.locator("#ledger-file").set_input_files(workbook)
     page.locator('#ledger-form [type="submit"]').click()
     expect(page.locator("#ledger-preview")).to_contain_text("К импорту: 1")
+    expect(page.locator("#ledger-preview .ledger-example-preview summary")).to_contain_text("Пример распознанных заявок")
+    expect(page.locator("#ledger-preview .ledger-example-preview")).to_contain_text(f"EXCEL-{number}")
     expect(page.locator("#ledger-preview")).to_contain_text("Выгрузился (1)")
     page.locator('#ledger-form [type="submit"]').click()
     expect(page.locator("#ledger-dialog")).to_be_hidden()
@@ -703,8 +705,16 @@ def large_year_browser(chromium, origin):
         sign_in(page, "first")
         page.evaluate("""async () => {
             const profile = await (await fetch('/api/me')).json();
-            const previous = await (await fetch('/api/records')).json();
+            const snapshotResponse = await fetch('/api/records', {
+                headers: {'X-CSRF-Token': profile.csrf}
+            });
+            if (!snapshotResponse.ok) throw new Error('Fixture registry read failed: ' +
+                snapshotResponse.status + ' ' + await snapshotResponse.text());
+            const previous = await snapshotResponse.json();
+            if (!previous.orders.length) throw new Error('Missing valid test order');
+            const template = previous.orders[0];
             const orders = Array.from({length: 515}, (_, index) => ({
+                ...template,
                 number: 'YEAR-' + String(index).padStart(4, '0'),
                 date: index < 200 ? '2025-12-15' : index < 400 ? '2026-01-15' : '2026-11-15',
                 customer: 'Synthetic year ' + index, carrier: 'Synthetic carrier',
@@ -716,7 +726,7 @@ def large_year_browser(chromium, origin):
                 headers: {'Content-Type': 'application/json', 'X-CSRF-Token': profile.csrf},
                 body: JSON.stringify({revision: previous.revision, orders})
             });
-            if (!response.ok) throw new Error('Yearly fixture upload failed: ' + response.status);
+            if (!response.ok) throw new Error('Yearly fixture upload failed: ' + response.status + ' ' + await response.text());
         }""")
         started = monotonic()
         page.reload()
@@ -724,8 +734,11 @@ def large_year_browser(chromium, origin):
         expect(page.locator("#history-count")).to_have_text("515")
         expect(page.locator("#table .order")).to_have_count(74)
         page.locator('[data-scope="history"]').click()
-        expect(page.locator("#table .order")).to_have_count(515)
+        # History intentionally opens the most recent month first.
+        expect(page.locator("#table .order")).to_have_count(115)
         expect(page.locator("#history-month option")).to_have_count(4)
+        page.locator("#history-month").select_option("all")
+        expect(page.locator("#table .order")).to_have_count(515)
         page.locator("#history-month").select_option("2025-12")
         expect(page.locator("#table .order")).to_have_count(200)
         page.locator("#history-month").select_option("2026-11")

@@ -54,6 +54,18 @@
   </details>
 </aside>
 <main id="workspace" hidden>
+  <section id="excel-lab-controls" class="excel-lab-panel" hidden aria-label="Тестовая среда Excel">
+    <h2>Excel Lab · тестовая среда</h2>
+    <p>Изолированное демо для проверки импорта файлов с другой структурой таблицы. Никакого подключения к рабочему серверу; данные сохраняются только в браузере.</p>
+    <div class="excel-lab-buttons">
+      <button type="button" data-lab-sample="alternate">Скачать Excel с другими колонками</button>
+      <button type="button" data-lab-sample="reordered">Скачать Excel с переставленными столбцами</button>
+      <button type="button" data-lab-sample="invalid">Скачать Excel с неподходящим форматом</button>
+      <button type="button" id="lab-open-excel" class="primary">Проверить импорт Excel</button>
+      <button type="button" id="lab-reset-demo">Сбросить учебные заявки</button>
+    </div>
+    <p class="quiet">Порядок проверки: скачайте учебный XLSX → «Проверить импорт Excel» → выберите файл → «Проверить файл». Импорт в это демо возможен только после подтверждения и не затрагивает 515 рабочих заявок. Не используйте здесь настоящие документы.</p>
+  </section>
   <header class="intro">
     <h1 id="view-title">Актуальные заявки</h1>
     <div class="intro-metrics">

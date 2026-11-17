@@ -49,3 +49,9 @@ test('журнал для пользователей описывает возм
   assert.doesNotMatch(latest, /515 заявк|браузерн(ый|ую) провер|автоматическ(ие|ую) провер|CI|SQLite|SHA-256/i);
   assert.match(latest, /фильтр/);
 });
+
+test('17 ноября: тестовая среда Excel указана в пользовательской истории', () => {
+  const entry = updates.find(group => group.title === '17 ноября 2026');
+  assert.ok(entry?.items.some(item => item.includes('учебную среду') &&
+    item.includes('разными названиями')));
+});

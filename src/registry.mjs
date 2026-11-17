@@ -19,7 +19,8 @@ export const violetPalettes = {
 export const defaultAccents = {sputnik:'#27313e', violet:'#6035c6', sand:'#252525'};
 export const statusColors = {new:'#9695a8', signed:'#e3ad39', loaded:'#7544da', unloaded:'#369658', failed:'#cd575a'};
 export const validAccent = value => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
-export const displayKey = 'logistics-workspace:display:v1';
+export const displayKey = import.meta.env?.VITE_EXCEL_LAB === 'true'
+  ? 'logistics-workspace:excel-lab:display:v1' : 'logistics-workspace:display:v1';
 
 export function readDisplayPreferences() {
   try {
