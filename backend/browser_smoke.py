@@ -654,6 +654,9 @@ def contacts_viewport(page, number):
 def workspace_design(page, mobile):
     """Raycast-style commands, Linear feedback, Steep metrics and mobile dock."""
     expect(page.locator("#month-metrics .metric-chip")).to_have_count(3)
+    expect(page.locator("#sync-quick")).to_be_visible()
+    expect(page.locator("#sync-quick")).to_be_enabled()
+    expect(page.locator('#month-metrics [data-metric="count"]')).to_have_css("text-align", "center")
     expect(page.locator('#month-metrics [data-metric="margin"]')).to_contain_text("Маржа")
     if mobile:
         expect(page.locator("#mobile-dock")).to_be_visible()
@@ -664,11 +667,22 @@ def workspace_design(page, mobile):
         expect(page.locator("#view-title")).to_have_text("Актуальные заявки")
         page.locator("#dock-search").click()
         expect(page.locator("#search")).to_be_focused()
+        assert page.evaluate("""() => {
+            const search = document.querySelector('.registry-search').getBoundingClientRect();
+            const input = document.querySelector('#search').getBoundingClientRect();
+            const filter = document.querySelector('#filters-open').getBoundingClientRect();
+            return search.left >= -1 && search.right <= innerWidth + 1 &&
+                input.left >= search.left - 1 && input.right <= search.right + 1 &&
+                search.right <= filter.left + 1 &&
+                document.documentElement.scrollWidth <= innerWidth + 1;
+        }""")
         page.locator("#dock-more").click()
         expect(page.locator("#dock-more")).to_have_attribute("aria-expanded", "true")
         page.locator("#dock-more").click()
         expect(page.locator("#dock-more")).to_have_attribute("aria-expanded", "false")
     else:
+        expect(page.locator("#workspace-nav #command-launch")).to_be_visible()
+        expect(page.locator("#registry-actions #command-launch")).to_have_count(0)
         page.locator("#command-launch").click()
         dialog = page.locator("#command-dialog")
         expect(dialog).to_be_visible()
