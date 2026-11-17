@@ -23,7 +23,7 @@ export function matchCommands(query, commands = commandDefinitions) {
   });
 }
 
-export function mountCommandPalette({dialog, input, results, opener, actions, available}) {
+export function mountCommandPalette({dialog, input, results, opener, actions, available, contextCommands = () => []}) {
   const closeThenRun = id => {
     if (!available() || typeof actions[id] !== 'function') return;
     dialog.close();
@@ -31,7 +31,7 @@ export function mountCommandPalette({dialog, input, results, opener, actions, av
   };
   const draw = () => {
     results.replaceChildren();
-    const matches = matchCommands(input.value);
+    const matches = matchCommands(input.value,[...contextCommands(), ...commandDefinitions]);
     if (!matches.length) {
       const empty = document.createElement('p');
       empty.className = 'command-empty';

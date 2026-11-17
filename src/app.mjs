@@ -2,7 +2,7 @@ import './style.css';
 import { updates } from './updates.mjs';
 import { mountCalculator } from './calculator.mjs';
 import { parseSheetText } from './sheet-preview.mjs';
-import { archived, blankOrder, etrnProgress, etrnStatus, margin, mergeImport, monthReport, monthSnapshot, orderMargin, tripStatus, tripStatuses, upsert } from './domain.mjs';
+import { archived, blankOrder, etrnProgress, etrnSteps, etrnStatus, margin, mergeImport, monthReport, monthSnapshot, orderMargin, tripStatus, tripStatuses, upsert } from './domain.mjs';
 import { importPair, phones } from './import.mjs';
 import { addLedgerOrders, previewLedgerWorkbook } from './ledger.mjs';
 import { checkImportFile, readExcelArchive } from './import-files.mjs';
@@ -12,6 +12,7 @@ import { isActionable, monthGroups, scopeOrders } from './order-history.mjs';
 import { demoOrders } from './demo.mjs';
 import { attachExcelLab } from './excel-lab.mjs';
 import { mountCommandPalette } from './command-palette.mjs';
+import {viewPresets, matchesPreset, monthComparison, financialFlags, paymentReviewLabel} from './workspace-extras.mjs';
 import { defaultAccents, displayKey, layoutLabels, matchesTripView, pendingEtrn, readDisplayPreferences, readStatusColors, readThemeLayouts, routeText, selectOrders, statusColors, themeLabels, validAccent, violetPalettes } from './registry.mjs';
 
 const $ = id => document.getElementById(id);
@@ -55,6 +56,93 @@ const bulkNumbers = new Set();
 let bulkVisible = [];
 let bulkPreview = null;
 let historyMonth = 'all';
+let activePreset = '';
+let minimumMargin = 5000;
+let inspectedNumber = '';
+const inspectorObjectUrls=[];
+function clearInspectorFiles(){
+  for(const url of inspectorObjectUrls)URL.revokeObjectURL(url);
+  inspectorObjectUrls.length=0;
+}
+let customViews = [];
+const scopedViewKey = () => 'logistics-workspace:views:' +
+  (import.meta.env.VITE_DEMO === 'true' ? 'demo' : $('account-email').textContent.trim().toLowerCase() || 'signed-out');
+function readMinimumMargin(){
+  try {
+    const value=Number(localStorage.getItem(scopedViewKey()+':margin'));
+    return Number.isFinite(value)&&value>=0&&value<=10000000&&
+      localStorage.getItem(scopedViewKey()+':margin')!==null?value:5000;
+  } catch{return 5000;}
+}
+$('margin-threshold').addEventListener('change',()=>{
+  const number=Number($('margin-threshold').value);
+  if(!Number.isFinite(number)||number<0||number>10000000){
+    $('margin-threshold').value=String(minimumMargin);return;
+  }
+  minimumMargin=number;
+  try{localStorage.setItem(scopedViewKey()+':margin',String(number));}
+  catch{$('settings-status').textContent='Не удалось сохранить порог в этом браузере.';}
+  render();
+});
+function readCustomViews() {
+  try {
+    const data = JSON.parse(localStorage.getItem(scopedViewKey()));
+    return Array.isArray(data) ? data.filter(item =>
+      item && typeof item.label === 'string' && item.label.length <= 40 &&
+      typeof item.search === 'string' && item.search.length <= 160 &&
+      (item.scope === 'active' || item.scope === 'history') &&
+      typeof item.filter === 'string' && typeof item.view === 'string').slice(0,8) : [];
+  } catch { return []; }
+}
+function saveCustomViews() {
+  try { localStorage.setItem(scopedViewKey(), JSON.stringify(customViews)); }
+  catch { $('notice').textContent = 'Не удалось сохранить виды в этом браузере.'; }
+}
+function activateSavedView(id) {
+  activePreset=id;
+  if (id.startsWith('custom-')) {
+    const item=customViews[Number(id.slice(7))];
+    if (!item) return;
+    registryScope=item.scope; view=item.view;
+    $('search').value=item.search; $('filter').value=item.filter;
+    historyMonth='all';
+  } else {
+    if (id === 'problems') registryScope='history';
+    else if (id === 'today' || id === 'etrn') registryScope='active';
+    else registryScope='history';
+    view='all'; $('search').value=''; $('filter').value='';
+    historyMonth='all';
+  }
+  render();
+}
+function renderSavedViews() {
+  const parent=$('saved-view-buttons');
+  parent.replaceChildren();
+  for (const item of viewPresets) {
+    const button=action(item.label,()=>activateSavedView(item.id),'saved-view-chip');
+    button.setAttribute('aria-pressed',String(activePreset===item.id));
+    button.title=item.id==='unpaid' ? paymentReviewLabel : item.label;
+    parent.append(button);
+  }
+  customViews.forEach((item,index)=>{
+    const button=action(item.label,()=>activateSavedView('custom-'+index),'saved-view-chip');
+    button.setAttribute('aria-pressed',String(activePreset==='custom-'+index));
+    parent.append(button);
+  });
+  $('clear-saved-view').hidden=!activePreset;
+}
+$('save-current-view').addEventListener('click',()=>{
+  if(customViews.length>=8){$('notice').textContent='Можно сохранить до восьми своих видов.';return;}
+  const label=window.prompt('Название вида (до 40 символов)');
+  if(!label?.trim())return;
+  customViews.push({label:label.trim().slice(0,40),scope:registryScope,
+    search:$('search').value.slice(0,160),filter:$('filter').value,view});
+  saveCustomViews();renderSavedViews();
+});
+$('clear-saved-view').addEventListener('click',()=>{
+  activePreset=''; view='all'; $('search').value=''; $('filter').value=''; render();
+});
+
 let sort = 'delivery';
 let ascending = true;
 const display = readDisplayPreferences();
@@ -378,6 +466,102 @@ $('driver-edit').addEventListener('click', () => {
   openEditor(driverOrder, driverOrder.number);
 });
 
+function inspectOrder(number) {
+  const order=orders.find(item=>item.number===number);
+  if(!order)return;
+  clearInspectorFiles();
+  inspectedNumber=number;
+  const dialog=$('order-inspector');
+  $('inspector-title').textContent='Заявка № '+number;
+  const body=$('inspector-body');
+  body.replaceChildren();
+  const columns=node('div',null,'inspector-columns');
+  const details=node('section',null,'inspector-column');
+  details.append(node('h3','Рейс и участники'),
+    detailFields('Основное',[
+      ['Маршрут',routeText(order)],['Заказчик',order.customer],
+      ['Перевозчик',order.carrier],['Водитель',order.driver],
+      ['Автомобиль',order.vehicle],['Дата заявки',order.date],
+      ['Груз',order.cargo],
+    ]));
+  const journey=node('ol',null,'inspector-stages');
+  const stage=tripStatus(order);
+  const statuses=tripStatuses.filter(([key])=>key!=='new' && key!=='failed');
+  statuses.forEach(([key,label],index)=>{
+    const item=node('li',label);
+    item.dataset.state=stage==='failed'?'stopped':
+      (statuses.findIndex(([id])=>id===stage)>=index?'done':'next');
+    journey.append(item);
+  });
+  details.append(node('h3','Ход перевозки'),journey);
+  const finance=node('section',null,'inspector-column');
+  finance.append(node('h3','Финансы'),financeSummary(order));
+  const flags=financialFlags(order,minimumMargin);
+  if(flags.length) {
+    const warning=node('p',flags.map(flag=>flag.label).join(' · '),'risk-hint');
+    finance.append(warning);
+  }
+  const windows=node('ul',null,'inspector-points');
+  (order.points||[]).forEach(point=>{
+    const item=node('li');
+    item.append(node('strong',point.kind),node('span',point.address||'Адрес не указан'),
+      node('small',point.schedule||'Без окна'));
+    windows.append(item);
+  });
+  finance.append(node('h3','Точки маршрута'),windows);
+  const documents=node('section',null,'inspector-column');
+  documents.append(node('h3','Документы и ЭТРН'),
+    node('p','Номер ЭТРН: '+(order.etrn?.number||'не указан')),
+    node('p','Статус: '+etrnStatus(order.etrn)));
+  const stages=node('ol',null,'inspector-stages');
+  for(const [key,label] of etrnSteps) {
+    const item=node('li',label);
+    item.dataset.state=order.etrn?.[key]?'done':'next';
+    stages.append(item);
+  }
+  documents.append(stages,
+    node('p','Исходные PDF в реестре не хранятся. Можно временно открыть свои локальные копии — они не загружаются на сервер и не связываются автоматически с заявкой.','quiet'));
+  for(const labelText of ['PDF заказчика','PDF перевозчика']){
+    const field=node('label',labelText,'inspector-local-file');
+    const input=node('input');
+    input.type='file';input.accept='.pdf,application/pdf';
+    const link=node('a','Открыть выбранный PDF','inspect-file-link');
+    link.hidden=true;link.target='_blank';link.rel='noopener noreferrer';
+    input.addEventListener('change',()=>{
+      if(link.href?.startsWith('blob:')){
+        URL.revokeObjectURL(link.href);
+        const index=inspectorObjectUrls.indexOf(link.href);
+        if(index>=0)inspectorObjectUrls.splice(index,1);
+      }
+      const file=input.files?.[0];
+      if(!file || (file.type && file.type!=='application/pdf') ||
+          !file.name.toLowerCase().endsWith('.pdf') || file.size>25*1024*1024){
+        link.hidden=true;link.removeAttribute('href');return;
+      }
+      const url=URL.createObjectURL(file);
+      inspectorObjectUrls.push(url);
+      link.href=url;link.hidden=false;
+    });
+    field.append(input,link);documents.append(field);
+  }
+  const footer=$('inspector-actions');
+  footer.replaceChildren(
+    action('Редактировать',()=>{dialog.close();openOrder(number);},'primary'),
+    action('Данные водителя',()=>{dialog.close();openDriver(order);}),
+    action('Открыть ЭТРН',()=>{dialog.close();openEtrn(number);}),
+    action('Закрыть',()=>dialog.close())
+  );
+  columns.append(details,finance,documents);
+  body.append(columns);
+  dialog.showModal();
+}
+$('order-inspector').addEventListener('close',()=>{
+  clearInspectorFiles();
+  $('dock-context').hidden=true;
+  $('dock-more').hidden=false;
+});
+$('dock-context').addEventListener('click',()=>inspectOrder(inspectedNumber));
+
 function openOrder(number) {
   const current = orders.find(order => order.number === number);
   if (!current) return;
@@ -478,6 +662,9 @@ function renderRows(container, rows) {
     const selector = bulkCheckbox(order);
     if (selector) label.append(selector);
     label.append(action('№ ' + order.number, () => openOrder(order.number), 'order-link'));
+    const inspector=action('◫',()=>inspectOrder(order.number),'inspect-open');
+    inspector.setAttribute('aria-label','Быстрый просмотр заявки № '+order.number);
+    label.append(inspector);
     const date = node('div', order.date ? order.date.slice(5).split('-').reverse().join('.') : '—', 'order-date');
     const customer = node('div', order.customer || '—', 'customer-cell');
     const carrier = node('div', order.carrier || '—', 'carrier-cell');
@@ -500,7 +687,14 @@ function renderRows(container, rows) {
     stage.append(tripControl(order));
     const etrn = node('div', null, 'etrn-cell');
     etrn.append(etrnAction(order));
-    row.append(label, date, customer, carrier, direction, ...windows, etrn, stage, contactsCell(order), financeSummary(order));
+    const rates=financeSummary(order);
+    const problems=financialFlags(order,minimumMargin);
+    if(problems.length){
+      const badge=node('span','⚑ '+problems.map(flag=>flag.label).join(' · '),'financial-flag');
+      badge.title='Проверьте ставки заявки перед принятием решения.';
+      rates.append(badge);
+    }
+    row.append(label, date, customer, carrier, direction, ...windows, etrn, stage, contactsCell(order), rates);
     for (const cell of row.children) cell.setAttribute('role', 'cell');
     table.append(row);
   }
@@ -534,6 +728,7 @@ function renderCompact(container, rows) {
     if (selector) item.append(selector);
     item.append(orderSummary(order, () => openOrder(order.number), undefined, false,
       !window.matchMedia?.('(max-width: 760px)')?.matches));
+    item.append(action('Просмотр',()=>inspectOrder(order.number),'inspect-open'));
     list.append(item);
   }
   container.append(list);
@@ -558,7 +753,8 @@ function renderKanban(container, rows, scrollLeft) {
       const card = node('article', null, 'kanban-card');
       const selector = bulkCheckbox(order);
       if (selector) card.append(selector);
-      card.append(orderSummary(order, () => openOrder(order.number)), tripControl(order, true), etrnAction(order));
+      card.append(orderSummary(order, () => openOrder(order.number)), tripControl(order, true), etrnAction(order),
+        action('Просмотр',()=>inspectOrder(order.number),'inspect-open'));
       column.append(card);
     }
     board.append(column);
@@ -661,7 +857,13 @@ function renderSplit(container, rows) {
   );
   const actions = node('div', null, 'split-actions');
   actions.append(contactsCell(order),
+    action('Просмотр',()=>inspectOrder(order.number)),
     action('Открыть заявку', () => openOrder(order.number), 'primary'));
+  if(inline && matched && selection.expanded){
+    inspectedNumber=order.number;
+    $('dock-context').hidden=false;
+    $('dock-more').hidden=true;
+  }
   panel.append(actions);
   split.append(list);
   if (inline) {
@@ -701,7 +903,10 @@ function shortPeriodDate(value) {
 }
 
 function render() {
+  $('dock-context').hidden=true;
+  $('dock-more').hidden=false;
   updateMonthMetrics();
+  renderSavedViews();
   closeContacts();
   const day = today();
   for (const button of document.querySelectorAll('[data-view]')) {
@@ -733,7 +938,9 @@ function render() {
   const matches = selectOrders(orders, {
     query:$('search').value, filter:$('filter').value, view, today:day, sort, ascending, ...period,
   });
-  const scoped = scopeOrders(matches, {scope:registryScope, month:historyMonth, search:$('search').value});
+  const scopedBase = scopeOrders(matches, {scope:registryScope, month:historyMonth, search:$('search').value});
+  const scoped = activePreset && !activePreset.startsWith('custom-') ?
+    scopedBase.filter(order => matchesPreset(order,activePreset,day,minimumMargin)) : scopedBase;
   const groups = monthGroups(orders);
   $('view-title').textContent = registryScope === 'active' ? 'Актуальные заявки' : 'История заявок';
   $('active-nav').setAttribute('aria-current', registryScope === 'active' ? 'page' : 'false');
@@ -1136,10 +1343,41 @@ function showUpdates() {
 }
 $('updates-open').addEventListener('click', showUpdates);
 
+const settingsPanels={
+  appearance:'settings-appearance',registry:'settings-registry',
+  notifications:'settings-notifications',account:'settings-account-pane',
+  updates:'settings-updates',
+};
+function openSettingsTab(tab){
+  for(const [name,id] of Object.entries(settingsPanels)){
+    $(id).hidden=name!==tab;
+  }
+  for(const button of document.querySelectorAll('[data-settings-tab]')){
+    button.setAttribute('aria-pressed',String(button.dataset.settingsTab===tab));
+  }
+}
+for(const button of document.querySelectorAll('[data-settings-tab]')){
+  button.addEventListener('click',()=>openSettingsTab(button.dataset.settingsTab));
+}
+for(const [theme,label] of Object.entries(themeLabels)){
+  const button=action(label,()=>setDisplay('theme',theme),'theme-preview');
+  button.dataset.themePreview=theme;
+  button.style?.setProperty?.('--sample-accent',defaultAccents[theme]);
+  $('theme-previews').append(button);
+}
+$('reset-appearance').addEventListener('click',()=>{
+  display.theme='sputnik';display.layout='table';
+  display.violetPalette='violet';display.accents={};
+  display.statusColors={};display.themeLayouts={};
+  applyDisplay();applyStatusColors();saveDisplay();render();
+  $('settings-status').textContent='Сброшено только оформление; заявки не изменены.';
+});
+
 $('settings').addEventListener('click', () => {
   const email = $('account-email').textContent;
   $('settings-account').textContent = email;
   $('settings-account').hidden = !email;
+  openSettingsTab('appearance');
   $('settings-dialog').showModal();
 });
 let calculator;
@@ -1209,7 +1447,18 @@ mountCommandPalette({
   dialog:$('command-dialog'), input:$('command-search'),
   results:$('command-results'), opener:$('command-launch'),
   available:() => demo || signedIn,
+  contextCommands:() => inspectedNumber && orders.some(item=>item.number===inspectedNumber) ? [
+    {id:'inspect',label:'Просмотр заявки № '+inspectedNumber,
+      detail:'Открыть карточку без потери позиции в реестре',group:'Текущая заявка'},
+    {id:'driver',label:'Данные водителя · '+inspectedNumber,
+      detail:'Просмотреть и скопировать сведения водителя',group:'Текущая заявка'},
+    {id:'etrn',label:'ЭТРН · '+inspectedNumber,
+      detail:'Открыть документ и этапы подписи',group:'Текущая заявка'},
+  ] : [],
   actions:{
+    inspect:()=>inspectOrder(inspectedNumber),
+    driver:()=>{const item=orders.find(order=>order.number===inspectedNumber);if(item)openDriver(item);},
+    etrn:()=>openEtrn(inspectedNumber),
     search:focusRegistrySearch,
     active:() => changeRegistryScope('active'),
     history:() => changeRegistryScope('history'),
@@ -1234,7 +1483,7 @@ $('dock-more').addEventListener('click', () => {
 });
 $('workspace-menu').addEventListener('toggle', () =>
   $('dock-more').setAttribute('aria-expanded', String($('workspace-menu').open)));
-$('search').addEventListener('input', render);
+$('search').addEventListener('input', () => { activePreset=''; render(); });
 $('filter-view').addEventListener('change', event => {
   view = event.currentTarget.value;
   if (view === 'completed' || view === 'failed') {
@@ -1357,6 +1606,7 @@ function signInScreen(message = '') {
     $(id).textContent = '';
   }
   $('account-email').textContent = '';
+  customViews=[];activePreset='';inspectedNumber='';
   $('sync-status').textContent = '';
   $('sync-status').title = '';
   $('notice').textContent = '';
@@ -1414,6 +1664,8 @@ async function showAccount(account) {
   accountGeneration++;
   signedIn = true;
   $('account-email').textContent = account.email;
+  customViews=readCustomViews();minimumMargin=readMinimumMargin();
+  $('margin-threshold').value=String(minimumMargin);activePreset='';
   $('sync-tools').hidden = false;
   $('sign-out').hidden = false;
   try {
@@ -1541,6 +1793,8 @@ $('local-import').addEventListener('click', async event => {
 });
 
 if (demo) {
+  customViews=readCustomViews();minimumMargin=readMinimumMargin();
+  $('margin-threshold').value=String(minimumMargin);
   attachExcelLab();
   $('demo-note').hidden = false;
   showWorkspace(true);
@@ -1937,6 +2191,35 @@ $('ledger-form').addEventListener('submit', async event => {
 function reportData() {
   return monthReport(orders, $('report-month').value);
 }
+function renderComparison(){
+  const first=$('compare-first').value,second=$('compare-second').value;
+  const target=$('compare-results');
+  target.replaceChildren();
+  if(!first||!second)return;
+  try{
+    const {first:a,second:b,delta,changePercent}=monthComparison(orders,first,second);
+    const table=node('table',null,'comparison-table');
+    const header=node('tr');['Показатель',first,second].forEach(x=>header.append(node('th',x)));
+    table.append(header);
+    for(const [name,x,y] of [
+      ['Рейсы',a.count,b.count],
+      ['Маржа',money(a.total),money(b.total)],
+      ['Средняя (из рассчитанных)',a.average===null?'—':money(a.average),b.average===null?'—':money(b.average)],
+      ['Медиана (из рассчитанных)',a.median===null?'—':money(a.median),b.median===null?'—':money(b.median)],
+      ['Без маржи',a.unknown,b.unknown],
+    ]){
+      const row=node('tr');
+      [name,String(x),String(y)].forEach(v=>row.append(node('td',v)));
+      table.append(row);
+    }
+    target.append(table,node('p','Изменение маржи: '+money(delta)+
+      (changePercent===null?' · сравнение в процентах недоступно':
+      ' · '+changePercent.toFixed(1)+'%')));
+    target.append(node('p','Срывы исключены. Неизвестная маржа не считается нулевой при вычислении средней и медианы.','quiet'));
+  }catch(error){target.append(node('p',error.message,'error'));}
+}
+for(const id of ['compare-first','compare-second'])$(id).addEventListener('change',renderComparison);
+
 function refreshReport() {
   const {rows,total} = reportData();
   const unknown = rows.filter(order => orderMargin(order) === null).length;
@@ -1947,7 +2230,11 @@ function refreshReport() {
 }
 $('report').addEventListener('click', () => {
   $('report-month').value = today().slice(0,7);
-  refreshReport();
+  $('compare-second').value = today().slice(0,7);
+  const previous=new Date(today().slice(0,7)+'-01T12:00:00');
+  previous.setMonth(previous.getMonth()-1);
+  $('compare-first').value=previous.toISOString().slice(0,7);
+  refreshReport();renderComparison();
   $('report-dialog').showModal();
 });
 $('report-month').addEventListener('input', refreshReport);

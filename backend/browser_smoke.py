@@ -87,6 +87,7 @@ def calculators(page, mobile):
 def updates_history(page, mobile):
     click_workspace_action(page, "#settings", mobile)
     expect(page.locator("#settings-dialog")).to_be_visible()
+    page.locator('[data-settings-tab="updates"]').click()
     page.locator("#updates-open").click()
     dialog = page.locator("#updates-dialog")
     expect(dialog).to_be_visible()
@@ -525,6 +526,7 @@ def registry_views(page, number, order_a, mobile):
     click_workspace_action(page, "#settings", mobile)
     settings.locator("#accent-color").fill("#226650")
     expect(page.locator("html")).to_have_attribute("style", re.compile("--custom-accent: #226650"))
+    settings.locator('[data-settings-tab="registry"]').click()
     settings.locator("#settings-layout").select_option("kanban")
     settings.locator("[data-close]").click()
     expect(layout).to_have_value("kanban")

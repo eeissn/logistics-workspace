@@ -69,3 +69,12 @@ test('17 ноября: исправления по обратной связи �
   assert.ok(entry?.items.some(item => item.includes('номер документа')
     && item.includes('исправить')));
 });
+
+test('17 ноября: новая карточка, сравнение маржи и настройки задокументированы', () => {
+  const entry = updates.find(group => group.title === '17 ноября 2026');
+  assert.ok(entry?.items.some(item => item.includes('боковой просмотр')
+    && item.includes('ЭТРН')));
+  assert.ok(entry?.items.some(item => item.includes('сравнивать маржу')
+    && item.includes('сохранённые виды')));
+  assert.ok(entry?.items.some(item => item.includes('порог низкой маржи')));
+});
