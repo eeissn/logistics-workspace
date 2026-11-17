@@ -734,8 +734,11 @@ def large_year_browser(chromium, origin):
         expect(page.locator("#history-count")).to_have_text("515")
         expect(page.locator("#table .order")).to_have_count(74)
         page.locator('[data-scope="history"]').click()
-        expect(page.locator("#table .order")).to_have_count(515)
+        # History intentionally opens the most recent month first.
+        expect(page.locator("#table .order")).to_have_count(115)
         expect(page.locator("#history-month option")).to_have_count(4)
+        page.locator("#history-month").select_option("all")
+        expect(page.locator("#table .order")).to_have_count(515)
         page.locator("#history-month").select_option("2025-12")
         expect(page.locator("#table .order")).to_have_count(200)
         page.locator("#history-month").select_option("2026-11")
