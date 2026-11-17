@@ -694,6 +694,57 @@ def smoke(browser_type, origin, chromium, number, report_total, device=None):
     print(f"{browser_type.name}: 3 themes × 4 registry views, pickup/delivery sorting, PDF, Excel, ETRN, archive, margin and account isolation passed", flush=True)
 
 
+
+def large_year_browser(chromium, origin):
+    """Verify 515 synthetic orders through the real UI, without using production."""
+    with closing(chromium.launch()) as browser:
+        page = browser.new_page(ignore_https_errors=True)
+        page.goto(origin)
+        sign_in(page, "first")
+        page.evaluate("""async () => {
+            const profile = await (await fetch('/api/me')).json();
+            const previous = await (await fetch('/api/records')).json();
+            const orders = Array.from({length: 515}, (_, index) => ({
+                number: 'YEAR-' + String(index).padStart(4, '0'),
+                date: index < 200 ? '2025-12-15' : index < 400 ? '2026-01-15' : '2026-11-15',
+                customer: 'Synthetic year ' + index, carrier: 'Synthetic carrier',
+                route: 'Москва → Казань', points: [], contacts: [], differences: [],
+                payment: {}, etrn: {}, trip: {stage: index % 7 === 0 ? 'loaded' : 'unloaded'}
+            }));
+            const response = await fetch('/api/records', {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json', 'X-CSRF-Token': profile.csrf},
+                body: JSON.stringify({revision: previous.revision, orders})
+            });
+            if (!response.ok) throw new Error('Yearly fixture upload failed: ' + response.status);
+        }""")
+        started = monotonic()
+        page.reload()
+        expect(page.locator("#active-count")).to_have_text("74")
+        expect(page.locator("#history-count")).to_have_text("515")
+        expect(page.locator("#table .order")).to_have_count(74)
+        page.locator('[data-scope="history"]').click()
+        expect(page.locator("#table .order")).to_have_count(515)
+        expect(page.locator("#history-month option")).to_have_count(4)
+        page.locator("#history-month").select_option("2025-12")
+        expect(page.locator("#table .order")).to_have_count(200)
+        page.locator("#history-month").select_option("2026-11")
+        expect(page.locator("#table .order")).to_have_count(115)
+        page.locator("#search").fill("YEAR-0000")
+        expect(page.locator("#table .order")).to_have_count(1)
+        expect(page.locator("#table")).to_contain_text("YEAR-0000")
+        page.locator("#search").clear()
+        expect(page.locator("#table .order")).to_have_count(115)
+        for layout, selector in (
+            ("compact", ".compact-list > li"), ("split", ".split-list > li"),
+            ("kanban", ".kanban-card"), ("table", ".order-table .order")
+        ):
+            page.locator("#layout").select_option(layout)
+            expect(page.locator("#table " + selector)).to_have_count(115)
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"), layout
+        print(f"chromium: 515-order browser history and layout checks passed in {monotonic()-started:.1f}s", flush=True)
+
+
 def main():
     with TemporaryDirectory() as directory:
         root = Path(directory)
@@ -724,6 +775,7 @@ def main():
                 smoke(playwright.chromium, origin, playwright.chromium, 41001, r"22\s*000")
                 smoke(playwright.webkit, origin, playwright.chromium, 41002, r"44\s*000",
                       {**playwright.devices["iPhone 13"], "viewport": {"width": 393, "height": 852}})
+                large_year_browser(playwright.chromium, origin)
         finally:
             server.terminate()
             server.wait(timeout=10)
