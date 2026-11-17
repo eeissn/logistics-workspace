@@ -973,6 +973,15 @@ function applyDisplay() {
   $('layout').value = display.layout;
   $('settings-layout').value = display.layout;
   $('status-palette').hidden = display.theme === 'sand';
+  const preview = $('theme-preview');
+  preview.replaceChildren();
+  for (const [id,title] of Object.entries(themeLabels)) {
+    const button = action(null, () => setDisplay('theme',id), 'theme-swatch');
+    button.dataset.swatch = id;
+    button.setAttribute('aria-pressed',String(display.theme === id));
+    button.append(node('span',null,'swatch-bars'),node('strong',title));
+    preview.append(button);
+  }
 }
 
 function applyAccent() {
@@ -1104,6 +1113,30 @@ for (const [id, labels] of [['theme', themeLabels], ['layout', layoutLabels], ['
   });
 }
 applyDisplay();
+const settingsTabs = [...document.querySelectorAll('[data-settings-section]')];
+const showSettingsSection = name => {
+  for (const button of settingsTabs) {
+    button.setAttribute('aria-pressed',String(button.dataset.settingsSection===name));
+  }
+  for (const panel of document.querySelectorAll('[data-settings-panel]')) {
+    panel.hidden=panel.dataset.settingsPanel!==name;
+  }
+};
+settingsTabs.forEach(button => button.addEventListener('click',
+  ()=>showSettingsSection(button.dataset.settingsSection)));
+$('reset-appearance').addEventListener('click', () => {
+  // Reset only visual preferences; keep orders, accounts and user-created views.
+  display.theme='sputnik';
+  display.violetPalette='violet';
+  display.accents={};
+  display.statusColors={};
+  display.themeLayouts={};
+  display.layout='table';
+  applyStatusColors();
+  applyDisplay();
+  saveDisplay();
+  render();
+});
 const mobileNav = window.matchMedia?.('(max-width: 850px)');
 const mobileCommands = window.matchMedia?.('(max-width: 740px)');
 function placeRegistryCommands() {
@@ -1166,6 +1199,7 @@ function showUpdates() {
 $('updates-open').addEventListener('click', showUpdates);
 
 $('settings').addEventListener('click', () => {
+  showSettingsSection('appearance');
   const email = $('account-email').textContent;
   $('settings-account').textContent = email;
   $('settings-account').hidden = !email;
@@ -1274,6 +1308,22 @@ $('filter-view').addEventListener('change', event => {
 });
 $('filter').addEventListener('change', render);
 $('financial-filter').addEventListener('change', render);
+for(const button of document.querySelectorAll('[data-preset]')) {
+  button.addEventListener('click',()=>{
+    const preset=savedViewPresets.find(item=>item.id===button.dataset.preset);
+    if(!preset)return;
+    view=preset.view;
+    registryScope=preset.view==='failed'?'history':'active';
+    historyMonth='all';
+    period={};
+    $('search').value='';
+    $('filter').value=preset.etrn;
+    $('financial-filter').value=preset.financial||'';
+    $('workspace-menu').open=false;
+    render();
+  });
+}
+
 $('add-point').addEventListener('click', () => addPoint());
 $('new').addEventListener('click', () => openEditor(blankOrder()));
 $('editor-etrn').addEventListener('click', () => openEtrn());
