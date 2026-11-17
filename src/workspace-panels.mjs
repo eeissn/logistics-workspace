@@ -45,6 +45,24 @@ export function mountWorkspacePanel({root,getOrder,edit,openEtrn,openDriver,open
       row.append(element('small',title),element('span',value||'—'));
       details.append(row);
     }
+    const contacts=element('section',null,'peek-contact-section');
+    contacts.append(element('h4','Контакты'));
+    if(order.contacts?.length){
+      for(const contact of order.contacts) {
+        const row=element('div',null,'peek-contact-row');
+        row.append(element('strong',contact.role||'Контакт'));
+        for(const value of contact.values||[]){
+          const phone=String(value).trim();
+          if(/^\\+?[0-9+()\\s-]{7,24}$/.test(phone)){
+            const link=element('a',phone);
+            link.href='tel:'+phone.replace(/[^0-9+]/g,'');
+            row.append(link);
+          }else row.append(element('span',phone));
+        }
+        contacts.append(row);
+      }
+    }else contacts.append(element('p','Контакты не указаны','quiet'));
+    details.append(contacts);
     const points=element('section',null,'peek-context-panel');
     points.append(element('h3','Точки и документы'));
     for(const point of order.points||[]) {
@@ -106,7 +124,7 @@ export function mountWorkspacePanel({root,getOrder,edit,openEtrn,openDriver,open
       ['Открыть заявку',()=>{close();edit(number);}],
       ['Данные водителя',()=>{close();openDriver(number);}],
       ['ЭТРН',()=>{close();openEtrn(number);}],
-      ['Контакты',()=>{close();openContacts(number);}]
+      ['Контакты',()=>{contacts.scrollIntoView({block:'nearest',behavior:'smooth'});contacts.focus?.();}]
     ]) {
       const button=element('button',title);
       button.type='button';
