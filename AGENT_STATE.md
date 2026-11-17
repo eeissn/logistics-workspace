@@ -1,3 +1,7 @@
+# Backup freshness audit · 18.11.2026
+
+Отдельная ветка `feature/backup-freshness-audit` от `feature/two-user-sync`. Добавлен read-only CLI для проверки локального последнего зашифрованного архива и квитанции SHA-256, даты, предельного возраста. Новых расписаний, оповещений и Windows/VPS изменений нет. Проверка запуска планировщика после перезагрузки Windows и независимое оповещение при его пропуске остаются на физическую приёмку. Тесты `deploy/test_backup_freshness.py`, CI проверить на последнем SHA.
+
 # Desktop simplification & active-ETRN ownership rule · 17.11.2026
 
 Owner's post-release feedback: the desktop page shows too many equally weighted controls and monthly cards; the saved/connection status should appear **after** the refresh button. More critical: an unloaded truck must remain in «Актуальные» until ETRN is signed by everyone. Treat an explicit «Срыв заявки» as terminal, separate from the unsigned delivery scenario.
