@@ -2502,3 +2502,83 @@ dialog .dialog-foot button { min-height: 42px; font-weight: 610; }
   .workspace-nav button, .registry-command button,
   #order-peek button { transition: none !important; }
 }
+
+/* Operational desktop: one navigation system, focused list controls, on-demand KPI details.
+   Progressive disclosure follows Apple layout guidance and Attio record workspaces. */
+.metrics-disclosure { flex: 0 1 auto; min-width: 0; }
+.metrics-disclosure > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  min-height: 40px;
+  max-width: 100%;
+  padding: .48rem .72rem;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: .83rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.metrics-disclosure > summary::-webkit-details-marker { display:none; }
+.metrics-disclosure > summary::after {
+  content: '⌄';
+  display: inline-block;
+  margin-inline-start: .35rem;
+  color: var(--muted);
+  transition: transform .15s ease;
+}
+.metrics-disclosure[open] > summary::after { transform: rotate(180deg); }
+.metrics-disclosure > summary:hover { background:var(--hover); }
+.metrics-disclosure > summary:focus-visible {outline:2px solid var(--outline);outline-offset:2px;}
+@media (min-width: 851px) {
+  .intro-metrics { gap: .55rem; flex-wrap: nowrap; }
+  .metrics-disclosure { position:relative; z-index:11; flex: 0 1 auto; }
+  .metrics-disclosure > .month-metrics {
+    position: absolute;
+    z-index: 11;
+    top: calc(100% + .5rem);
+    right: 0;
+    width: max-content;
+    max-width: min(520px, 75vw);
+    border:1px solid var(--line);
+    border-radius:12px;
+    background:var(--paper);
+    padding:.55rem;
+    box-shadow:0 12px 30px #16172b1c;
+  }
+  .registry-tabs { display: none !important; }
+  .registry {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 1rem;
+  }
+  .registry-toolbar {
+    flex: 1 1 22rem;
+    min-width: 0;
+    margin-bottom: .65rem;
+  }
+  .bulk-controls {
+    flex: 0 0 auto;
+    justify-content: flex-end;
+    margin: 0 0 .65rem;
+  }
+  #history-browser:not([hidden]) {
+    flex: 0 0 100%;
+    margin-bottom: .6rem;
+  }
+  #table, #archive { flex: 0 0 100%; min-width: 0; }
+  .registry-tools .view-picker > span[aria-hidden] {display:none;}
+}
+@media (max-width: 850px) {
+  .metrics-disclosure > summary { display: none; }
+  .metrics-disclosure { flex: 1 1 100%; }
+  .metrics-disclosure > .month-metrics { position: static; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .metrics-disclosure > summary::after { transition: none; }
+}
