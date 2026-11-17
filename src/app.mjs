@@ -1775,6 +1775,24 @@ $('ledger-form').addEventListener('submit', async event => {
           [...stages].map(([label, count]) => `${label} (${count})`).join(', '), 'quiet'));
       }
       if (preview.orders.length) {
+        const details = node('details', null, 'ledger-example-preview');
+        details.append(node('summary', 'Пример распознанных заявок · первые ' +
+          Math.min(preview.orders.length, 5)));
+        const list = node('ol');
+        for (const item of preview.orders.slice(0, 5)) {
+          const row = node('li');
+          row.append(node('strong', '№ ' + item.number + ' · ' + (item.date || 'без даты')),
+            node('p', (item.route || 'Маршрут не указан') + ' · ' +
+              (item.customer || 'Заказчик не указан') + ' / ' +
+              (item.carrier || 'Перевозчик не указан')),
+            node('p', 'Ставки: ' +
+              (item.customerAmount == null ? '—' : money(item.customerAmount)) +
+              ' / ' + (item.carrierAmount == null ? '—' : money(item.carrierAmount)),
+              'quiet'));
+          list.append(row);
+        }
+        details.append(list);
+        $('ledger-preview').append(details);
         ledgerPreview = {file, ...preview};
         $('ledger-submit').textContent = 'Подтвердить импорт';
       }
