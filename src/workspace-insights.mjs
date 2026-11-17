@@ -2,7 +2,7 @@ import {archived, etrnStatus, hasMargin, orderMargin, tripStatus} from './domain
 
 // UI-only insights: never mutate orders, never infer payment dates from missing data.
 export const financialFlags = (order, minimum = 5000) => {
-  if (!hasMargin(order)) return ['unknown'];
+  if (!hasMargin(order) && !Number.isFinite(order.ledgerMargin)) return ['unknown'];
   const value = orderMargin(order);
   if (value == null || !Number.isFinite(value)) return ['unknown'];
   if (value < 0) return ['loss'];
