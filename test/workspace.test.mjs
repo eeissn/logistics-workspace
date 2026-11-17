@@ -129,6 +129,15 @@ test('маржа совпадает с формулой калькулятора
   assert.equal(margin(10000,'0',20000,'0').realProfit,-8500);
 });
 
+test('созданная заказ-заявка видна отдельным статусом до создания ЭТРН', () => {
+  const draft = {required:true,number:'7372',orderForm:true,created:false,allSigned:false};
+  assert.equal(etrnStatus(draft), 'Заказ-заявка создана');
+  assert.equal(etrnProgress(draft), 'Заказ-заявка создана');
+  assert.equal(etrnStatus({...draft,created:true}), 'В работе');
+  assert.equal(etrnStatus({...draft,created:true,allSigned:true}), 'Подписана');
+  assert.equal(etrnStatus({required:true,number:'7372',created:false}), 'К созданию');
+});
+
 test('ЭТРН требует номер и все подписи, ручное закрытие отдельное', () => {
   const etrn = {required:true, ...Object.fromEntries(etrnSteps.map(([key]) => [key,true]))};
   assert.equal(etrnStatus(etrn), 'В работе');
