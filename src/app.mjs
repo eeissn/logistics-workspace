@@ -11,8 +11,11 @@ import { driverMessage } from './driver.mjs';
 import { isActionable, monthGroups, scopeOrders } from './order-history.mjs';
 import { demoOrders } from './demo.mjs';
 import { attachExcelLab } from './excel-lab.mjs';
+import { mountWorkspacePanel, mountComparison } from './workspace-panels.mjs';
+import { financialFlags, flagLabels, savedViewPresets } from './workspace-insights.mjs';
+import { readSavedViews, writeSavedViews } from './saved-views.mjs';
 import { mountCommandPalette } from './command-palette.mjs';
-import { defaultAccents, displayKey, layoutLabels, matchesTripView, pendingEtrn, readDisplayPreferences, readStatusColors, readThemeLayouts, routeText, selectOrders, statusColors, themeLabels, validAccent, violetPalettes } from './registry.mjs';
+import { columnKeys, columnTitles, safeColumnOrder, defaultAccents, displayKey, layoutLabels, matchesTripView, pendingEtrn, readDisplayPreferences, readStatusColors, readThemeLayouts, routeText, selectOrders, statusColors, themeLabels, validAccent, violetPalettes } from './registry.mjs';
 
 const $ = id => document.getElementById(id);
 const currency = new Intl.NumberFormat('ru', {style:'currency', currency:'RUB', maximumFractionDigits:0});
@@ -128,6 +131,23 @@ function updateMonthMetrics() {
   el.hidden = !signedIn && !demo;
 }
 
+let lastSyncWarning = '';
+const syncWarningKey=()=>displayKey+':sync-notice:'+
+  encodeURIComponent(($('account-email').textContent||'demo').toLowerCase());
+function syncNotificationsEnabled() {
+  try{return localStorage.getItem(syncWarningKey())==='true';}
+  catch{return false;}
+}
+function notifySyncProblem(state) {
+  if(!state||!['offline','failed','unavailable'].includes(state)) {
+    lastSyncWarning='';return;
+  }
+  if(state===lastSyncWarning||!document.hidden||!syncNotificationsEnabled()||
+    !globalThis.Notification||Notification.permission!=='granted')return;
+  lastSyncWarning=state;
+  try{new Notification('Logistics Workspace',{body:'Синхронизация требует внимания. Откройте рабочую вкладку.'});}
+  catch{/* Browser notifications may be blocked by the OS. */}
+}
 function showSyncStatus() {
   $('sync-quick').hidden = demo || !signedIn;
   $('sync-quick').disabled = pendingWrites > 0 || refreshing !== undefined;
@@ -139,6 +159,7 @@ function showSyncStatus() {
     : saveFailure ? 'failed' : refreshFailure ? 'unavailable'
     : serverConfirmed ? 'saved' : '';
   status.dataset.state = state;
+  notifySyncProblem(state);
   status.textContent = ({
     busy: 'Синхронизация', offline: 'Нет соединения',
     failed: 'Ошибка сохранения', unavailable: 'Реестр недоступен', saved: 'Сохранено',
@@ -160,6 +181,31 @@ async function saveRecords(records, current) {
       serverConfirmed = true;
     }
     return saved;
+  } catch (error) {
+    if (generation === accountGeneration) saveFailure = error;
+    throw error;
+  } finally {
+    if (generation === accountGeneration) {
+      pendingWrites--;
+      showSyncStatus();
+    }
+  }
+}
+
+async function saveEtrn(number, stamp, etrn, generation) {
+  if (demo) {
+    await updateOrder(number, stamp, order => ({...order, etrn}), generation);
+    return;
+  }
+  pendingWrites++;
+  showSyncStatus();
+  try {
+    const saved = await store.updateEtrn(number, stamp, etrn);
+    if (generation === accountGeneration) {
+      orders = saved;
+      saveFailure = refreshFailure = undefined;
+      serverConfirmed = true;
+    }
   } catch (error) {
     if (generation === accountGeneration) saveFailure = error;
     throw error;
@@ -427,6 +473,20 @@ function updateBulkControls() {
   $('bulk-select-visible').disabled = bulkVisible.length === 0;
 }
 
+let workspacePanel;
+const panelFor = number => workspacePanel?.open(number);
+const financeBadges = order => {
+  const flags = financialFlags(order);
+  const box = node('span', null, 'finance-flags');
+  for (const flag of flags) {
+    const badge = node('span', flag === 'unknown' ? 'Нет ставок' :
+      flag === 'loss' ? 'Убыток' : 'Низкая маржа', 'finance-flag');
+    badge.dataset.flag = flag;
+    badge.title = flagLabels[flag];
+    box.append(badge);
+  }
+  return box;
+};
 function financeSummary(order) {
   const rates = [
     ['Заказчик', order.customerAmount],
@@ -453,6 +513,8 @@ function renderRows(container, rows) {
   for (const [column, title] of [['number','№ заявки'], ['date','Дата'], ['customer','Заказчик'], ['carrier','Перевозчик'],
     ['route','Маршрут'], ['pickup','Загрузка'], ['delivery','Выгрузка'], ['etrn','ЭТРН'], ['trip','Статус рейса'], ['', 'Водитель / контакты']]) {
     const heading = node('div');
+    heading.dataset.column = column || 'contacts';
+    if(heading.style) heading.style.order = String(display.columnOrder.indexOf(column || 'contacts'));
     heading.setAttribute('role', 'columnheader');
     if (column === sort) heading.setAttribute('aria-sort', ascending ? 'ascending' : 'descending');
     if (column) {
@@ -478,6 +540,8 @@ function renderRows(container, rows) {
     const selector = bulkCheckbox(order);
     if (selector) label.append(selector);
     label.append(action('№ ' + order.number, () => openOrder(order.number), 'order-link'));
+    label.append(action('◫', () => panelFor(order.number), 'order-peek-button'));
+    label.append(financeBadges(order));
     const date = node('div', order.date ? order.date.slice(5).split('-').reverse().join('.') : '—', 'order-date');
     const customer = node('div', order.customer || '—', 'customer-cell');
     const carrier = node('div', order.carrier || '—', 'carrier-cell');
@@ -501,7 +565,13 @@ function renderRows(container, rows) {
     const etrn = node('div', null, 'etrn-cell');
     etrn.append(etrnAction(order));
     row.append(label, date, customer, carrier, direction, ...windows, etrn, stage, contactsCell(order), financeSummary(order));
-    for (const cell of row.children) cell.setAttribute('role', 'cell');
+    [...row.children].forEach((cell,index) => {
+      cell.setAttribute('role','cell');
+      if(index<columnKeys.length) {
+        cell.dataset.column=columnKeys[index];
+        if(cell.style) cell.style.order=String(display.columnOrder.indexOf(columnKeys[index]));
+      } else if(cell.style) cell.style.order=String(columnKeys.length);
+    });
     table.append(row);
   }
   container.append(table);
@@ -523,6 +593,7 @@ function orderSummary(order, open, selected, showParties = false, showDates = tr
   }
   if (showDates && (dates || showParties)) button.append(node('small', dates || '—', 'quiet summary-dates'));
   button.append(financeSummary(order));
+  button.append(financeBadges(order));
   return button;
 }
 
@@ -533,7 +604,8 @@ function renderCompact(container, rows) {
     const selector = bulkCheckbox(order);
     if (selector) item.append(selector);
     item.append(orderSummary(order, () => openOrder(order.number), undefined, false,
-      !window.matchMedia?.('(max-width: 760px)')?.matches));
+      !window.matchMedia?.('(max-width: 760px)')?.matches),
+      action('Быстрый просмотр', () => panelFor(order.number), 'peek-card-button'));
     list.append(item);
   }
   container.append(list);
@@ -558,7 +630,8 @@ function renderKanban(container, rows, scrollLeft) {
       const card = node('article', null, 'kanban-card');
       const selector = bulkCheckbox(order);
       if (selector) card.append(selector);
-      card.append(orderSummary(order, () => openOrder(order.number)), tripControl(order, true), etrnAction(order));
+      card.append(orderSummary(order, () => openOrder(order.number)), tripControl(order, true), etrnAction(order),
+        action('Быстрый просмотр', () => panelFor(order.number), 'peek-card-button'));
       column.append(card);
     }
     board.append(column);
@@ -661,7 +734,8 @@ function renderSplit(container, rows) {
   );
   const actions = node('div', null, 'split-actions');
   actions.append(contactsCell(order),
-    action('Открыть заявку', () => openOrder(order.number), 'primary'));
+    action('Открыть заявку', () => openOrder(order.number), 'primary'),
+    action('Быстрый просмотр', () => panelFor(order.number)));
   panel.append(actions);
   split.append(list);
   if (inline) {
@@ -712,12 +786,14 @@ function render() {
   }
   const viewFilter = view !== 'all' && view !== 'not-unloaded';
   const etrnFilter = $('filter').value;
-  const filterCount = Number(viewFilter) + Number(Boolean(etrnFilter));
+  const financeFilter = $('financial-filter').value;
+  const filterCount = Number(viewFilter) + Number(Boolean(etrnFilter)) + Number(Boolean(financeFilter));
   $('filter-view').value = view;
   const activeFilters = $('active-filters');
   const filterLabels = [];
   if (viewFilter) filterLabels.push($('filter-view').selectedOptions?.[0]?.textContent.trim());
   if (etrnFilter) filterLabels.push($('filter').selectedOptions?.[0]?.textContent.trim());
+  if (financeFilter) filterLabels.push($('financial-filter').selectedOptions?.[0]?.textContent.trim());
   activeFilters.textContent = filterLabels.filter(Boolean).join(' · ');
   activeFilters.hidden = !filterCount;
   const hasPeriod = Boolean(period.from || period.to);
@@ -733,7 +809,13 @@ function render() {
   const matches = selectOrders(orders, {
     query:$('search').value, filter:$('filter').value, view, today:day, sort, ascending, ...period,
   });
-  const scoped = scopeOrders(matches, {scope:registryScope, month:historyMonth, search:$('search').value});
+  const financialMatches = financeFilter
+    ? matches.filter(order => {
+        const flags = financialFlags(order);
+        return financeFilter === 'issues' ? flags.length > 0 : flags.includes(financeFilter);
+      })
+    : matches;
+  const scoped = scopeOrders(financialMatches, {scope:registryScope, month:historyMonth, search:$('search').value});
   const groups = monthGroups(orders);
   $('view-title').textContent = registryScope === 'active' ? 'Актуальные заявки' : 'История заявок';
   $('active-nav').setAttribute('aria-current', registryScope === 'active' ? 'page' : 'false');
@@ -944,6 +1026,15 @@ function applyDisplay() {
   $('layout').value = display.layout;
   $('settings-layout').value = display.layout;
   $('status-palette').hidden = display.theme === 'sand';
+  const preview = $('theme-preview');
+  preview.replaceChildren();
+  for (const [id,title] of Object.entries(themeLabels)) {
+    const button = action(null, () => setDisplay('theme',id), 'theme-swatch');
+    button.dataset.swatch = id;
+    button.setAttribute('aria-pressed',String(display.theme === id));
+    button.append(node('span',null,'swatch-bars'),node('strong',title));
+    preview.append(button);
+  }
 }
 
 function applyAccent() {
@@ -1075,6 +1166,74 @@ for (const [id, labels] of [['theme', themeLabels], ['layout', layoutLabels], ['
   });
 }
 applyDisplay();
+const settingsTabs = [...document.querySelectorAll('[data-settings-section]')];
+const showSettingsSection = name => {
+  for (const button of settingsTabs) {
+    button.setAttribute('aria-pressed',String(button.dataset.settingsSection===name));
+  }
+  for (const panel of document.querySelectorAll('[data-settings-panel]')) {
+    panel.hidden=panel.dataset.settingsPanel!==name;
+  }
+};
+settingsTabs.forEach(button => button.addEventListener('click',
+  ()=>showSettingsSection(button.dataset.settingsSection)));
+for (const key of columnKeys) {
+  const option=node('option',columnTitles[key]);
+  option.value=key;
+  $('column-choice').append(option);
+}
+function moveColumn(delta) {
+  const key=$('column-choice').value;
+  const from=display.columnOrder.indexOf(key);
+  const target=from+delta;
+  if(from<0||target<0||target>=display.columnOrder.length)return;
+  [display.columnOrder[from],display.columnOrder[target]]=
+    [display.columnOrder[target],display.columnOrder[from]];
+  saveDisplay();render();
+}
+$('column-left').addEventListener('click',()=>moveColumn(-1));
+$('column-right').addEventListener('click',()=>moveColumn(1));
+$('reset-columns').addEventListener('click',()=>{
+  display.columnOrder=[...columnKeys];saveDisplay();render();
+});
+async function setSyncNotifications(event) {
+  const input=event.currentTarget;
+  if(input.checked) {
+    if(!('Notification' in globalThis)){
+      input.checked=false;
+      $('notify-status').textContent='Этот браузер не поддерживает уведомления.';
+      return;
+    }
+    const permission=Notification.permission==='granted'?'granted':
+      await Notification.requestPermission();
+    if(permission!=='granted'){
+      input.checked=false;
+      $('notify-status').textContent='Браузер не разрешил уведомления.';
+      return;
+    }
+  }
+  try{localStorage.setItem(syncWarningKey(),String(input.checked));}
+  catch{
+    $('notify-status').textContent='Не удалось сохранить настройку.';
+    return;
+  }
+  $('notify-status').textContent=input.checked?
+    'Уведомления включены для этого аккаунта и браузера.':'Уведомления выключены.';
+}
+$('notify-sync-errors').addEventListener('change',setSyncNotifications);
+$('reset-appearance').addEventListener('click', () => {
+  // Reset only visual preferences; keep orders, accounts and user-created views.
+  display.theme='sputnik';
+  display.violetPalette='violet';
+  display.accents={};
+  display.statusColors={};
+  display.themeLayouts={};
+  display.layout='table';
+  applyStatusColors();
+  applyDisplay();
+  saveDisplay();
+  render();
+});
 const mobileNav = window.matchMedia?.('(max-width: 850px)');
 const mobileCommands = window.matchMedia?.('(max-width: 740px)');
 function placeRegistryCommands() {
@@ -1137,6 +1296,7 @@ function showUpdates() {
 $('updates-open').addEventListener('click', showUpdates);
 
 $('settings').addEventListener('click', () => {
+  showSettingsSection('appearance');
   const email = $('account-email').textContent;
   $('settings-account').textContent = email;
   $('settings-account').hidden = !email;
@@ -1209,6 +1369,7 @@ mountCommandPalette({
   dialog:$('command-dialog'), input:$('command-search'),
   results:$('command-results'), opener:$('command-launch'),
   available:() => demo || signedIn,
+  hasSelection:()=>Boolean(workspacePanel?.selected()),
   actions:{
     search:focusRegistrySearch,
     active:() => changeRegistryScope('active'),
@@ -1220,6 +1381,16 @@ mountCommandPalette({
     table:() => setDisplay('layout','table'),
     split:() => setDisplay('layout','split'),
     settings:() => $('settings').click(),
+    selected:() => panelFor(workspacePanel?.selected()),
+    'selected-driver':() => {
+      const number=workspacePanel?.selected();
+      const order=orders.find(item=>item.number===number);
+      if(order){workspacePanel.close();openDriver(order);}
+    },
+    'selected-etrn':() => {
+      const number=workspacePanel?.selected();
+      if(number){workspacePanel.close();openEtrn(number);}
+    },
   },
 });
 $('dock-active').addEventListener('click', () => changeRegistryScope('active'));
@@ -1244,6 +1415,67 @@ $('filter-view').addEventListener('change', event => {
   render();
 });
 $('filter').addEventListener('change', render);
+$('financial-filter').addEventListener('change', render);
+const ownerViewKey=()=>demo?'demo':$('account-email').textContent;
+function applyPersonalView(entry) {
+  view=entry.view;registryScope=entry.scope;historyMonth='all';period={};
+  sort=entry.sort;ascending=entry.ascending;
+  $('filter').value=entry.etrn;
+  $('financial-filter').value=entry.financial;
+  $('search').value='';
+  $('workspace-menu').open=false;
+  render();
+}
+function renderCustomViews() {
+  const box=$('custom-views');
+  box.replaceChildren();
+  for(const item of readSavedViews(ownerViewKey())) {
+    const row=node('div',null,'custom-view-row');
+    const open=action(item.name,()=>applyPersonalView(item));
+    const remove=action('×',()=>{
+      if(!window.confirm('Удалить сохранённый вид «'+item.name+'»?'))return;
+      const views=readSavedViews(ownerViewKey()).filter(entry=>entry.name!==item.name);
+      writeSavedViews(ownerViewKey(),views);renderCustomViews();
+    });
+    remove.setAttribute('aria-label','Удалить вид '+item.name);
+    row.append(open,remove);box.append(row);
+  }
+}
+$('save-view').addEventListener('click',()=>{
+  const requested=window.prompt('Название вида (до 45 символов)');
+  if(!requested)return;
+  const name=requested.trim().slice(0,45);
+  if(!name)return;
+  const items=readSavedViews(ownerViewKey());
+  if(items.some(item=>item.name.toLowerCase()===name.toLowerCase())) {
+    $('notice').textContent='Вид с таким названием уже существует.';return;
+  }
+  if(items.length>=25) {
+    $('notice').textContent='Можно сохранить не больше 25 видов.';return;
+  }
+  items.push({name,scope:registryScope,view,etrn:$('filter').value,
+    financial:$('financial-filter').value,sort,ascending});
+  $('notice').textContent=writeSavedViews(ownerViewKey(),items)?
+    'Вид сохранён только для этого аккаунта и браузера.':
+    'Не удалось сохранить вид в браузере.';
+  renderCustomViews();
+});
+for(const button of document.querySelectorAll('[data-preset]')) {
+  button.addEventListener('click',()=>{
+    const preset=savedViewPresets.find(item=>item.id===button.dataset.preset);
+    if(!preset)return;
+    view=preset.view;
+    registryScope=preset.view==='failed'?'history':'active';
+    historyMonth='all';
+    period={};
+    $('search').value='';
+    $('filter').value=preset.etrn;
+    $('financial-filter').value=preset.financial||'';
+    $('workspace-menu').open=false;
+    render();
+  });
+}
+
 $('add-point').addEventListener('click', () => addPoint());
 $('new').addEventListener('click', () => openEditor(blankOrder()));
 $('editor-etrn').addEventListener('click', () => openEtrn());
@@ -1257,7 +1489,7 @@ etrnForm.addEventListener('submit', async event => {
       draft.etrn = etrn;
       editorPreview();
     } else {
-      await updateOrder(etrnOrderNumber, etrnStamp, order => ({...order, etrn}), generation);
+      await saveEtrn(etrnOrderNumber, etrnStamp, etrn, generation);
       if (generation !== accountGeneration) return;
       render();
       $('notice').textContent = 'Статус ЭТРН сохранён.';
@@ -1341,6 +1573,7 @@ function signInScreen(message = '') {
   setWorkspaceMenu();
   for (const reset of pendingImports.values()) reset();
   for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
+  workspacePanel?.close();
   orders = [];
   period = {};
   view = 'all';
@@ -1357,6 +1590,7 @@ function signInScreen(message = '') {
     $(id).textContent = '';
   }
   $('account-email').textContent = '';
+  $('custom-views').replaceChildren();
   $('sync-status').textContent = '';
   $('sync-status').title = '';
   $('notice').textContent = '';
@@ -1414,6 +1648,8 @@ async function showAccount(account) {
   accountGeneration++;
   signedIn = true;
   $('account-email').textContent = account.email;
+  $('notify-sync-errors').checked=syncNotificationsEnabled();
+  renderCustomViews();
   $('sync-tools').hidden = false;
   $('sign-out').hidden = false;
   try {
@@ -1516,6 +1752,23 @@ $('sign-out').addEventListener('click', async event => {
 
 $('sync-refresh').addEventListener('click', refresh);
 $('sync-quick').addEventListener('click', () => $('sync-refresh').click());
+const comparison = mountComparison({
+  dialog:$('compare-dialog'),orders:() => orders,
+  first:$('compare-first'),second:$('compare-second'),results:$('compare-results'),
+});
+$('compare-open').addEventListener('click', comparison.open);
+workspacePanel = mountWorkspacePanel({
+  root:$('order-peek'),
+  getOrder:number=>orders.find(order=>order.number===number),
+  edit:openOrder,
+  openEtrn,
+  openDriver:number=>{const order=orders.find(order=>order.number===number);if(order)openDriver(order);},
+  openContacts:number=>{const order=orders.find(order=>order.number===number);
+    if(order)openEditor(order,order.number);
+  },
+});
+$('dock-context').addEventListener('click',()=>{if(workspacePanel?.selected())panelFor(workspacePanel.selected());});
+
 $('local-import').addEventListener('click', async event => {
   const operation = startImport(event.currentTarget);
   if (!operation) return;
@@ -1541,6 +1794,7 @@ $('local-import').addEventListener('click', async event => {
 });
 
 if (demo) {
+  renderCustomViews();
   attachExcelLab();
   $('demo-note').hidden = false;
   showWorkspace(true);

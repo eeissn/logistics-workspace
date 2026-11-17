@@ -9,7 +9,7 @@ test('command palette exposes navigation, registry and analytics without duplica
 });
 
 test('command palette search accepts Russian aliases and multiple words', () => {
-  assert.ok(matchCommands('этрН').length === 0); // ETRN editing is never an implicit bulk action.
+  assert.ok(matchCommands('этрН').every(item => item.contextual && item.id !== 'bulk-etrn')); // Only selected-order ETRN commands, never implicit bulk changes.
   assert.deepEqual(matchCommands('история').map(item => item.id), ['history']);
   assert.deepEqual(matchCommands('импорт excel').map(item => item.id), ['excel']);
   assert.deepEqual(matchCommands('маржа').map(item => item.id), ['report']);
