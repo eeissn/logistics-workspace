@@ -284,7 +284,10 @@
     </div></section>
     <section id="settings-registry" class="settings-pane" hidden>
       <label>Отображение заявок<select id="settings-layout"></select></label>
-      <p class="quiet">Виды и фильтры сохраняются в этом браузере отдельно для каждой учётной записи.</p>
+      <label>Сигнал о низкой марже, ₽
+        <input type="number" id="margin-threshold" min="0" max="10000000" step="500" value="5000">
+      </label>
+      <p class="quiet">Индикатор не изменяет расчёт маржи. Виды и этот порог сохраняются только в браузере для текущего аккаунта.</p>
     </section>
     <section id="settings-notifications" class="settings-pane" hidden>
       <p>Системные уведомления о сохранении и ошибках отображаются в рабочем реестре.</p>
