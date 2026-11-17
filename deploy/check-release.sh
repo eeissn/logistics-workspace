@@ -4,12 +4,30 @@ set -euo pipefail
 origin=${1:-https://logistics-sputnik.duckdns.org}
 origin=${origin%/}
 
+# Optional local HTTPS check via nginx: bypass VPS DNS, but retain the
+# production hostname for TLS certificate verification and nginx routing.
+# Example: RELEASE_RESOLVE_IP=127.0.0.1 bash deploy/check-release.sh
+curl_flags=(--silent --show-error --max-time 10 --noproxy '*' --proto '=https')
+if [[ -n "${RELEASE_RESOLVE_IP:-}" ]]; then
+    if [[ ! "${RELEASE_RESOLVE_IP}" =~ ^[0-9A-Fa-f:.]+$ ]]; then
+        printf 'Invalid RELEASE_RESOLVE_IP (numeric IP required)\n' >&2
+        exit 2
+    fi
+    host=${origin#https://}
+    host=${host%%/*}
+    if [[ "$host" == *:* ]]; then
+        printf 'RELEASE_RESOLVE_IP supports default HTTPS port only\n' >&2
+        exit 2
+    fi
+    curl_flags+=(--resolve "${host}:443:${RELEASE_RESOLVE_IP}")
+fi
+
 # The API can briefly return 502 while Uvicorn starts after a release.
 # Retry boundedly; do not accept a 200 or a login redirect in place of 401.
 check_status() {
     local path=$1 expected=$2 attempts=${3:-1} status attempt
     for ((attempt=1; attempt<=attempts; attempt++)); do
-        status=$(curl --silent --show-error --max-time 5 --proto '=https' \
+        status=$(curl "${curl_flags[@]}" \
             --output /dev/null --write-out '%{http_code}' "${origin}${path}") || status=000
         if [[ "$status" == "$expected" ]]; then
             printf '%s: HTTP %s (expected %s)\n' "$path" "$status" "$expected"
@@ -38,7 +56,7 @@ check_pdf_worker() {
     fi
 
     name=${files[0]##*/}
-    result=$(curl --silent --show-error --max-time 5 --proto '=https' \
+    result=$(curl "${curl_flags[@]}" \
         --output /dev/null --write-out '%{http_code} %{content_type}' \
         "${origin}/assets/${name}") || result='000 '
     status=${result%% *}
