@@ -2246,3 +2246,258 @@ dialog :is(input,select,textarea) { scroll-margin-block: 5rem; }
   font-size: .76rem; color: var(--ink); border: 0; padding: 0;
   font-weight: 620; min-width: 0;
 }
+
+/* Sputnik Workspace · visual-system polish / 17 Nov 2026
+   Apple HIG: predictable primary/secondary tools and touch targets.
+   Attio: persistent navigation, readable record density and contextual details.
+   Uses native controls and existing theme tokens — no fetched fonts or icons. */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --control-height: 40px;
+  --text-body: .9rem;
+  --text-caption: .78rem;
+  --type-tracking: -.012em;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.workspace-nav {
+  border-right-color: color-mix(in srgb, var(--line) 90%, var(--muted));
+}
+.workspace-nav .brand {
+  min-height: 39px;
+  font-size: .9rem;
+  letter-spacing: -.016em;
+  font-weight: 720;
+}
+.workspace-nav .brand img { flex: none; }
+.workspace-nav .registry-link {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  padding-inline: .72rem;
+  font-size: .88rem;
+  font-weight: 620;
+}
+.workspace-nav .registry-link[aria-current="page"] {
+  box-shadow: inset 3px 0 0 var(--theme-outline);
+}
+.workspace-nav .nav-primary, .workspace-nav .favorite-views {
+  gap: .15rem;
+  padding-top: .7rem;
+}
+.workspace-nav .nav-primary button, .workspace-nav .favorite-views > button,
+.workspace-nav .saved-views-group button {
+  min-height: 40px;
+  padding: .55rem .72rem;
+  font-size: .88rem;
+  line-height: 1.35;
+  letter-spacing: -.008em;
+}
+.workspace-nav .favorite-views > button[aria-pressed=true] {
+  font-weight: 680;
+  box-shadow: inset 3px 0 0 var(--theme-outline);
+}
+.workspace-nav .nav-section-title {
+  color: var(--muted);
+  font-size: .73rem;
+  font-weight: 690;
+  padding-block: .2rem;
+  letter-spacing: .01em;
+}
+.workspace-nav #command-launch {
+  min-height: 43px;
+  padding: .6rem .68rem;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px #16172b08;
+}
+.workspace-nav #command-launch > .sidebar-command-label {
+  font-size: .83rem;
+}
+.workspace-nav .saved-views-group > summary {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  font-size: .85rem;
+  padding-inline: .72rem;
+}
+.workspace-nav .account-tools {
+  border-top-color: var(--line);
+  padding-top: .6rem;
+}
+.workspace-nav .account-tools button {
+  color: var(--ink);
+  min-height: 40px;
+  font-size: .86rem;
+  padding: .48rem .72rem;
+}
+.workspace-nav #account-email {
+  font-size: .77rem;
+  line-height: 1.4;
+  padding-inline: .72rem;
+}
+.workspace-nav #sign-out { color: var(--muted); }
+.workspace-nav #sign-out:hover { color: var(--ink); }
+main#workspace { min-width: 0; }
+main#workspace .intro {
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.2rem;
+}
+.intro-title { gap: .65rem 1.1rem; }
+.intro-title h1 {
+  font-size: clamp(1.62rem, 2.2vw, 2rem);
+  font-weight: 710;
+  letter-spacing: -.045em;
+  line-height: 1.15;
+}
+.intro-title #new {
+  min-height: 42px;
+  font-weight: 680;
+  font-size: .85rem;
+  letter-spacing: -.008em;
+  border-radius: 10px;
+}
+.intro-metrics {
+  gap: .65rem;
+}
+.month-metrics { gap: .35rem; }
+.metric-chip {
+  min-width: 5.6rem;
+  border: 1px solid var(--line);
+  padding: .47rem .72rem;
+  background: color-mix(in srgb, var(--paper) 94%, var(--surface));
+  box-shadow: none;
+  border-radius: 10px;
+}
+.metric-chip small { font-size: .72rem; line-height: 1.35; }
+.metric-chip strong {
+  font-size: .88rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+#sync-status { font-size: .79rem; white-space: nowrap; }
+#sync-quick { min-height: 40px; font-size: .85rem; font-weight: 570; }
+.registry-command {
+  gap: .55rem;
+  padding: .52rem;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--paper);
+  box-shadow: 0 2px 10px #16172b08;
+}
+.registry-command .registry-search {
+  min-height: 43px;
+  border-color: transparent;
+  background: var(--surface);
+  padding-left: .75rem;
+}
+.registry-command .registry-search input {
+  min-height: 40px;
+  background: transparent;
+  font-size: .91rem;
+}
+.registry-command > button, #period-slot > button, #registry-actions button {
+  min-height: 40px;
+  font-size: .84rem;
+  padding: .48rem .72rem;
+  font-weight: 570;
+}
+.registry-command #filters-open[data-active=true],
+#period-open[data-active=true] {
+  border-color: var(--theme-outline);
+  background: var(--nav-active);
+}
+.registry-tabs { gap: .4rem; }
+.registry-tabs button {
+  min-height: 38px;
+  font-weight: 620;
+  border-radius: 9px;
+}
+.registry-toolbar { margin-bottom: .6rem; }
+.registry-tools label { color: var(--muted); font-size: .82rem; }
+.registry-tools select { color: var(--ink); font-size: .86rem; }
+.bulk-controls #bulk-mode { min-height: 37px; font-weight: 580; }
+.order-table .table-head { font-size: .77rem; font-weight: 650; }
+.order-table .order {
+  font-size: .86rem;
+  line-height: 1.45;
+}
+.order-table .order-link { font-weight: 720; font-size: .87rem; }
+.order-table .finance-summary { font-size: .77rem; }
+.order-table .row { padding-block: .56rem; }
+.order-table .order-peek-button {
+  min-height: 31px;
+  min-width: 50px;
+  padding-inline: .45rem;
+  font-size: .77rem;
+}
+.etrn-link {
+  font-size: .78rem;
+  font-weight: 600;
+  line-height: 1.3;
+  border-radius: 8px;
+}
+#order-peek .peek-header h2 { font-size: 1.12rem; font-weight: 730; }
+#order-peek .peek-header { min-height: 69px; }
+#order-peek .peek-context { gap: 1.25rem; }
+#order-peek .peek-context-panel h3 { font-size: .95rem; font-weight: 700; }
+#order-peek .peek-field small { font-size: .73rem; }
+#order-peek .peek-field span { font-size: .88rem; line-height: 1.48; }
+#order-peek .peek-actions button { min-height: 44px; font-size: .84rem; font-weight: 610; }
+dialog .dialog-head h2 { font-weight: 720; letter-spacing: -.025em; }
+dialog .dialog-foot button { min-height: 42px; font-weight: 610; }
+:where(button, a, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--outline);
+  outline-offset: 2px;
+}
+@media (min-width: 851px) {
+  .workspace-menu { scrollbar-gutter: stable; }
+  .workspace-menu-body { padding-bottom: .25rem; }
+}
+@media (min-width: 851px) and (max-height: 680px) {
+  .workspace-nav { gap: .3rem; }
+  .workspace-nav .nav-primary button,
+  .workspace-nav .favorite-views > button { min-height: 36px; padding-block: .38rem; }
+}
+@media (max-width: 850px) {
+  .registry-command { padding: .4rem; }
+  .workspace-nav .registry-link { display: none; }
+  .workspace-nav .account-tools button { min-height: 44px; }
+}
+@media (max-width: 740px) {
+  main#workspace .intro { gap: .65rem; }
+  .intro-title { align-items: center; }
+  .intro-title h1 { font-size: clamp(1.35rem, 6.2vw, 1.78rem); }
+  .intro-title #new {
+    padding: .45rem .55rem;
+    min-height: 44px;
+    font-size: .79rem;
+  }
+  .registry-command {
+    padding: .35rem;
+    box-shadow: none;
+    border: 0;
+    background: transparent;
+  }
+  .registry-command .registry-search {
+    border: 1px solid var(--line);
+    background: var(--paper);
+    min-height: 44px;
+  }
+  .registry-command #filters-open,
+  .registry-command #registry-more summary {
+    min-height: 44px;
+  }
+  #order-peek .peek-actions button { min-height: 48px; font-size: .72rem; }
+  .month-metrics { width: 100%; }
+  .metric-chip { padding: .45rem .55rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-nav button, .registry-command button,
+  #order-peek button { transition: none !important; }
+}
