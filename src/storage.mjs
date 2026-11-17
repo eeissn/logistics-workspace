@@ -61,7 +61,7 @@ const offlineStore = {
   async save(orders) {
     localStorage.setItem(KEY, JSON.stringify({version: 1, orders}));
     return orders;
-  ,
+  },
   async updateEtrn(number, stamp, etrn) {
     const current = localOrders();
     const order = current.find(entry => entry.number === number);
