@@ -75,7 +75,7 @@ let driverOrder;
 const today = () => new Intl.DateTimeFormat('sv-SE', {timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const desktopMetrics = window.matchMedia?.('(min-width: 851px)');
 function syncMetricsDisclosure() {
-  $('metrics-disclosure').open = !desktopMetrics.matches;
+  $('metrics-disclosure').open = !desktopMetrics?.matches;
 }
 syncMetricsDisclosure();
 desktopMetrics?.addEventListener?.('change', syncMetricsDisclosure);
