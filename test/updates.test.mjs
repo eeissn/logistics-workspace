@@ -69,3 +69,12 @@ test('17 ноября: исправления по обратной связи �
   assert.ok(entry?.items.some(item => item.includes('номер документа')
     && item.includes('исправить')));
 });
+
+test('17 ноября: новые UX-функции описаны без утверждения о релизе VPS', () => {
+  const latest=updates.find(group=>group.title==='17 ноября 2026').items.join(' ');
+  for(const text of ['тестовой версии','быстрый просмотр','сравнение двух месяцев',
+    'финансовых рисках','Graphite','временный просмотр выбранных PDF']) {
+    assert.ok(latest.includes(text), text);
+  }
+  assert.doesNotMatch(latest,/515 заявк|парол[ья]|\.pem|IPv4|CI|SQLite/);
+});
