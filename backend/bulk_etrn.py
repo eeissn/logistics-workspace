@@ -10,7 +10,7 @@ CHOICES = {
 }
 
 
-def apply_bulk_etrn(order, choice):
+def apply_bulk_etrn(order, choice, number_override=None):
     if choice not in CHOICES:
         raise ValueError("Неизвестный статус ЭТРН.")
     updated = deepcopy(order)
@@ -18,6 +18,22 @@ def apply_bulk_etrn(order, choice):
     if not isinstance(etrn, dict):
         raise ValueError("Некорректные данные ЭТРН.")
     etrn = dict(etrn)
+    if number_override is not None:
+        if choice not in ("created", "signed"):
+            raise ValueError("Номер можно менять только при создании или подписании ЭТРН.")
+        if (not isinstance(number_override, str) or
+            not 1 <= len(number_override) <= 80 or
+            number_override != number_override.strip() or
+            any(ord(char) < 32 for char in number_override)):
+            raise ValueError("Укажи корректный номер ЭТРН (до 80 символов).")
+        etrn["number"] = number_override
+    if choice in ("created", "signed"):
+        # Per-order default: agreement/order number, never one shared bulk number.
+        if not str(etrn.get("number", "")).strip():
+            fallback = order.get("number", "")
+            if not isinstance(fallback, str) or not 1 <= len(fallback) <= 48:
+                raise ValueError("У заявки нет номера для ЭТРН.")
+            etrn["number"] = fallback
     if choice == "created":
         if etrn.get("manualComplete"):
             raise ValueError("ЭТРН уже закрыта вручную.")
@@ -32,9 +48,10 @@ def apply_bulk_etrn(order, choice):
     elif choice == "signed":
         if etrn.get("manualComplete"):
             raise ValueError("ЭТРН закрыта вручную.")
-        if not etrn.get("created") or not str(etrn.get("number", "")).strip():
-            raise ValueError("Для статуса «Подписана» нужны созданная ЭТРН и её номер.")
+        # Explicit operator confirmation records a signed summary and document.
+        # Never invent or overwrite the four individual signature fields.
         etrn["required"] = True
+        etrn["created"] = True
         etrn["allSigned"] = True
         etrn["manualComplete"] = False
     elif choice == "not-required":

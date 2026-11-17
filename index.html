@@ -34,6 +34,7 @@
         <button type="button" id="ledger">Импорт Excel</button>
         <button type="button" id="ledger-export" aria-haspopup="dialog">Экспорт Excel</button>
         <button type="button" id="report">Отчёт по марже</button>
+        <button type="button" id="command-launch" class="sidebar-command" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K">⌘ Поиск и действия <span aria-hidden="true">⌘K</span></button>
       </div>
       <nav class="favorite-views" aria-label="Избранные фильтры">
         <strong>☆ Избранное</strong>
@@ -71,13 +72,14 @@
     <div class="intro-metrics">
       <p id="month-metrics" class="month-metrics" aria-label="Показатели текущего месяца" hidden></p>
       <p id="sync-status" class="quiet" role="status"></p>
+      <button type="button" id="sync-quick" class="sync-quick" hidden aria-label="Синхронизировать заявки">↻ Обновить</button>
     </div>
   </header>
   <div class="registry-command">
     <label class="registry-search"><svg class="command-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input id="search" type="search" aria-label="Поиск по заявкам" placeholder="Номер, компания, маршрут"></label>
     <button id="filters-open" type="button" aria-haspopup="dialog"><svg class="command-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-6 7v5l-4 2v-7z"/></svg><span>Фильтры</span><span id="filters-count" class="command-count" hidden>1</span></button>
     <div id="period-slot"><button id="period-open" type="button" aria-haspopup="dialog"><svg class="command-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="14" rx="2"/><path d="M8 4v4m8-4v4M4 10h16"/></svg><span id="period-label">Период</span></button></div>
-    <div class="actions" id="registry-actions"><button type="button" id="command-launch" class="command-launch" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K">⌘ Действия</button><button id="new" class="primary" type="button" aria-label="Новая заявка"><span aria-hidden="true">+</span> <span class="action-label">Новая заявка</span></button><button id="import" type="button"><span aria-hidden="true">↑</span> <span class="action-label">Загрузить два PDF</span></button></div>
+    <div class="actions" id="registry-actions"><button id="new" class="primary" type="button" aria-label="Новая заявка"><span aria-hidden="true">+</span> <span class="action-label">Новая заявка</span></button><button id="import" type="button"><span aria-hidden="true">↑</span> <span class="action-label">Загрузить два PDF</span></button></div>
     <details id="registry-more"><summary aria-label="Другие действия с заявками">⋯</summary><div id="registry-more-actions"></div></details>
   </div>
   <p id="active-filters" class="active-filters" hidden></p>
@@ -146,7 +148,11 @@
         <option value="manual">Закрыта вручную</option>
       </select>
     </label>
-    <p class="quiet">Статус «Подписана» можно исправить на «Создана ЭТРН», если не зафиксированы все четыре подписи. Номер документа и отмеченные этапы сохраняются.</p>
+    <p class="quiet">Для каждой заявки номер ЭТРН берётся из номера договор-заявки, если не указан другой. Существующий номер сохраняется. Перед сохранением проверьте номера: их можно исправить отдельно для каждой заявки.</p>
+    <details id="bulk-numbers" class="bulk-numbers"><summary>Номера ЭТРН для выбранных заявок</summary>
+      <div id="bulk-number-list" class="bulk-number-list"></div>
+    </details>
+    <p class="quiet">Выбранный статус «Подписана» подтверждается оператором; отдельные отметки четырёх подписей не проставляются автоматически.</p>
     <div id="bulk-preview" role="status" aria-live="polite"></div>
     <footer class="dialog-foot"><button type="button" data-close>Отмена</button><button type="submit" id="bulk-apply" class="primary" disabled>Подтвердить изменения</button></footer>
   </form>

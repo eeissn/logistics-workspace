@@ -61,3 +61,11 @@ test('17 ноября: пользовательские улучшения ин�
   assert.ok(entry?.items.some(item => item.includes('быстрые команды')
     && item.includes('навигация на iPhone') && item.includes('детали заявки')));
 });
+
+test('17 ноября: исправления по обратной связи и номера массового ЭТРН в истории', () => {
+  const entry = updates.find(group => group.title === '17 ноября 2026');
+  assert.ok(entry?.items.some(item => item.includes('кнопка синхронизации возвращена')
+    && item.includes('поиск на iPhone')));
+  assert.ok(entry?.items.some(item => item.includes('номер документа')
+    && item.includes('исправить')));
+});

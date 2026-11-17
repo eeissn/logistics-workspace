@@ -387,11 +387,17 @@ def create_app(path, origin, sheet_preview=None):
             raise HTTPException(422, "Select between 1 and 200 orders")
         numbers = set()
         for item in items:
-            if not isinstance(item, dict) or set(item) != {"number", "updatedAt"}:
+            if (not isinstance(item, dict) or
+                not {"number", "updatedAt"} <= set(item) <= {"number", "updatedAt", "etrnNumber"}):
                 raise HTTPException(422, "Invalid selection")
             number, stamp = item["number"], item["updatedAt"]
+            override = item.get("etrnNumber")
             if (not isinstance(number, str) or not 1 <= len(number) <= 48 or
-                number in numbers or not isinstance(stamp, str) or len(stamp) > 80):
+                number in numbers or not isinstance(stamp, str) or len(stamp) > 80 or
+                ("etrnNumber" in item and
+                 (choice not in ("created", "signed") or not isinstance(override, str) or
+                  not 1 <= len(override) <= 80 or override != override.strip() or
+                  any(ord(char) < 32 for char in override)))):
                 raise HTTPException(422, "Invalid or repeated selection")
             numbers.add(number)
 
@@ -418,7 +424,7 @@ def create_app(path, origin, sheet_preview=None):
                         results.append({"number": number, "result": "conflict"})
                         continue
                     try:
-                        updated = apply_bulk_etrn(original, choice)
+                        updated = apply_bulk_etrn(original, choice, item.get("etrnNumber"))
                     except ValueError as exc:
                         results.append({"number": number, "result": "skipped", "reason": str(exc)})
                         continue

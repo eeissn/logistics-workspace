@@ -618,13 +618,24 @@ def contacts_viewport(page, number):
         expect(trigger).to_have_attribute("aria-expanded", "true")
         expect(panel.get_by_role("link")).to_have_attribute("href", "tel:+70000000001")
         popup, button = panel.bounding_box(), trigger.bounding_box()
-        viewport = page.evaluate("({width: innerWidth, height: innerHeight})")
-        assert popup["x"] >= 0 and popup["x"] + popup["width"] <= viewport["width"]
-        assert popup["y"] >= 0 and popup["y"] + popup["height"] <= viewport["height"]
-        if edge == "top":
-            assert popup["y"] >= button["y"] + button["height"]
-        else:
-            assert popup["y"] + popup["height"] <= button["y"]
+        viewport = page.evaluate("""() => {
+            const dock = document.getElementById('mobile-dock');
+            const visible = dock && !dock.hidden && getComputedStyle(dock).display !== 'none';
+            return {
+                width:innerWidth, height:innerHeight,
+                usableBottom:visible ? dock.getBoundingClientRect().top : innerHeight
+            };
+        }""")
+        assert popup["x"] >= 0 and popup["x"] + popup["width"] <= viewport["width"] + 1
+        assert popup["y"] >= 0 and popup["y"] + popup["height"] <= viewport["usableBottom"] + 1
+        # Placement direction depends on available space after reserving the dock.
+        # Check the direction only if the opposite side cannot hold the popup.
+        below_room = viewport["usableBottom"] - (button["y"] + button["height"])
+        above_room = button["y"]
+        if below_room < popup["height"] + 8 and above_room >= popup["height"] + 8:
+            assert popup["y"] + popup["height"] <= button["y"] + 2
+        elif above_room < popup["height"] + 8 and below_room >= popup["height"] + 8:
+            assert popup["y"] >= button["y"] + button["height"] - 2
         return trigger
 
     trigger = check_placement("20", "top")
@@ -654,6 +665,9 @@ def contacts_viewport(page, number):
 def workspace_design(page, mobile):
     """Raycast-style commands, Linear feedback, Steep metrics and mobile dock."""
     expect(page.locator("#month-metrics .metric-chip")).to_have_count(3)
+    expect(page.locator("#sync-quick")).to_be_visible()
+    expect(page.locator("#sync-quick")).to_be_enabled()
+    expect(page.locator('#month-metrics [data-metric="count"]')).to_have_css("text-align", "center")
     expect(page.locator('#month-metrics [data-metric="margin"]')).to_contain_text("Маржа")
     if mobile:
         expect(page.locator("#mobile-dock")).to_be_visible()
@@ -664,11 +678,22 @@ def workspace_design(page, mobile):
         expect(page.locator("#view-title")).to_have_text("Актуальные заявки")
         page.locator("#dock-search").click()
         expect(page.locator("#search")).to_be_focused()
+        assert page.evaluate("""() => {
+            const search = document.querySelector('.registry-search').getBoundingClientRect();
+            const input = document.querySelector('#search').getBoundingClientRect();
+            const filter = document.querySelector('#filters-open').getBoundingClientRect();
+            return search.left >= -1 && search.right <= innerWidth + 1 &&
+                input.left >= search.left - 1 && input.right <= search.right + 1 &&
+                search.right <= filter.left + 1 &&
+                document.documentElement.scrollWidth <= innerWidth + 1;
+        }""")
         page.locator("#dock-more").click()
         expect(page.locator("#dock-more")).to_have_attribute("aria-expanded", "true")
         page.locator("#dock-more").click()
         expect(page.locator("#dock-more")).to_have_attribute("aria-expanded", "false")
     else:
+        expect(page.locator("#workspace-nav #command-launch")).to_be_visible()
+        expect(page.locator("#registry-actions #command-launch")).to_have_count(0)
         page.locator("#command-launch").click()
         dialog = page.locator("#command-dialog")
         expect(dialog).to_be_visible()
@@ -737,6 +762,67 @@ def smoke(browser_type, origin, chromium, number, report_total, device=None):
         expect(b.locator("#table")).to_contain_text(order_b)
     print(f"{browser_type.name}: 3 themes × 4 registry views, pickup/delivery sorting, PDF, Excel, ETRN, archive, margin and account isolation passed", flush=True)
 
+
+
+
+def bulk_etrn_numbers_ui(chromium, origin):
+    """Preview and save two signed ETRN statuses with independently editable numbers."""
+    with closing(chromium.launch()) as browser:
+        page = browser.new_page(ignore_https_errors=True)
+        page.goto(origin)
+        sign_in(page, "first")
+        page.evaluate("""async () => {
+            const {csrf} = await (await fetch('/api/me')).json();
+            const headers = {'Content-Type': 'application/json', 'X-CSRF-Token': csrf};
+            const response = await fetch('/api/records', {headers});
+            if (!response.ok) throw new Error('Cannot read synthetic registry');
+            const snapshot = await response.json();
+            if (!snapshot.orders.length) throw new Error('Missing test order template');
+            const template = snapshot.orders[0];
+            const fixtures = ['BULK-UI-01', 'BULK-UI-02'].map(number => ({
+                ...template, number,
+                trip: {...template.trip, stage: 'loaded'},
+                etrn: {required: true, number: '', created: false, allSigned: false},
+            }));
+            const save = await fetch('/api/records', {
+                method:'PUT', headers,
+                body:JSON.stringify({revision:snapshot.revision,orders:[...snapshot.orders,...fixtures]})
+            });
+            if (!save.ok) throw new Error('Cannot create UI fixtures: ' + await save.text());
+        }""")
+        page.reload()
+        page.locator("#search").fill("BULK-UI-")
+        expect(page.locator("#table .order")).to_have_count(2)
+        page.locator("#bulk-mode").click()
+        page.locator("#bulk-select-visible").click()
+        expect(page.locator("#bulk-selected")).to_contain_text("2")
+        page.locator("#bulk-open").click()
+        dialog = page.locator("#bulk-dialog")
+        dialog.locator("#bulk-choice").select_option("signed")
+        dialog.locator("#bulk-numbers summary").click()
+        inputs = dialog.locator("#bulk-number-list input")
+        expect(inputs).to_have_count(2)
+        expect(inputs.nth(0)).to_have_value("BULK-UI-01")
+        expect(inputs.nth(1)).to_have_value("BULK-UI-02")
+        inputs.nth(0).fill("CUSTOM-BULK-01")
+        inputs.nth(0).press("Tab")
+        expect(dialog.locator("#bulk-preview")).to_contain_text("Готово к изменению: 2")
+        expect(dialog.locator("#bulk-apply")).to_be_enabled()
+        dialog.locator("#bulk-apply").click()
+        expect(dialog).to_be_hidden()
+        expect(page.locator("#notice")).to_contain_text("Изменено ЭТРН: 2")
+        confirmed = page.evaluate("""async () => {
+            const {csrf} = await (await fetch('/api/me')).json();
+            const snapshot = await (await fetch('/api/records', {
+                headers: {'X-CSRF-Token': csrf}
+            })).json();
+            return snapshot.orders.filter(item => item.number.startsWith('BULK-UI-'))
+                .map(item => [item.number, item.etrn.number, item.etrn.created, item.etrn.allSigned]);
+        }""")
+        assert confirmed == [
+            ["BULK-UI-01", "CUSTOM-BULK-01", True, True],
+            ["BULK-UI-02", "BULK-UI-02", True, True],
+        ], confirmed
 
 
 def large_year_browser(chromium, origin):
@@ -830,6 +916,7 @@ def main():
                 smoke(playwright.chromium, origin, playwright.chromium, 41001, r"22\s*000")
                 smoke(playwright.webkit, origin, playwright.chromium, 41002, r"44\s*000",
                       {**playwright.devices["iPhone 13"], "viewport": {"width": 393, "height": 852}})
+                bulk_etrn_numbers_ui(playwright.chromium, origin)
                 large_year_browser(playwright.chromium, origin)
         finally:
             server.terminate()
