@@ -28,23 +28,32 @@
   <details class="workspace-menu" id="workspace-menu">
     <summary aria-label="Меню рабочего пространства">⋯</summary>
     <div class="workspace-menu-body">
-      <div class="nav-tools">
+      <button type="button" id="command-launch" class="sidebar-command" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K"><span class="sidebar-command-label">⌕ Поиск и действия</span><kbd>Ctrl K</kbd></button>
+      <nav class="nav-primary" aria-label="Инструменты">
+        <p class="nav-section-title">Инструменты</p>
         <button type="button" id="calculator" aria-haspopup="dialog">Калькулятор</button>
         <button type="button" id="cargo-open" aria-haspopup="dialog">Размещение груза</button>
         <button type="button" id="ledger">Импорт Excel</button>
         <button type="button" id="ledger-export" aria-haspopup="dialog">Экспорт Excel</button>
         <button type="button" id="report">Отчёт по марже</button>
-        <button type="button" id="compare-open">Сравнить месяцы</button>
-        <button type="button" id="command-launch" class="sidebar-command" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K">⌘ Поиск и действия <span aria-hidden="true">⌘K</span></button>
-      </div>
-      <nav class="favorite-views" aria-label="Избранные фильтры">
-        <strong>Рабочие виды</strong><button type="button" data-preset="awaiting-etrn">Ждём ЭТРН</button><button type="button" data-preset="money-issues">Финансовые риски</button><button type="button" data-preset="today-pickup">Загрузка сегодня</button><button type="button" data-preset="today-delivery">Выгрузка сегодня</button><button type="button" data-preset="issues">Проблемные рейсы</button>
-        <button type="button" id="save-view">＋ Сохранить текущий вид</button>
-        <div id="custom-views" class="custom-views" aria-label="Мои виды реестра"></div>
-        <strong>☆ Избранное</strong>
-        <button type="button" data-view="pickup" aria-pressed="false">Загрузка сегодня</button>
-        <button type="button" data-view="delivery" aria-pressed="false">Выгрузка сегодня</button>
-        <button type="button" data-view="failed" aria-pressed="false">Проблемные</button>
+        <button type="button" id="compare-open">Сравнение месяцев</button>
+      </nav>
+      <nav class="favorite-views" aria-label="Быстрые фильтры">
+        <div class="nav-section-row"><span class="nav-section-title">Быстрые фильтры</span><button type="button" id="reset-workspace-view" class="nav-reset" title="Вернуться к актуальным заявкам">Сбросить</button></div>
+        <button type="button" data-preset="awaiting-etrn">Ждём ЭТРН</button>
+        <button type="button" data-preset="money-issues">Финансовые риски</button>
+        <button type="button" data-preset="today-pickup">Загрузка сегодня</button>
+        <button type="button" data-preset="today-delivery">Выгрузка сегодня</button>
+        <button type="button" data-preset="issues">Проблемные рейсы</button>
+        <details class="saved-views-group"><summary>Мои виды</summary>
+          <button type="button" id="save-view">＋ Сохранить текущий вид</button>
+          <div id="custom-views" class="custom-views" aria-label="Мои виды реестра"></div>
+        </details>
+        <div class="legacy-view-actions" hidden>
+          <button type="button" data-view="pickup" aria-pressed="false">Загрузка сегодня</button>
+          <button type="button" data-view="delivery" aria-pressed="false">Выгрузка сегодня</button>
+          <button type="button" data-view="failed" aria-pressed="false">Проблемные</button>
+        </div>
       </nav>
       <div class="account-tools">
         <div id="sync-tools" class="sync-tools" hidden>
