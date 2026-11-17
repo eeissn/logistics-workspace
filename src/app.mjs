@@ -1583,10 +1583,52 @@ $('bulk-select-visible').addEventListener('click', () => {
   if (bulkVisible.length > 200) $('notice').textContent = 'Можно выбрать не более 200 заявок за операцию.';
   render();
 });
+let bulkPreviewRequest = 0;
+function drawBulkNumbers() {
+  const choice = $('bulk-choice').value;
+  const editable = choice === 'created' || choice === 'signed';
+  $('bulk-numbers').hidden = !editable;
+  const list = $('bulk-number-list');
+  list.replaceChildren();
+  if (!editable) return;
+  for (const order of orders.filter(item => bulkNumbers.has(item.number))) {
+    const label = node('label', null, 'bulk-number-entry');
+    label.append(node('span', 'Заявка № ' + order.number));
+    const input = node('input');
+    input.type = 'text';
+    input.required = true;
+    input.maxLength = 80;
+    input.autocomplete = 'off';
+    input.value = order.etrn?.number?.trim() || order.number;
+    input.dataset.order = order.number;
+    input.setAttribute('aria-label', 'Номер ЭТРН заявки № ' + order.number);
+    input.addEventListener('input', () => {
+      bulkPreviewRequest++;
+      bulkPreview = null;
+      $('bulk-apply').disabled = true;
+      $('bulk-preview').textContent = 'Номер изменён. Повторная проверка после ввода.';
+    });
+    input.addEventListener('change', previewBulkEtrn);
+    label.append(input);
+    list.append(label);
+  }
+}
 function selectedEtrnItems() {
-  return orders.filter(order => bulkNumbers.has(order.number)).map(order => ({
-    number: order.number, updatedAt: order.updatedAt || '',
-  }));
+  const editable = ['created', 'signed'].includes($('bulk-choice').value);
+  const inputs = new Map([...$('bulk-number-list').querySelectorAll('input')]
+    .map(input => [input.dataset.order, input]));
+  return orders.filter(order => bulkNumbers.has(order.number)).map(order => {
+    const item = {number: order.number, updatedAt: order.updatedAt || ''};
+    if (editable) {
+      const value = inputs.get(order.number)?.value.trim();
+      if (!value || value.length > 80 || /[\\x00-\\x1f]/.test(value)) {
+        throw new Error('Проверь номер ЭТРН заявки № ' + order.number + '.');
+      }
+      const original = order.etrn?.number?.trim() || order.number;
+      if (value !== original) item.etrnNumber = value;
+    }
+    return item;
+  });
 }
 function drawBulkPreview(result) {
   const box = $('bulk-preview');
@@ -1605,6 +1647,7 @@ function drawBulkPreview(result) {
   $('bulk-apply').disabled = ready.length === 0;
 }
 async function previewBulkEtrn() {
+  const requestId = ++bulkPreviewRequest;
   bulkPreview = null;
   $('bulk-apply').disabled = true;
   $('bulk-preview').textContent = 'Проверяем выбранные заявки…';
@@ -1616,19 +1659,25 @@ async function previewBulkEtrn() {
     const items = selectedEtrnItems();
     const choice = $('bulk-choice').value;
     const response = await store.bulkEtrn(items, choice, true);
+    if (requestId !== bulkPreviewRequest || !$('bulk-dialog').open) return;
     bulkPreview = {items, choice};
     drawBulkPreview(response);
   } catch (error) {
-    $('bulk-preview').textContent = error.message;
+    if (requestId === bulkPreviewRequest) $('bulk-preview').textContent = error.message;
   }
 }
 $('bulk-open').addEventListener('click', () => {
   if (!bulkNumbers.size || bulkNumbers.size > 200) return;
   $('bulk-summary').textContent = 'Выбрано заявок: ' + bulkNumbers.size;
+  drawBulkNumbers();
   $('bulk-dialog').showModal();
   previewBulkEtrn();
 });
-$('bulk-choice').addEventListener('change', previewBulkEtrn);
+$('bulk-choice').addEventListener('change', () => {
+  drawBulkNumbers();
+  previewBulkEtrn();
+});
+$('bulk-dialog').addEventListener('close', () => { bulkPreviewRequest++; bulkPreview = null; });
 $('bulk-form').addEventListener('submit', async event => {
   event.preventDefault();
   if (!bulkPreview || $('bulk-apply').disabled) return;
@@ -1636,7 +1685,10 @@ $('bulk-form').addEventListener('submit', async event => {
   const operation = startImport(button, button, 'Сохраняем…');
   if (!operation) return;
   try {
-    if (bulkPreview.choice !== $('bulk-choice').value) throw new Error('Повтори предпросмотр.');
+    if (bulkPreview.choice !== $('bulk-choice').value ||
+        JSON.stringify(bulkPreview.items) !== JSON.stringify(selectedEtrnItems())) {
+      throw new Error('Номера изменились. Повтори предпросмотр.');
+    }
     const result = await store.bulkEtrn(bulkPreview.items, bulkPreview.choice, false);
     if (!operation.active()) return;
     bulkPreview = null;
