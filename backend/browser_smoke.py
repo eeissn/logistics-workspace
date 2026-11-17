@@ -703,7 +703,12 @@ def large_year_browser(chromium, origin):
         sign_in(page, "first")
         page.evaluate("""async () => {
             const profile = await (await fetch('/api/me')).json();
-            const previous = await (await fetch('/api/records')).json();
+            const snapshotResponse = await fetch('/api/records', {
+                headers: {'X-CSRF-Token': profile.csrf}
+            });
+            if (!snapshotResponse.ok) throw new Error('Fixture registry read failed: ' +
+                snapshotResponse.status + ' ' + await snapshotResponse.text());
+            const previous = await snapshotResponse.json();
             if (!previous.orders.length) throw new Error('Missing valid test order');
             const template = previous.orders[0];
             const orders = Array.from({length: 515}, (_, index) => ({
