@@ -704,7 +704,10 @@ def large_year_browser(chromium, origin):
         page.evaluate("""async () => {
             const profile = await (await fetch('/api/me')).json();
             const previous = await (await fetch('/api/records')).json();
+            if (!previous.orders.length) throw new Error('Missing valid test order');
+            const template = previous.orders[0];
             const orders = Array.from({length: 515}, (_, index) => ({
+                ...template,
                 number: 'YEAR-' + String(index).padStart(4, '0'),
                 date: index < 200 ? '2025-12-15' : index < 400 ? '2026-01-15' : '2026-11-15',
                 customer: 'Synthetic year ' + index, carrier: 'Synthetic carrier',
@@ -716,7 +719,7 @@ def large_year_browser(chromium, origin):
                 headers: {'Content-Type': 'application/json', 'X-CSRF-Token': profile.csrf},
                 body: JSON.stringify({revision: previous.revision, orders})
             });
-            if (!response.ok) throw new Error('Yearly fixture upload failed: ' + response.status);
+            if (!response.ok) throw new Error('Yearly fixture upload failed: ' + response.status + ' ' + await response.text());
         }""")
         started = monotonic()
         page.reload()
