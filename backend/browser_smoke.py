@@ -682,6 +682,35 @@ def workspace_design(page, mobile):
     expect(page.locator("#sync-quick")).to_be_enabled()
     expect(page.locator('#month-metrics [data-metric="count"]')).to_have_css("text-align", "center")
     expect(page.locator('#month-metrics [data-metric="margin"]')).to_contain_text("Маржа")
+    # Visual quality gate for all browser engines: controls stay within the
+    # viewport, text is not reduced to unreadable icon-sized labels, and
+    # the primary action stays discoverable across desktop and mobile.
+    assert page.evaluate("""() => {
+        const ids = ['#view-title', '#new', '#sync-quick', '#filters-open', '#search'];
+        const fit = ids.every(selector => {
+            const el = document.querySelector(selector);
+            const box = el.getBoundingClientRect();
+            return box.width > 0 && box.height >= 20 &&
+                   box.left >= -1 && box.right <= innerWidth + 1;
+        });
+        const px = selector => parseFloat(getComputedStyle(document.querySelector(selector)).fontSize);
+        const primary = document.querySelector('#new').getBoundingClientRect();
+        const headline = document.querySelector('#view-title').getBoundingClientRect();
+        return fit && px('#new') >= 12.5 && px('#view-title') >= 20 &&
+               primary.top >= headline.top - 2 &&
+               document.documentElement.scrollWidth <= innerWidth + 1;
+    }"""), "Visual hierarchy or viewport overflow regression"
+    if not mobile:
+        assert page.evaluate("""() => {
+            const nav = document.querySelector('#workspace-nav');
+            const menu = document.querySelector('#workspace-menu');
+            const css = getComputedStyle(nav);
+            const button = document.querySelector('.nav-primary button');
+            return nav.getBoundingClientRect().width >= 190 &&
+                   menu.open && css.position === 'fixed' &&
+                   parseFloat(getComputedStyle(button).fontSize) >= 13.5;
+        }"""), "Desktop navigation legibility regression"
+
     if mobile:
         expect(page.locator("#mobile-dock")).to_be_visible()
         page.locator("#dock-history").click()
