@@ -261,22 +261,33 @@
       <button type="button" data-settings-section="updates">Обновления</button>
     </nav>
     <div class="display-settings">
-      <div class="theme-preview" id="theme-preview" aria-label="Предпросмотр оформления"></div>
-      <button id="reset-appearance" type="button">Сбросить только оформление</button>
-      <label>Внешний вид<select id="theme"></select></label>
-      <label id="violet-palette-setting" hidden>Палитра фона и таблицы<select id="violet-palette"></select></label>
-      <div class="accent-settings">
-        <label for="accent-color">Цвет акцента</label>
-        <input id="accent-color" type="color" value="#6035c6">
-        <button type="button" id="reset-accent">Цвет темы</button>
-      </div>
-      <details id="status-palette" hidden><summary>Цвета статусов</summary>
-        <div id="status-colors"></div>
-        <button type="button" id="reset-status-colors">Вернуть цвета</button>
-      </details>
-      <label>Отображение заявок<select id="settings-layout"></select></label>
-      <button type="button" id="updates-open" class="updates-link">Обновления сайта</button>
-      <p class="quiet" id="settings-account" hidden></p>
+      <section data-settings-panel="appearance" class="settings-panel">
+        <div class="theme-preview" id="theme-preview" aria-label="Предпросмотр оформления"></div>
+        <label>Внешний вид<select id="theme"></select></label>
+        <label id="violet-palette-setting" hidden>Палитра фона и таблицы<select id="violet-palette"></select></label>
+        <div class="accent-settings">
+          <label for="accent-color">Цвет акцента</label>
+          <input id="accent-color" type="color" value="#6035c6">
+          <button type="button" id="reset-accent">Цвет темы</button>
+        </div>
+        <details id="status-palette"><summary>Цвета статусов</summary>
+          <div id="status-colors"></div>
+          <button type="button" id="reset-status-colors">Вернуть цвета</button>
+        </details>
+        <button id="reset-appearance" type="button">Сбросить только оформление</button>
+      </section>
+      <section data-settings-panel="registry" class="settings-panel" hidden>
+        <label>Отображение заявок<select id="settings-layout"></select></label>
+        <p class="quiet">Быстрые виды и финансовые фильтры доступны в панели навигации. Настройки интерфейса сохраняются только в этом браузере.</p>
+      </section>
+      <section data-settings-panel="account" class="settings-panel" hidden>
+        <h3>Аккаунт</h3>
+        <p class="quiet" id="settings-account" hidden></p>
+        <p class="quiet">Данные аккаунтов и заявок разделены на сервере. Изменение пароля пока не доступно в этом меню.</p>
+      </section>
+      <section data-settings-panel="updates" class="settings-panel" hidden>
+        <button type="button" id="updates-open" class="updates-link">Открыть историю обновлений</button>
+      </section>
       <p class="quiet" id="settings-status" role="status">Настройки сохраняются в этом браузере.</p>
     </div>
   </div>
