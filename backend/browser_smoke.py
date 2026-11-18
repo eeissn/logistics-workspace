@@ -91,10 +91,11 @@ def updates_history(page, mobile):
     page.locator("#updates-open").click()
     dialog = page.locator("#updates-dialog")
     expect(dialog).to_be_visible()
-    expect(dialog.locator(".updates-group")).to_have_count(9)
+    expect(dialog.locator(".updates-group")).to_have_count(10)
     expect(dialog).to_contain_text("16 сентября 2026")
     expect(dialog).to_contain_text("16 ноября 2026")
     expect(dialog).to_contain_text("17 ноября 2026")
+    expect(dialog).to_contain_text("18 ноября 2026")
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
     if mobile:
         bounds = dialog.bounding_box()
