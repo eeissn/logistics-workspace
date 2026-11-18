@@ -1029,6 +1029,52 @@ def large_year_browser(chromium, origin):
         print(f"chromium: 515-order browser history and layout checks passed in {monotonic()-started:.1f}s", flush=True)
 
 
+
+def password_change_browser(browser_type, origin, user, mobile=False, device=None):
+    """Rotate a synthetic password through settings and invalidate sibling tabs."""
+    with closing(browser_type.launch()) as browser:
+        context = browser.new_context(ignore_https_errors=True, **(device or {}))
+        page = context.new_page()
+        sibling = context.new_page()
+        page.goto(origin)
+        sign_in(page, user)
+        sibling.goto(origin)
+        expect(sibling.locator("#account-email")).to_have_text(f"{user}@example.test")
+        click_workspace_action(page, "#settings", mobile)
+        page.locator('[data-settings-section="account"]').click()
+        form = page.locator("#password-form")
+        expect(form).to_be_visible()
+        form.locator('[name="currentPassword"]').fill(PASSWORD)
+        form.locator('[name="newPassword"]').fill(PASSWORD + "-new")
+        form.locator('[name="confirmPassword"]').fill(PASSWORD + "-different")
+        form.locator('[type="submit"]').click()
+        expect(page.locator("#password-status")).to_contain_text("не совпадают")
+        expect(page.locator("#sign-in")).to_be_hidden()
+
+        form.locator('[name="confirmPassword"]').fill(PASSWORD + "-new")
+        form.locator('[name="currentPassword"]').fill("wrong-current-password")
+        form.locator('[type="submit"]').click()
+        expect(page.locator("#password-status")).to_contain_text("Текущий пароль неверен")
+        expect(page.locator("#sign-in")).to_be_hidden()
+
+        form.locator('[name="currentPassword"]').fill(PASSWORD)
+        form.locator('[type="submit"]').click()
+        expect(page.locator("#sign-in")).to_be_visible()
+        expect(page.locator("#workspace")).to_be_hidden()
+        sibling.reload()
+        expect(sibling.locator("#sign-in")).to_be_visible()
+
+        page.locator('#sign-in-form [name="email"]').fill(f"{user}@example.test")
+        page.locator('#sign-in-form [name="password"]').fill(PASSWORD)
+        page.locator('#sign-in-form [type="submit"]').click()
+        expect(page.locator("#sign-in-error")).to_contain_text("Проверьте почту и пароль")
+        page.locator('#sign-in-form [name="password"]').fill(PASSWORD + "-new")
+        page.locator('#sign-in-form [type="submit"]').click()
+        expect(page.locator("#account-email")).to_have_text(f"{user}@example.test")
+        expect(page.locator("#sync-status")).to_have_text("Сохранено")
+        print(f"{browser_type.name}: password rotation {user} on {'mobile' if mobile else 'desktop'} passed", flush=True)
+
+
 def main():
     with TemporaryDirectory() as directory:
         root = Path(directory)
@@ -1061,6 +1107,9 @@ def main():
                       {**playwright.devices["iPhone 13"], "viewport": {"width": 393, "height": 852}})
                 bulk_etrn_numbers_ui(playwright.chromium, origin)
                 large_year_browser(playwright.chromium, origin)
+                password_change_browser(playwright.chromium, origin, "first")
+                password_change_browser(playwright.webkit, origin, "second", True,
+                                       {**playwright.devices["iPhone 13"], "viewport": {"width": 393, "height": 852}})
         finally:
             server.terminate()
             server.wait(timeout=10)

@@ -311,7 +311,16 @@
       <section data-settings-panel="account" class="settings-panel" hidden>
         <h3>Аккаунт</h3>
         <p class="quiet" id="settings-account" hidden></p>
-        <p class="quiet">Данные аккаунтов и заявок разделены на сервере. Изменение пароля пока не доступно в этом меню.</p>
+        <p class="quiet">Данные двух аккаунтов изолированы. После смены пароля потребуется заново войти на всех устройствах.</p>
+        <form id="password-form" autocomplete="off">
+          <div class="fields">
+            <label class="wide">Текущий пароль<input name="currentPassword" type="password" autocomplete="current-password" required maxlength="256"></label>
+            <label class="wide">Новый пароль (от 12 символов)<input name="newPassword" type="password" autocomplete="new-password" required minlength="12" maxlength="256"></label>
+            <label class="wide">Повторите новый пароль<input name="confirmPassword" type="password" autocomplete="new-password" required minlength="12" maxlength="256"></label>
+          </div>
+          <button type="submit" class="primary">Изменить пароль</button>
+          <p class="quiet" id="password-status" role="status" aria-live="polite"></p>
+        </form>
       </section>
       <section data-settings-panel="updates" class="settings-panel" hidden>
         <button type="button" id="updates-open" class="updates-link">Открыть историю обновлений</button>

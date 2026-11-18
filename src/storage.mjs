@@ -149,6 +149,14 @@ export const auth = {
     const csrf = account?.csrf;
     return changeCookie(() => request('logout', 'POST', undefined, csrf), () => this.clear());
   },
+  changePassword(currentPassword, newPassword) {
+    if (!account || demo) return Promise.reject(new Error('Сеанс завершён.'));
+    const csrf = account.csrf;
+    return changeCookie(
+      () => request('password', 'POST', {currentPassword, newPassword}, csrf),
+      () => this.clear(),
+    );
+  },
   clear() {
     generation++;
     account = undefined;
