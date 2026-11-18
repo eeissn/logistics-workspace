@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { margin, etrnSteps, etrnStatus, etrnProgress, markTrip, mergeImport, upsert, archived, monthReport, monthSnapshot, dateRange, scheduledToday } from '../src/domain.mjs';
+import { margin, etrnSteps, etrnStatus, etrnProgress, markTrip, mergeImport, upsert, archived, monthReport, monthSnapshot, dateRange, scheduledToday, orderMargin } from '../src/domain.mjs';
 import { parseLedger, addLedgerOrders } from '../src/ledger.mjs';
 import { driverMessage } from '../src/driver.mjs';
 import { importPair, phones, normalizePassport } from '../src/import.mjs';
@@ -292,4 +292,23 @@ test('фильтр на сегодня учитывает ISO-время и см
   assert.equal(scheduledToday(order, 'Выгрузка', '2026-12-31'), true);
   assert.equal(scheduledToday(order, 'Выгрузка', '2027-01-01'), true);
   assert.equal(scheduledToday(order, 'Выгрузка', '2027-01-02'), false);
+});
+
+test('ручная маржа перекрывает расчётную, сохраняется и очищается без изменения ставок', () => {
+  const base = {number:'MARGIN-TEST',date:'2026-11-18',customerAmount:120000,
+    carrierAmount:80000,customerTax:'0',carrierTax:'0',points:[],contacts:[],
+    differences:[],trip:{},etrn:{required:false},payment:{}};
+  const calculated=orderMargin(base);
+  assert.ok(Number.isFinite(calculated));
+  assert.notEqual(calculated, 12345.67);
+  const changed=upsert([base], {...base,ledgerMargin:12345.67}, base.number)[0];
+  assert.equal(orderMargin(changed),12345.67);
+  assert.equal(changed.customerAmount,base.customerAmount);
+  assert.equal(changed.carrierAmount,base.carrierAmount);
+  assert.equal(monthReport([changed],'2026-11').total,12345.67);
+  assert.equal(orderMargin({...changed,ledgerMargin:0}),0);
+  assert.equal(orderMargin({...changed,ledgerMargin:-125}),-125);
+  assert.equal(orderMargin({...changed,ledgerMargin:null}),calculated);
+  // A repeated PDF import must not silently erase an operator's override.
+  assert.equal(mergeImport(base,changed).ledgerMargin,12345.67);
 });
