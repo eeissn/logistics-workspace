@@ -1117,7 +1117,7 @@ def etrn_trip_save_race(chromium, origin):
         expect(row.locator(".trip-status")).to_be_enabled()
         row.locator(".etrn-link").click()
         expect(page.locator("#etrn-dialog")).to_be_visible()
-        page.locator("#etrn-dialog [data-close]").click()
+        page.locator("#etrn-dialog [data-close]").first.click()
     print("chromium: ETRN/trip save race and unlocked retry passed", flush=True)
 
 
