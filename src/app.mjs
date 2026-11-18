@@ -19,6 +19,7 @@ import { columnKeys, columnTitles, safeColumnOrder, defaultAccents, displayKey, 
 
 const $ = id => document.getElementById(id);
 const currency = new Intl.NumberFormat('ru', {style:'currency', currency:'RUB', maximumFractionDigits:0});
+const currencyPrecise = new Intl.NumberFormat('ru', {style:'currency', currency:'RUB', minimumFractionDigits:0, maximumFractionDigits:2});
 const money = value => currency.format(value);
 const fieldNames = ['number','date','customer','carrier','driver','passport','vehicle','route','cargo','customerAmount','carrierAmount','customerTax','carrierTax'];
 const paymentNames = ['originals','edo','unit','conditions'];
@@ -898,7 +899,7 @@ function editorPreview() {
   if (overrideInput.value !== '' && Number.isFinite(overrideInput.valueAsNumber)) {
     const metric = node('div');
     metric.append(node('small', 'Маржа по заявке · вручную'),
-      node('strong', money(overrideInput.valueAsNumber)));
+      node('strong', currencyPrecise.format(overrideInput.valueAsNumber)));
     metric.className = 'margin-override-preview';
     detail.append(metric);
   }
