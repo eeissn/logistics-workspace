@@ -26,6 +26,8 @@ python -m unittest backend.test_pdf_originals_feasibility -v
 python -m backend.pdf_originals_feasibility --orders 515 --pdf-kib 64
 ```
 
+In addition, `python -m unittest backend.test_pdf_originals_recovery -v` runs a **disposable** CMS encrypt/publish/mock-SFTP-download/decrypt test using OpenSSL with `-binary`. It confirms exact restored snapshot SHA-256 and separately checks the two originals for each of two synthetic owners sharing the same order number. It also verifies rejection after tampering with the published CMS bytes. This proves the synthetic application-to-backup protocol, not the state of the home Windows computer.
+
 The benchmark creates temporary SQLite files, a **test-only** table for `owner,number,role,content,digest`, and exactly two synthetic binary payloads per order. It uses the actual `backend.app.backup` function for a SQLite online backup, reopens the backup, checks `integrity_check`, foreign keys, distinct owner+order keys, both roles, and byte-exact SHA-256 restoration. It prints actual temporary source/backup sizes and backup duration for that run. All files are discarded at completion.
 
 The default test workload is 515 synthetic orders × 2 payloads × 64 KiB (~64.4 MiB of payload). Adjust `--pdf-kib` only after measuring **anonymized aggregate** sizes of real PDF pairs; the tool enforces a 256 MiB upper bound on synthetic bytes to avoid consuming the VPS disk. **Run on developer/CI hardware, not the production VPS.** Synthetic opaque payloads are not valid PDFs and do not model actual compression, encryption, network transfer time, daily growth, or peak WAL disk use. The benchmark cannot certify that a full backup fits the VPS or successfully arrives on the home Windows computer.
