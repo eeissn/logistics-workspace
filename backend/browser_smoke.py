@@ -392,7 +392,12 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     expect(page.locator("#etrn-dialog")).to_be_hidden()
     expect(row.locator(".etrn-link")).to_have_text("Закрыта вручную")
     active_before_unload = int(page.locator("#active-count").inner_text())
+    page.locator("#notice").evaluate("(node) => node.textContent = ''")
     row.locator(".trip-status").select_option("unloaded")
+    # Wait for the trip PUT to finish before opening the document editor:
+    # otherwise the ETRN PATCH may carry an old updatedAt and return 409.
+    expect(page.locator("#notice")).to_have_text("Статус рейса сохранён.")
+    expect(row.locator(".trip-status")).to_be_enabled()
     # Manual ETRN closure is not equivalent to everyone's signature.
     expect(page.locator("#active-count")).to_have_text(str(active_before_unload))
     expect(row).to_be_visible()
@@ -1075,6 +1080,47 @@ def password_change_browser(browser_type, origin, user, mobile=False, device=Non
         print(f"{browser_type.name}: password rotation {user} on {'mobile' if mobile else 'desktop'} passed", flush=True)
 
 
+
+def etrn_trip_save_race(chromium, origin):
+    """Do not open an ETRN editor with stale updatedAt during a pending trip save."""
+    with closing(chromium.launch()) as browser:
+        page = browser.new_page(ignore_https_errors=True)
+        page.goto(origin)
+        sign_in(page, "second")
+        create_order(page, "RACE-ETRN-SYNTH")
+        # Delay only the next registry GET used by the trip status PUT path.
+        # The browser remains interactive while the fetch promise is pending.
+        page.evaluate("""() => {
+            const original = window.fetch.bind(window);
+            let intercepted = false;
+            window.fetch = (url, options = {}) => {
+                if (!intercepted && String(url).includes('/api/records') &&
+                        (!options.method || options.method === 'GET')) {
+                    intercepted = true;
+                    return new Promise((resolve, reject) => {
+                        window.__resumeTripSave = () => original(url, options).then(resolve, reject);
+                    });
+                }
+                return original(url, options);
+            };
+            window.__restoreFetch = () => { window.fetch = original; };
+        }""")
+        row = page.locator("#table .order").filter(
+            has=page.get_by_role("button", name="№ RACE-ETRN-SYNTH", exact=True))
+        row.locator(".trip-status").select_option("loaded")
+        page.wait_for_function("typeof window.__resumeTripSave === 'function'")
+        row.locator(".etrn-link").click()
+        expect(page.locator("#etrn-dialog")).to_be_hidden()
+        expect(page.locator("#notice")).to_contain_text("Дождитесь сохранения статуса рейса")
+        page.evaluate("window.__resumeTripSave(); window.__restoreFetch();")
+        expect(page.locator("#notice")).to_have_text("Статус рейса сохранён.")
+        expect(row.locator(".trip-status")).to_be_enabled()
+        row.locator(".etrn-link").click()
+        expect(page.locator("#etrn-dialog")).to_be_visible()
+        page.locator("#etrn-dialog [data-close]").first.click()
+    print("chromium: ETRN/trip save race and unlocked retry passed", flush=True)
+
+
 def main():
     with TemporaryDirectory() as directory:
         root = Path(directory)
@@ -1107,6 +1153,7 @@ def main():
                       {**playwright.devices["iPhone 13"], "viewport": {"width": 393, "height": 852}})
                 bulk_etrn_numbers_ui(playwright.chromium, origin)
                 large_year_browser(playwright.chromium, origin)
+                etrn_trip_save_race(playwright.chromium, origin)
                 password_change_browser(playwright.chromium, origin, "first")
                 password_change_browser(playwright.webkit, origin, "second", True,
                                        {**playwright.devices["iPhone 13"], "viewport": {"width": 393, "height": 852}})
