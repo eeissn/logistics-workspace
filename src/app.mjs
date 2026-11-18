@@ -40,6 +40,7 @@ let reviewPrevious;
 let reviewStamp;
 let editorStamp;
 let etrnStamp;
+let savingEtrn = false;
 let signedIn = false;
 let signingIn = false;
 let refreshing;
@@ -926,6 +927,13 @@ function refreshEtrn() {
 }
 
 function openEtrn(number = null) {
+  // A trip status update also changes updatedAt; opening the ETRN editor
+  // before that write finishes would send a stale revision and yield HTTP 409.
+  if (number !== null && savingTrips.has(number)) {
+    $('notice').textContent = 'Дождитесь сохранения статуса рейса и откройте ЭТРН снова.';
+    return;
+  }
+  if (savingEtrn) return;
   const order = number === null ? draft : orders.find(item => item.number === number);
   if (!order) return;
   etrnOrderNumber = number;
@@ -1573,6 +1581,10 @@ $('editor-etrn').addEventListener('click', () => openEtrn());
 etrnForm.addEventListener('input', refreshEtrn);
 etrnForm.addEventListener('submit', async event => {
   event.preventDefault();
+  if (savingEtrn) return;
+  savingEtrn = true;
+  const saveButton = $('etrn-save');
+  saveButton.disabled = true;
   const generation = accountGeneration;
   const etrn = readEtrn();
   try {
@@ -1586,7 +1598,15 @@ etrnForm.addEventListener('submit', async event => {
       $('notice').textContent = 'Статус ЭТРН сохранён.';
     }
     etrnDialog.close();
-  } catch (error) { if (generation === accountGeneration) $('etrn-error').textContent = error.message; }
+  } catch (error) {
+    if (generation === accountGeneration) $('etrn-error').textContent = error.message;
+  } finally {
+    // A stale asynchronous request must not re-enable a new user's form.
+    if (generation === accountGeneration) {
+      savingEtrn = false;
+      saveButton.disabled = false;
+    }
+  }
 });
 $('import').addEventListener('click', () => {
   if (pendingImports.has($('import-form'))) return;
@@ -1671,6 +1691,8 @@ function signInScreen(message = '') {
   $('filter').value = '';
   selections.clear();
   savingTrips.clear();
+  savingEtrn = false;
+  $('etrn-save').disabled = false;
   $('settings-account').textContent = '';
   $('settings-account').hidden = true;
   $('password-form').reset();
