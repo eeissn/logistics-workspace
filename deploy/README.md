@@ -98,7 +98,7 @@ Get-ScheduledTaskInfo -TaskName 'Logistics Workspace Backup'
 Независимая диагностическая проверка **только чтения** подтверждает, что свежий зашифрованный CMS-архив был получен на Windows, не потерян и соответствует квитанции SHA-256/размера. Подставьте **реальный** локальный каталог доставки (пример ниже — не подтверждённая настройка конкретного ПК):
 
 ```powershell
-python -m deploy.check_backup_freshness "C:\\Private\\LogisticsArchives" --max-age-hours 36
+python -m deploy.check_backup_freshness "C:\Private\LogisticsArchives" --max-age-hours 36
 ```
 
 Успешный результат `BACKUP OK` (код 0) показывает возраст последнего подтверждённого архива, совпадение хеша и размера. При отсутствующей/устаревшей копии, отсутствующей квитанции, повреждении файла или неверном времени выводится `BACKUP ALERT` (код 1). Команда ничего не скачивает и не изменяет и не заменяет учебное восстановление SQLite и проверку шифрования.
@@ -106,8 +106,8 @@ python -m deploy.check_backup_freshness "C:\\Private\\LogisticsArchives" --max-a
 Для **необязательного локального предупреждения** подготовлен отдельный аудит в Планировщике Windows. Установка требует запуска владельцем ПК из локального каталога проекта, где находятся эти скрипты. Вместо примеров укажите свои фактические пути:
 
 ```powershell
-.\\deploy\\check-backup-freshness.ps1 -Python 'C:\\Path\\python.exe' -Destination 'C:\\Private\\LogisticsArchives'
-.\\deploy\\install-backup-audit-task.ps1 -Python 'C:\\Path\\python.exe' -Destination 'C:\\Private\\LogisticsArchives'
+.\deploy\check-backup-freshness.ps1 -Python 'C:\Path\python.exe' -Destination 'C:\Private\LogisticsArchives'
+.\deploy\install-backup-audit-task.ps1 -Python 'C:\Path\python.exe' -Destination 'C:\Private\LogisticsArchives'
 Get-ScheduledTaskInfo -TaskName 'Logistics Workspace Backup Audit'
 ```
 
