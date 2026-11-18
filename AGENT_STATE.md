@@ -1,3 +1,7 @@
+# User-requested manual margin editor · 18.11.2026
+
+Новый приоритет владельца: вручную изменять сумму маржи внутри существующей заявки с любого вида и темы на Windows и iPhone. Ветка `feature/manual-margin-in-order-editor-20261118` от `feature/two-user-sync`. Единая форма `#editor` дополнена необязательным вводом `ledgerMargin`, сохраняемым через действующий авторизованный API с защитой версии; пустое значение возвращает формулу без изменения ставок. Excel-импорт с уже заданной маржей сохраняется. Регрессии JS + Chromium/WebKit; проверить CI последнего SHA. PR №34 (ЭТРН), №35 (backup freshness), №36 (PDF storage design) — параллельные незакрытые задачи, не потерять при объединении. Реальный VPS не изменён.
+
 # Desktop simplification & active-ETRN ownership rule · 17.11.2026
 
 Owner's post-release feedback: the desktop page shows too many equally weighted controls and monthly cards; the saved/connection status should appear **after** the refresh button. More critical: an unloaded truck must remain in «Актуальные» until ETRN is signed by everyone. Treat an explicit «Срыв заявки» as terminal, separate from the unsigned delivery scenario.

@@ -2590,3 +2590,21 @@ dialog .dialog-foot button { min-height: 42px; font-weight: 610; }
 /* Wider status marker while retaining custom stage colors. */
 :root:not([data-theme=sand]) .order-table .order-id { padding-inline-start: 1rem; }
 :root:not([data-theme=sand]) .order-table .order-id::before { width: 7px; min-width: 7px; border-radius: 4px; }
+
+/* The shared order editor is used by every theme/layout on desktop and iPhone. */
+#editor .manual-margin-field {
+  margin-top: .8rem;
+  padding: .7rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+#editor .manual-margin-field label { max-width: 22rem; }
+#editor .manual-margin-field input { font-size: 16px; }
+#editor #manual-margin-help { margin: .45rem 0 0; font-size: .78rem; line-height: 1.5; }
+#editor .margin-override-preview { font-variant-numeric: tabular-nums; }
+#editor .margin-override-preview strong { font-weight: 750; color: var(--ink); }
+@media (max-width: 740px) {
+  #editor .manual-margin-field label { max-width: 100%; }
+  #editor .manual-margin-field input { min-height: 44px; }
+}

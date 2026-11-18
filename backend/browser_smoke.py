@@ -91,10 +91,11 @@ def updates_history(page, mobile):
     page.locator("#updates-open").click()
     dialog = page.locator("#updates-dialog")
     expect(dialog).to_be_visible()
-    expect(dialog.locator(".updates-group")).to_have_count(9)
+    expect(dialog.locator(".updates-group")).to_have_count(10)
     expect(dialog).to_contain_text("16 сентября 2026")
     expect(dialog).to_contain_text("16 ноября 2026")
     expect(dialog).to_contain_text("17 ноября 2026")
+    expect(dialog).to_contain_text("18 ноября 2026")
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
     if mobile:
         bounds = dialog.bounding_box()
@@ -297,6 +298,34 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     expect(page.locator("#review-save")).to_have_text("Сохранить заявку")
     page.locator("#review-save").click()
     expect(page.locator("#review-dialog")).to_be_hidden()
+
+    # The same editor on desktop and iPhone can override margin without changing rates.
+    margin_row = page.locator("#table .order").filter(
+        has=page.get_by_role("button", name=f"№ {number}", exact=True))
+    margin_row.get_by_role("button", name=f"№ {number}", exact=True).click()
+    editor = page.locator("#editor")
+    expect(editor).to_be_visible()
+    manual_margin = editor.locator('[name="ledgerMargin"]')
+    expect(manual_margin).to_have_value("")
+    original_rate = editor.locator('[name="customerAmount"]').input_value()
+    manual_margin.fill("12345.67")
+    expect(editor.locator("#margin-detail")).to_contain_text("Маржа по заявке · вручную")
+    editor.locator('[type="submit"]').click()
+    expect(editor).to_be_hidden()
+    page.reload()
+    margin_row = page.locator("#table .order").filter(
+        has=page.get_by_role("button", name=f"№ {number}", exact=True))
+    margin_row.get_by_role("button", name=f"№ {number}", exact=True).click()
+    expect(manual_margin).to_have_value("12345.67")
+    expect(editor.locator('[name="customerAmount"]')).to_have_value(original_rate)
+    manual_margin.fill("")
+    editor.locator('[type="submit"]').click()
+    expect(editor).to_be_hidden()
+    margin_row = page.locator("#table .order").filter(
+        has=page.get_by_role("button", name=f"№ {number}", exact=True))
+    margin_row.get_by_role("button", name=f"№ {number}", exact=True).click()
+    expect(manual_margin).to_have_value("")
+    editor.locator("[data-close]").first.click()
 
     # Re-importing an existing order must announce an update, not create a duplicate.
     click_registry_action(page, "#import", mobile)

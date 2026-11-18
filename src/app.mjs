@@ -19,6 +19,7 @@ import { columnKeys, columnTitles, safeColumnOrder, defaultAccents, displayKey, 
 
 const $ = id => document.getElementById(id);
 const currency = new Intl.NumberFormat('ru', {style:'currency', currency:'RUB', maximumFractionDigits:0});
+const currencyPrecise = new Intl.NumberFormat('ru', {style:'currency', currency:'RUB', minimumFractionDigits:0, maximumFractionDigits:2});
 const money = value => currency.format(value);
 const fieldNames = ['number','date','customer','carrier','driver','passport','vehicle','route','cargo','customerAmount','carrierAmount','customerTax','carrierTax'];
 const paymentNames = ['originals','edo','unit','conditions'];
@@ -894,6 +895,14 @@ function editorPreview() {
   const canCalculate = ['customerAmount','carrierAmount','customerTax','carrierTax'].every(key => values[key] !== '');
   const detail = $('margin-detail');
   detail.replaceChildren();
+  const overrideInput = form.elements.ledgerMargin;
+  if (overrideInput.value !== '' && Number.isFinite(overrideInput.valueAsNumber)) {
+    const metric = node('div');
+    metric.append(node('small', 'Маржа по заявке · вручную'),
+      node('strong', currencyPrecise.format(overrideInput.valueAsNumber)));
+    metric.className = 'margin-override-preview';
+    detail.append(metric);
+  }
   if (canCalculate) {
     const result = profit(values);
     for (const [label, value] of [['После налога',result.realProfit],['Разница ставок',result.grossMargin],['НДС к уплате',result.vatPayable],['Налог на прибыль',result.profitTax]]) {
@@ -987,6 +996,7 @@ function openEditor(order, original = null, stamp = order.updatedAt) {
   $('editor-error').textContent = '';
   $('editor-title').textContent = order.number ? 'Заявка № ' + order.number : 'Новая заявка';
   for (const key of fieldNames) form.elements[key].value = draft[key] ?? '';
+  form.elements.ledgerMargin.value = Number.isFinite(draft.ledgerMargin) ? draft.ledgerMargin : '';
   for (const key of paymentNames) form.elements[key].value = order.payment[key] ?? '';
   $('payment-source').textContent = order.payment.source ? 'Из PDF перевозчика: ' + order.payment.source : '';
   $('points').replaceChildren();
@@ -1016,6 +1026,10 @@ function readDraft() {
     const input = form.elements[key];
     order[key] = input.type === 'number' ? (input.value === '' ? null : input.valueAsNumber) : input.value.trim();
   }
+  // Reuse the existing per-order override (also used for imported Excel margins).
+  // Clearing the optional input explicitly restores calculation from rates and VAT.
+  const marginInput = form.elements.ledgerMargin;
+  order.ledgerMargin = marginInput.value === '' ? null : marginInput.valueAsNumber;
   for (const key of paymentNames) {
     const input = form.elements[key];
     order.payment[key] = input.type === 'number' ? (input.value === '' ? null : input.valueAsNumber) : input.value.trim();
