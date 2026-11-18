@@ -50,13 +50,13 @@ class PasswordRotationTests(unittest.TestCase):
         self.assertEqual(self.first.put("/api/records", headers=first, json={
             "revision": 0, "orders": [{
                 "number": "SAME", "customer": "Owner A", "points": [],
-                "contacts": [], "differences": [],
+                "contacts": [], "differences": [], "payment": {}, "trip": {}, "etrn": {},
             }],
         }).status_code, 200)
         self.assertEqual(self.second.put("/api/records", headers=second, json={
             "revision": 0, "orders": [{
                 "number": "SAME", "customer": "Owner B", "points": [],
-                "contacts": [], "differences": [],
+                "contacts": [], "differences": [], "payment": {}, "trip": {}, "etrn": {},
             }],
         }).status_code, 200)
         before_b = self.second.get("/api/records", headers=second).json()
