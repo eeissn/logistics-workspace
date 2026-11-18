@@ -2061,6 +2061,11 @@ dialog :is(input,select,textarea) { scroll-margin-block: 5rem; }
 .settings-sections button{min-height:40px;font-size:.8rem;}
 .settings-sections [aria-pressed=true]{background:var(--nav-active);color:var(--ink);font-weight:700;}
 .settings-panel{display:grid;gap:.65rem;}
+#password-form{display:grid;gap:.7rem;padding:0;margin:.25rem 0 0;}
+#password-form .fields{grid-template-columns:minmax(0,1fr);}
+#password-form input{font-size:16px;}
+#password-form button{justify-self:start;}
+#password-status{min-height:1.2em;}
 .settings-panel h3{margin:.2rem 0 .5rem;}
 .order-peek:not([hidden]){position:fixed;inset:0 0 0 auto;width:min(750px,78vw);z-index:30;
  background:var(--paper);border-left:1px solid var(--line);box-shadow:-12px 0 36px #151b3226;
