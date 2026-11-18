@@ -10,7 +10,7 @@ const sample=(number,date,margin,stage='unloaded')=>({
   points:[],etrn:{required:true,created:true,number},
 });
 
-test('finance: compare months with missing values and failed trips excluded',()=>{
+test('finance: compare months with failed compensation and missing values included',()=>{
   const orders=[
     sample('A','2026-09-02',1000),sample('B','2026-09-03',5000),
     sample('C','2026-09-04',3000),sample('D','2026-09-05',40000,'failed'),
@@ -19,15 +19,15 @@ test('finance: compare months with missing values and failed trips excluded',()=
       ledgerMargin:null},
   ];
   const result=monthlyComparison(orders,'2026-09','2026-10');
-  assert.equal(result.before.count,3);
-  assert.equal(result.before.total,9000);
-  assert.equal(result.before.median,3000);
-  assert.equal(result.before.average,3000);
+  assert.equal(result.before.count,4);
+  assert.equal(result.before.total,49000);
+  assert.equal(result.before.median,4000);
+  assert.equal(result.before.average,12250);
   assert.equal(result.after.count,2);
   assert.equal(result.after.calculated,1);
   assert.equal(result.after.total,-2000);
   assert.equal(result.after.issues,2);
-  assert.equal(result.delta,-11000);
+  assert.equal(result.delta,-51000);
   assert.ok(result.percent<0);
 });
 
@@ -63,4 +63,24 @@ test('timeline: trip and ETRN are independent and explicit',()=>{
   order.etrn.allSigned=true;
   assert.equal(etrnTimeline(order).at(-1).state,'current');
   assert.equal(tripTimeline(order)[1].state,'current');
+});
+
+test('P0: cancelled trip with custom or calculated margin affects comparison and flags', () => {
+  const orders=[
+    sample('C1','2026-10-01',7000,'failed'),
+    sample('C2','2026-10-02',-2500,'failed'),
+    sample('C3','2026-10-03',0,'failed'),
+    {...sample('C4','2026-10-04',null,'failed'),
+      customerAmount:null,carrierAmount:null,ledgerMargin:null},
+    sample('N1','2026-11-01',1000),
+  ];
+  const {before,after,delta}=monthlyComparison(orders,'2026-10','2026-11');
+  assert.equal(before.count,4);
+  assert.equal(before.calculated,3);
+  assert.equal(before.total,4500);
+  assert.equal(before.average,1500);
+  assert.equal(before.median,0);
+  assert.equal(before.issues,3); // loss, low, unknown: nonfinancial status doesn't hide flags
+  assert.equal(after.total,1000);
+  assert.equal(delta,-3500);
 });
