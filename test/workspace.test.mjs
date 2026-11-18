@@ -83,7 +83,7 @@ test('архив ждёт выгрузку и завершение ЭТРН, м�
   assert.equal(archived({...base, etrn:{required:true,manualComplete:true}}), true);
   assert.equal(archived({...base, trip:{stage:'loaded'}, etrn:{required:true,manualComplete:true}}), false);
   assert.equal(archived({...base, trip:{stage:'loaded'}, etrn:{...base.etrn,allSigned:true}}), false);
-  assert.equal(monthReport([finished, failed, {...base, number:'3', date:'2026-12-01'}], '2026-11').total, 700);
+  assert.equal(monthReport([finished, failed, {...base, number:'3', date:'2026-12-01'}], '2026-11').total, 1400);
 });
 
 test('фильтр на сегодня учитывает окна из PDF и диапазоны дат из Excel', () => {
@@ -203,14 +203,14 @@ test('пустой прицеп не выводится, существующа�
   assert.match(result, /Транспорт: VOLVO А000АА 00/);
 });
 
-test('месячная сводка считает все заявки, но маржу по правилам отчёта', () => {
+test('месячная сводка учитывает маржу срывов, но не выдумывает неизвестные суммы', () => {
   const data = [
     {number:'1',date:'2026-11-01',ledgerMargin:100,trip:{stage:'unloaded'}},
     {number:'2',date:'2026-11-30',ledgerMargin:50,trip:{stage:'failed'}},
     {number:'3',date:'2026-11-02',customerAmount:null,carrierAmount:null},
     {number:'4',date:'2026-12-01',ledgerMargin:70},
   ];
-  assert.deepEqual(monthSnapshot(data,'2026-11'), {count:3,total:100});
+  assert.deepEqual(monthSnapshot(data,'2026-11'), {count:3,total:150});
   assert.deepEqual(monthSnapshot(data,'2026-12'), {count:1,total:70});
   assert.deepEqual(monthSnapshot(data,'2027-01'), {count:0,total:0});
   assert.deepEqual(monthSnapshot(data,'2026-11','2026-11-01'), {count:1,total:100});
@@ -311,4 +311,26 @@ test('ручная маржа перекрывает расчётную, сох�
   assert.equal(orderMargin({...changed,ledgerMargin:null}),calculated);
   // A repeated PDF import must not silently erase an operator's override.
   assert.equal(mergeImport(base,changed).ledgerMargin,12345.67);
+});
+
+test('P0: компенсация за срыв входит в отчёт, включая прибыль, убыток, ноль и пустую маржу', () => {
+  const orders=[
+    {number:'710', date:'2026-11-10', trip:{stage:'failed'}, ledgerMargin:5000},
+    {number:'711', date:'2026-11-11', trip:{stage:'failed'}, ledgerMargin:-900},
+    {number:'712', date:'2026-11-12', trip:{stage:'failed'}, ledgerMargin:0},
+    {number:'713', date:'2026-11-13', trip:{stage:'failed'}, ledgerMargin:null,
+      customerAmount:null,carrierAmount:null},
+    {number:'714', date:'2026-11-14', trip:{stage:'unloaded'}, ledgerMargin:2500},
+    {number:'715', date:'2026-12-01', trip:{stage:'failed'}, ledgerMargin:99999},
+  ];
+  const report=monthReport(orders,'2026-11');
+  assert.deepEqual(report.rows.map(x=>x.number),['710','711','712','713','714']);
+  assert.equal(report.total,6600);
+  assert.deepEqual(monthSnapshot(orders,'2026-11'),{count:5,total:6600});
+  assert.deepEqual(monthSnapshot(orders,'2026-11','2026-11-11'),{count:2,total:4100});
+  assert.equal(orderMargin(orders[0]),5000);
+  assert.equal(orderMargin(orders[1]),-900);
+  assert.equal(orderMargin(orders[2]),0);
+  assert.equal(orderMargin(orders[3]),null);
+  assert.equal(archived(orders[0]),true); // keeps cancelled trip out of active queue
 });
