@@ -28,7 +28,7 @@ jobs:
           python -m pip install -r backend/requirements-test.txt
           python -m unittest backend.test_app backend.test_bulk_etrn -v
           python -m unittest backend.test_sheets -v
-          python -m unittest deploy.test_backup_delivery -v
+          python -m unittest deploy.test_backup_delivery deploy.test_backup_freshness -v
       - name: Validate release check
         run: |
           bash -n deploy/check-release.sh
