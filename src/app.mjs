@@ -1333,8 +1333,54 @@ $('settings').addEventListener('click', () => {
   const email = $('account-email').textContent;
   $('settings-account').textContent = email;
   $('settings-account').hidden = !email;
+  $('password-form').hidden = demo || !signedIn;
+  $('password-form').reset();
+  $('password-status').textContent = '';
   $('settings-dialog').showModal();
 });
+$('password-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!signedIn || demo) return;
+  const form = event.currentTarget;
+  const button = event.submitter;
+  if (button.disabled) return;
+  const generation = accountGeneration;
+  const currentPassword = form.elements.currentPassword.value;
+  const newPassword = form.elements.newPassword.value;
+  const confirmPassword = form.elements.confirmPassword.value;
+  if (newPassword !== confirmPassword) {
+    $('password-status').textContent = 'Новые пароли не совпадают.';
+    return;
+  }
+  if (currentPassword === newPassword) {
+    $('password-status').textContent = 'Новый пароль должен отличаться от текущего.';
+    return;
+  }
+  button.disabled = true;
+  $('password-status').textContent = 'Проверяем текущий пароль…';
+  try {
+    await auth.changePassword(currentPassword, newPassword);
+    if (generation !== accountGeneration) return;
+    form.reset();
+    signInScreen('Пароль изменён. Войдите с новым паролем на этом и других устройствах.');
+  } catch (error) {
+    if (generation !== accountGeneration) return;
+    form.elements.currentPassword.value = '';
+    if (error.network || error.status === 401) {
+      // On network errors we cannot know if the server already revoked sessions.
+      signInScreen('Проверьте, сохранился ли новый пароль, и войдите снова.');
+    } else {
+      $('password-status').textContent = error.status === 403
+        ? 'Текущий пароль неверен или сеанс изменился. Проверьте пароль и повторите.'
+        : error.status === 429
+          ? 'Слишком много попыток. Повторите позже.'
+          : error.message;
+    }
+  } finally {
+    if (generation === accountGeneration) button.disabled = false;
+  }
+});
+
 let calculator;
 $('calculator').addEventListener('click', () => {
   calculator ??= mountCalculator($('calculator-dialog'));
@@ -1627,6 +1673,8 @@ function signInScreen(message = '') {
   savingTrips.clear();
   $('settings-account').textContent = '';
   $('settings-account').hidden = true;
+  $('password-form').reset();
+  $('password-status').textContent = '';
   draft = reviewOrder = driverOrder = null;
   previousNumber = etrnOrderNumber = reviewPrevious = null;
   editorStamp = etrnStamp = reviewStamp = undefined;
