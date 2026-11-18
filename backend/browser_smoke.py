@@ -365,9 +365,9 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     expect(row.locator(".etrn-link")).to_have_text("Закрыта вручную")
     active_before_unload = int(page.locator("#active-count").inner_text())
     row.locator(".trip-status").select_option("unloaded")
-    # A manually closed ETRN ends an unloaded trip just like all signatures.
-    expect(page.locator("#active-count")).to_have_text(str(active_before_unload - 1))
-    expect(row).to_have_count(0)
+    # Manual closure is not proof of all signatures: keep unloaded trip actionable.
+    expect(page.locator("#active-count")).to_have_text(str(active_before_unload))
+    expect(row).to_be_visible()
     click_scope(page, "history", mobile)
     page.locator("#history-month").select_option("all")
     expect(page.locator("#table")).to_contain_text(str(number))
