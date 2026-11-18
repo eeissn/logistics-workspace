@@ -65,6 +65,25 @@ test('timeline: trip and ETRN are independent and explicit',()=>{
   assert.equal(tripTimeline(order)[1].state,'current');
 });
 
+test('ETRN timeline shows the distinct agreement-created stage and all transitions', () => {
+  const base=sample('T','2026-11-18',3000);
+  const states=etrn=>etrnTimeline({...base,etrn});
+  const titles=['К созданию','Заказ-заявка создана','В работе','Подписана'];
+  assert.deepEqual(states({required:true}).map(item=>item.title),titles);
+  assert.deepEqual(states({required:true}).map(item=>item.state),
+    ['current','pending','pending','pending']);
+  assert.deepEqual(states({required:true,orderForm:true}).map(item=>item.state),
+    ['done','current','pending','pending']);
+  assert.deepEqual(states({required:true,orderForm:true,created:true}).map(item=>item.state),
+    ['done','done','current','pending']);
+  assert.deepEqual(states({required:true,orderForm:true,created:true,number:'T',allSigned:true})
+    .map(item=>item.state),['done','done','done','current']);
+  assert.deepEqual(states({required:true,manualComplete:true})
+    .map(item=>item.state),['manual','manual','manual','manual']);
+  assert.deepEqual(states({required:false})
+    .map(item=>item.state),['not-required','not-required','not-required','not-required']);
+});
+
 test('P0: cancelled trip with custom or calculated margin affects comparison and flags', () => {
   const orders=[
     sample('C1','2026-10-01',7000,'failed'),
