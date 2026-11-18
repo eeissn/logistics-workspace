@@ -343,6 +343,84 @@ def create_app(path, origin, sheet_preview=None):
         response.delete_cookie(COOKIE, secure=True, httponly=True, samesite="strict", path="/")
         return {"ok": True}
 
+    @app.post("/api/password")
+    async def change_password(request: Request, response: Response):
+        """Rotate the signed-in user's password and revoke ALL their sessions."""
+        active = session(request, mutate=True)
+        data = await read_json(request, 2048)
+        if set(data) != {"currentPassword", "newPassword"}:
+            raise HTTPException(422, "Invalid password request")
+        old, new = data["currentPassword"], data["newPassword"]
+        if (not isinstance(old, str) or not isinstance(new, str) or
+            not 1 <= len(old) <= 256 or not 12 <= len(new) <= 256 or
+            old == new or
+            any(0xD800 <= ord(char) <= 0xDFFF for char in old + new)):
+            raise HTTPException(422, "Invalid password request")
+
+        def rotate():
+            now = int(time.time())
+            key = "password-change:" + active["email"]
+            with database(path, write=True) as db:
+                # Attempts are persisted in SQLite, not only in memory.
+                live = db.execute(
+                    "SELECT 1 FROM sessions WHERE token=? AND email=? AND expires>?",
+                    (active["token"], active["email"], now),
+                ).fetchone()
+                if live is None:
+                    raise HTTPException(401, "Sign in required")
+                db.execute("DELETE FROM login_attempts WHERE expires<=?", (now,))
+                attempt = db.execute(
+                    "SELECT attempts FROM login_attempts WHERE ip=?", (key,),
+                ).fetchone()
+                if attempt and attempt[0] >= 5:
+                    raise HTTPException(429, "Too many password attempts",
+                                        headers={"Retry-After": "900"})
+                db.execute("""INSERT INTO login_attempts VALUES (?, 1, ?)
+                              ON CONFLICT(ip) DO UPDATE SET attempts=attempts+1""",
+                           (key, now + 900))
+                user = db.execute(
+                    "SELECT salt, password FROM users WHERE email=?", (active["email"],),
+                ).fetchone()
+                if user is None:
+                    raise HTTPException(401, "Sign in required")
+
+            if not hash_slot.acquire(blocking=False):
+                raise HTTPException(429, "Authentication busy", headers={"Retry-After": "5"})
+            try:
+                previous = password_hash(old, user["salt"])
+                if not hmac.compare_digest(previous, user["password"]):
+                    raise HTTPException(403, "Invalid current password")
+                salt = secrets.token_bytes(16)
+                digest = password_hash(new, salt)
+            finally:
+                hash_slot.release()
+
+            with database(path, write=True) as db:
+                # The current session and stored hash may have changed while hashing.
+                live = db.execute(
+                    "SELECT 1 FROM sessions WHERE token=? AND email=? AND expires>?",
+                    (active["token"], active["email"], int(time.time())),
+                ).fetchone()
+                current = db.execute(
+                    "SELECT salt, password FROM users WHERE email=?", (active["email"],),
+                ).fetchone()
+                if live is None or current is None:
+                    raise HTTPException(401, "Sign in required")
+                if (not hmac.compare_digest(current["salt"], user["salt"]) or
+                    not hmac.compare_digest(current["password"], user["password"])):
+                    raise HTTPException(409, "Password changed in another session")
+                db.execute(
+                    "UPDATE users SET salt=?, password=? WHERE email=?",
+                    (salt, digest, active["email"]),
+                )
+                db.execute("DELETE FROM sessions WHERE email=?", (active["email"],))
+                db.execute("DELETE FROM login_attempts WHERE ip=?", (key,))
+
+        await run_in_threadpool(rotate)
+        response.delete_cookie(COOKIE, secure=True, httponly=True,
+                               samesite="strict", path="/")
+        return {"ok": True}
+
     @app.get("/api/records")
     def get_records(request: Request):
         owner = session(request, bind=True)["email"]
