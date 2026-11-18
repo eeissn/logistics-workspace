@@ -1114,6 +1114,7 @@ def etrn_trip_save_race(chromium, origin):
         expect(page.locator("#notice")).to_contain_text("Дождитесь сохранения статуса рейса")
         page.evaluate("window.__resumeTripSave(); window.__restoreFetch();")
         expect(page.locator("#notice")).to_have_text("Статус рейса сохранён.")
+        expect(row.locator(".trip-status")).to_be_enabled()
         row.locator(".etrn-link").click()
         expect(page.locator("#etrn-dialog")).to_be_visible()
         page.locator("#etrn-dialog [data-close]").click()
