@@ -16,8 +16,7 @@ export const flagLabels = Object.freeze({
 });
 export function monthlyComparison(orders, first, second, threshold = 0.10) {
   const aggregate = month => {
-    const values = orders.filter(order => order.date?.slice(0,7) === month &&
-      tripStatus(order) !== 'failed');
+    const values = orders.filter(order => order.date?.slice(0,7) === month);
     const margins = values.map(orderMargin)
       .filter(value => value != null && Number.isFinite(value)).sort((a,b) => a-b);
     const total = margins.reduce((sum,value)=>sum+value,0);
