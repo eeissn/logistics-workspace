@@ -392,7 +392,12 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     expect(page.locator("#etrn-dialog")).to_be_hidden()
     expect(row.locator(".etrn-link")).to_have_text("Закрыта вручную")
     active_before_unload = int(page.locator("#active-count").inner_text())
+    page.locator("#notice").evaluate("(node) => node.textContent = ''")
     row.locator(".trip-status").select_option("unloaded")
+    # Wait for the trip PUT to finish before opening the document editor:
+    # otherwise the ETRN PATCH may carry an old updatedAt and return 409.
+    expect(page.locator("#notice")).to_have_text("Статус рейса сохранён.")
+    expect(row.locator(".trip-status")).to_be_enabled()
     # Manual ETRN closure is not equivalent to everyone's signature.
     expect(page.locator("#active-count")).to_have_text(str(active_before_unload))
     expect(row).to_be_visible()
