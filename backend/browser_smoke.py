@@ -393,28 +393,14 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     expect(row.locator(".etrn-link")).to_have_text("Закрыта вручную")
     active_before_unload = int(page.locator("#active-count").inner_text())
     row.locator(".trip-status").select_option("unloaded")
-    # A manually closed ETRN ends an unloaded trip just like all signatures.
-    expect(page.locator("#active-count")).to_have_text(str(active_before_unload - 1))
-    expect(row).to_have_count(0)
-    click_scope(page, "history", mobile)
-    page.locator("#history-month").select_option("all")
-    expect(page.locator("#table")).to_contain_text(str(number))
-    archived_row = page.locator("#table .order").filter(
-        has=page.get_by_role("button", name=f"№ {number}", exact=True))
-    archived_row.locator(".trip-status").select_option("loaded")
-    # Reopening the trip restores it to active without silently changing ETRN.
-    click_scope(page, "active", mobile)
-    row = page.locator("#table .order").filter(
-        has=page.get_by_role("button", name=f"№ {number}", exact=True))
+    # Manual ETRN closure is not equivalent to everyone's signature.
+    expect(page.locator("#active-count")).to_have_text(str(active_before_unload))
     expect(row).to_be_visible()
     row.locator(".etrn-link").click()
     dialog.locator('[name="manualComplete"]').uncheck()
     page.locator("#etrn-save").click()
+    expect(dialog).to_be_hidden()
     expect(row.locator(".etrn-link")).to_have_text("Заказ-заявка создана")
-    row.locator(".trip-status").select_option("unloaded")
-    expect(row.locator(".trip-status")).to_have_value("unloaded")
-    # With no manual closure or full signatures, unloading is not enough.
-    expect(row).to_be_visible()
     row.locator(".etrn-link").click()
     dialog.locator('[name="orderForm"]').check()
     dialog.locator('[name="created"]').check()
@@ -422,12 +408,21 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     dialog.locator('[name="etrnNumber"]').fill(f"ETRN-{number}")
     expect(dialog.locator("#etrn-status")).to_have_text("Подписана")
     page.locator("#etrn-save").click()
+    expect(dialog).to_be_hidden()
     expect(page.locator("#active-count")).to_have_text(str(active_before_unload - 1))
     expect(page.locator("#table")).not_to_contain_text(f"№ {number}")
     click_scope(page, "history", mobile)
     page.locator("#history-month").select_option("all")
     expect(page.locator("#table")).to_contain_text(str(number))
+    archived_row = page.locator("#table .order").filter(
+        has=page.get_by_role("button", name=f"№ {number}", exact=True))
+    archived_row.locator(".trip-status").select_option("loaded")
     click_scope(page, "active", mobile)
+    reopened = page.locator("#table .order").filter(
+        has=page.get_by_role("button", name=f"№ {number}", exact=True))
+    expect(reopened).to_be_visible()
+    reopened.locator(".trip-status").select_option("unloaded")
+    expect(reopened).to_have_count(0)
 
     click_workspace_action(page, "#report", mobile)
     page.locator("#report-month").fill("2026-11")

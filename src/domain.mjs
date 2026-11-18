@@ -94,8 +94,7 @@ export function tripStatus(order) {
 
 export function archived(order) {
   const stage = tripStatus(order);
-  return stage === 'failed' || (stage === 'unloaded' &&
-    ['Подписана', 'Закрыта вручную'].includes(etrnStatus(order.etrn)));
+  return stage === 'failed' || (stage === 'unloaded' && etrnStatus(order.etrn) === 'Подписана');
 }
 
 export function dateRange(schedule, reference = '') {
