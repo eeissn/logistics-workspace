@@ -9,7 +9,7 @@ $taskName = 'Logistics Workspace Backup Audit'
 $account = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 $script = Join-Path $PSScriptRoot 'check-backup-freshness.ps1'
 foreach ($path in @($Python, $script, $Destination)) {
-    if ($path -notmatch '^[A-Za-z]:\\' -or $path -match '["\r\n]' -or $path.EndsWith('\\')) {
+    if ($path -notmatch '^[A-Za-z]:\\' -or $path -match '["\r\n]' -or $path.EndsWith([IO.Path]::DirectorySeparatorChar)) {
         throw 'Use absolute local paths without a trailing backslash.'
     }
     if (!(Test-Path -LiteralPath $path)) {
