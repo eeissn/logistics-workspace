@@ -51,11 +51,13 @@ export const tripTimeline = order => {
 };
 export const etrnTimeline = order => {
   const status = etrnStatus(order.etrn);
-  return ['К созданию','В работе','Подписана'].map((title,index)=>({
-    title,state:status==='Закрыта вручную'?'manual':
-      status==='Не требуется'?'not-required':
-      title===status?'current':
-      ['К созданию','В работе','Подписана'].indexOf(status)>index?'done':'pending',
+  const stages = ['К созданию', 'Заказ-заявка создана', 'В работе', 'Подписана'];
+  const currentIndex = stages.indexOf(status);
+  return stages.map((title, index) => ({
+    title, state:status === 'Закрыта вручную' ? 'manual' :
+      status === 'Не требуется' ? 'not-required' :
+      index === currentIndex ? 'current' :
+      index < currentIndex ? 'done' : 'pending',
   }));
 };
 export const safeRecordText = order => [order.number,order.customer,order.carrier,
