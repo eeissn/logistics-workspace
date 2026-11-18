@@ -12,7 +12,8 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # Playwright's Ubuntu apt mirror can stall during large WebKit dependency downloads.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:
