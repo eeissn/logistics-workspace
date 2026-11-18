@@ -2242,7 +2242,7 @@ function refreshReport() {
   const summary = $('report-preview');
   summary.replaceChildren(node('h3', money(total)),
     node('p', `Заявок: ${rows.length}. Без суммы маржи: ${unknown}.`),
-    node('p', 'Период определяется по дате заявки. Архивные рейсы учитываются, срывы исключаются.', 'quiet'));
+    node('p', 'Период определяется по дате заявки. Маржа учитывается по всем заявкам, включая срывы; при отсутствии данных сумма не придумывается.', 'quiet'));
 }
 $('report').addEventListener('click', () => {
   $('report-month').value = today().slice(0,7);
