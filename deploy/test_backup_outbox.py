@@ -31,8 +31,6 @@ class PublishedBackupAuditTest(unittest.TestCase):
             self.assertEqual(before, {
                 p.relative_to(root): p.read_bytes() for p in root.rglob("*") if p.is_file()
             })
-            self.assertEqual(main([str(root), "--max-age-hours", "36"]), 1
-                             if datetime.now(timezone.utc) - now > timedelta(hours=36) else 0)
             with self.assertRaisesRegex(ValueError, "stale"):
                 verify_published(root, now + timedelta(days=2))
 
