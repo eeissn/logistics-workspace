@@ -145,14 +145,14 @@ export function orderMargin(order) {
   return hasMargin(order) ? margin(order.customerAmount, order.customerTax, order.carrierAmount, order.carrierTax).realProfit : null;
 }
 
-// Count all requests for the period; margin follows the established report (failed trips excluded).
+// The trip outcome does not erase earned or payable margin (including cancellation compensation).
 export function monthSnapshot(orders, month, asOf = month + '-31') {
   const elapsed = orders.filter(order => order.date?.startsWith(month + '-') && order.date <= asOf);
   return {count: elapsed.length, total: monthReport(elapsed, month).total};
 }
 
 export function monthReport(orders, month) {
-  const rows = orders.filter(order => order.date?.startsWith(month + '-') && tripStatus(order) !== 'failed')
+  const rows = orders.filter(order => order.date?.startsWith(month + '-'))
     .sort((a,b) => a.date.localeCompare(b.date) || a.number.localeCompare(b.number, 'ru', {numeric:true}));
   return {rows, total: rows.reduce((sum, order) => sum + (orderMargin(order) ?? 0), 0)};
 }
