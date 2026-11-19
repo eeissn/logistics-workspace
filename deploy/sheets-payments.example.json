@@ -1,0 +1,12 @@
+{
+  "mode": "payments_v1",
+  "spreadsheet": "TEST_SPREADSHEET_ID",
+  "tab": "Workspace API 20261119",
+  "sheet_id": 60261119,
+  "coordinated_writes": false,
+  "actors": {
+    "first@example.test": "Герман",
+    "second@example.test": "Марина"
+  },
+  "service_account_file": "/etc/logistics-workspace/google-service-account.json"
+}

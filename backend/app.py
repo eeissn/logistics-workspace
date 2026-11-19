@@ -613,10 +613,20 @@ def from_env():
     writer = None
     if os.getenv("WORKSPACE_SHEETS_ENABLED") == "true":
         from backend.sheets import SheetWriter
+        from backend.sheets_auth import token_provider
         config = json.loads(Path(os.environ["WORKSPACE_SHEETS_CONFIG"]).read_text(encoding="utf-8"))
-        token_file = Path(config["token_file"])
-        writer = SheetWriter(path, config["spreadsheet"], config["tab"], config["headers"],
-                             config["actors"], lambda: token_file.read_text(encoding="utf-8").strip())
+        token = token_provider(config)
+        mode = config.get("mode", "generic_af")
+        if mode == "payments_v1":
+            from backend.payments_sheet import PaymentsSheetWriter
+            writer = PaymentsSheetWriter(path, config["spreadsheet"], config["tab"],
+                                         config["sheet_id"], config["actors"], token,
+                                         coordinated_writes=config.get("coordinated_writes", False))
+        elif mode == "generic_af":
+            writer = SheetWriter(path, config["spreadsheet"], config["tab"], config["headers"],
+                                 config["actors"], token)
+        else:
+            raise ValueError("Unknown Google Sheets layout mode")
     return create_app(path, os.environ["APP_ORIGIN"], writer)
 
 
