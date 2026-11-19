@@ -1,6 +1,6 @@
 import {displayKey} from './registry.mjs';
 
-// Deliberately local UI preferences: no order numbers, companies, names or search text.
+// Safe saved UI rules; legacy browser copies remain available for explicit migration.
 const allowedScopes=new Set(['active','history']);
 const allowedViews=new Set(['all','not-unloaded','planned','loaded','completed','failed','pickup','delivery']);
 const allowedEtrn=new Set(['','pending','Подписана','Закрыта вручную','Не требуется']);
@@ -34,4 +34,14 @@ export function readSavedViews(email) {
 export function writeSavedViews(email, views) {
   try{localStorage.setItem(userViewsKey(email),JSON.stringify(parseSavedViews(views)));return true}
   catch{return false;}
+}
+
+// Merge only by explicit user action. Existing server names always win.
+export function mergeLocalViews(server, local) {
+  const current = parseSavedViews(server);
+  const incoming = parseSavedViews(local);
+  const names = new Set(current.map(item => item.name.toLowerCase()));
+  const additions = incoming.filter(item => !names.has(item.name.toLowerCase()));
+  return {views:[...current,...additions], added:additions.length,
+    duplicates:incoming.length-additions.length, overflow:current.length+additions.length>25};
 }

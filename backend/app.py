@@ -18,6 +18,7 @@ from urllib.parse import urlsplit
 from fastapi import FastAPI, HTTPException, Request, Response
 from starlette.concurrency import run_in_threadpool
 from backend.bulk_etrn import apply_bulk_etrn, CHOICES
+from backend.saved_views import SAVED_VIEWS_SCHEMA, replace_saved_views, saved_views_snapshot, validate_saved_views
 
 COOKIE = "__Host-logistics"
 SESSION_AGE = 12 * 3600
@@ -37,7 +38,7 @@ OWNER_SCHEMA = (
        number TEXT NOT NULL, position INTEGER NOT NULL, payload TEXT NOT NULL,
        updated_at TEXT NOT NULL, PRIMARY KEY (owner, number))""",
 )
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def connect(path):
@@ -78,11 +79,13 @@ def initialize(path):
             db.execute("ALTER TABLE registry RENAME TO legacy_shared_registry")
             db.execute("ALTER TABLE orders RENAME TO legacy_shared_orders")
             db.execute("DELETE FROM sessions")
-        if version < SCHEMA_VERSION:
+        if version < 2:
             for statement in OWNER_SCHEMA:
                 db.execute(statement)
             db.execute("INSERT INTO registry SELECT email, 0 FROM users")
-            db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+        if version < 3:
+            db.execute(SAVED_VIEWS_SCHEMA)
+        db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
 
 
 def password_hash(password, salt):
@@ -420,6 +423,33 @@ def create_app(path, origin, sheet_preview=None):
         response.delete_cookie(COOKIE, secure=True, httponly=True,
                                samesite="strict", path="/")
         return {"ok": True}
+
+    @app.get("/api/saved-views")
+    def get_saved_views(request: Request):
+        owner = session(request, bind=True)["email"]
+        with database(path) as db:
+            return saved_views_snapshot(db, owner)
+
+    @app.put("/api/saved-views")
+    async def put_saved_views(request: Request):
+        active = session(request, mutate=True)
+        data = await read_json(request, 16384)
+        if set(data) != {"revision", "views"}:
+            raise HTTPException(422, "Invalid saved views request")
+        revision, views = data["revision"], data["views"]
+        if type(revision) is not int or not 0 <= revision < 2**63 - 1:
+            raise HTTPException(422, "Invalid saved views revision")
+
+        def save_views():
+            validate_saved_views(views)
+            with database(path, write=True) as db:
+                current = db.execute("SELECT 1 FROM sessions WHERE token=? AND email=? AND expires>?",
+                                     (active["token"], active["email"], int(time.time()))).fetchone()
+                if current is None:
+                    raise HTTPException(401, "Sign in required")
+                return replace_saved_views(db, active["email"], revision, views)
+
+        return await run_in_threadpool(save_views)
 
     @app.get("/api/records")
     def get_records(request: Request):
