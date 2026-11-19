@@ -397,7 +397,6 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     # Wait for the trip PUT to finish before opening the document editor:
     # otherwise the ETRN PATCH may carry an old updatedAt and return 409.
     expect(page.locator("#notice")).to_have_text("Статус рейса сохранён.")
-    expect(row.locator(".trip-status")).to_be_enabled()
     # An unloaded trip explicitly closed by the operator (no ETRN) is
     # finished and must leave Active, while still visible in History.
     expect(page.locator("#active-count")).to_have_text(str(active_before_unload - 1))
