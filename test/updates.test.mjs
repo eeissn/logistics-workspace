@@ -45,7 +45,7 @@ test('17 ноября: исправление ISO-дат отражено в и�
 
 
 test('журнал для пользователей описывает возможности, а не внутренние тесты', () => {
-  const latest = updates[0].items.map(item => item.description).join(' ');
+  const latest = updates.find(group => group.title === '18 ноября 2026').items.map(item => item.description).join(' ');
   assert.doesNotMatch(latest, /515 заявк|браузерн(ый|ую) провер|автоматическ(ие|ую) провер|CI|SQLite|SHA-256/i);
   assert.match(latest, /маржи/);
 });
@@ -84,7 +84,7 @@ test('официальный формат обновлений: заголово
     typeof item.title === 'string' && typeof item.description === 'string')));
   for (const group of updates) {
     for (const item of group.items) {
-      assert.doesNotMatch(item.description, /^(?:добавили|сделали|улучшили|научили|решили|договорились|обновили|проверили|подготовили|создали|разделили|настроили|переработали)\\b/i);
+      assert.doesNotMatch(item.description, /^(?:добавили|сделали|улучшили|научили|решили|договорились|обновили|проверили|подготовили|создали|разделили|настроили|переработали)/i);
       assert.doesNotMatch(item.title, /CI|SQLite|SHA-256|коммит|PR №/i);
     }
   }
