@@ -10,8 +10,8 @@
 <link rel="icon" href="./favicon.svg" type="image/svg+xml" sizes="any">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png" sizes="180x180">
 <link rel="manifest" href="./site.webmanifest">
-  <script type="module" crossorigin src="./assets/index-CDH4tqZv.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-DfK9D-4p.css">
+  <script type="module" crossorigin src="./assets/index-rBvIMBhW.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-DHwSUu8W.css">
 </head>
 <body>
 <section id="sign-in" hidden>
@@ -30,23 +30,34 @@
   <details class="workspace-menu" id="workspace-menu">
     <summary aria-label="Меню рабочего пространства">⋯</summary>
     <div class="workspace-menu-body">
-      <div class="nav-tools">
+      <button type="button" id="command-launch" class="sidebar-command" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K"><span class="sidebar-command-label">⌕ Поиск и действия</span><kbd>Ctrl K</kbd></button>
+      <nav class="nav-primary" aria-label="Инструменты">
+        <p class="nav-section-title">Инструменты</p>
         <button type="button" id="calculator" aria-haspopup="dialog">Калькулятор</button>
         <button type="button" id="cargo-open" aria-haspopup="dialog">Размещение груза</button>
         <button type="button" id="ledger">Импорт Excel</button>
         <button type="button" id="ledger-export" aria-haspopup="dialog">Экспорт Excel</button>
         <button type="button" id="report">Отчёт по марже</button>
-        <button type="button" id="compare-open">Сравнить месяцы</button>
-        <button type="button" id="command-launch" class="sidebar-command" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K">⌘ Поиск и действия <span aria-hidden="true">⌘K</span></button>
-      </div>
-      <nav class="favorite-views" aria-label="Избранные фильтры">
-        <strong>Рабочие виды</strong><button type="button" data-preset="awaiting-etrn">Ждём ЭТРН</button><button type="button" data-preset="money-issues">Финансовые риски</button><button type="button" data-preset="today-pickup">Загрузка сегодня</button><button type="button" data-preset="today-delivery">Выгрузка сегодня</button><button type="button" data-preset="issues">Проблемные рейсы</button>
-        <button type="button" id="save-view">＋ Сохранить текущий вид</button>
-        <div id="custom-views" class="custom-views" aria-label="Мои виды реестра"></div>
-        <strong>☆ Избранное</strong>
-        <button type="button" data-view="pickup" aria-pressed="false">Загрузка сегодня</button>
-        <button type="button" data-view="delivery" aria-pressed="false">Выгрузка сегодня</button>
-        <button type="button" data-view="failed" aria-pressed="false">Проблемные</button>
+        <button type="button" id="compare-open">Сравнение месяцев</button>
+      </nav>
+      <nav class="favorite-views" aria-label="Быстрые фильтры">
+        <div class="nav-section-row"><span class="nav-section-title">Быстрые фильтры</span><button type="button" id="reset-workspace-view" class="nav-reset" title="Вернуться к актуальным заявкам">Сбросить</button></div>
+        <button type="button" data-preset="awaiting-etrn">Ждём ЭТРН</button>
+        
+        <button type="button" data-preset="today-pickup">Загрузка сегодня</button>
+        <button type="button" data-preset="today-delivery">Выгрузка сегодня</button>
+        <button type="button" data-preset="issues">Проблемные рейсы</button>
+        <details class="saved-views-group"><summary>Мои виды</summary>
+          <button type="button" id="save-view">＋ Сохранить текущий вид</button>
+          <p id="views-status" class="quiet" role="status" aria-live="polite"></p>
+          <button type="button" id="import-local-views" hidden>Перенести локальные виды</button>
+          <div id="custom-views" class="custom-views" aria-label="Мои виды реестра"></div>
+        </details>
+        <div class="legacy-view-actions" hidden>
+          <button type="button" data-view="pickup" aria-pressed="false">Загрузка сегодня</button>
+          <button type="button" data-view="delivery" aria-pressed="false">Выгрузка сегодня</button>
+          <button type="button" data-view="failed" aria-pressed="false">Проблемные</button>
+        </div>
       </nav>
       <div class="account-tools">
         <div id="sync-tools" class="sync-tools" hidden>
@@ -74,18 +85,21 @@
     <p class="quiet">Порядок проверки: скачайте учебный XLSX → «Проверить импорт Excel» → выберите файл → «Проверить файл». Импорт в это демо возможен только после подтверждения и не затрагивает 515 рабочих заявок. Не используйте здесь настоящие документы.</p>
   </section>
   <header class="intro">
-    <h1 id="view-title">Актуальные заявки</h1>
+    <div class="intro-title"><h1 id="view-title">Актуальные заявки</h1><button id="new" class="primary" type="button" aria-label="Новая заявка"><span aria-hidden="true">+</span> <span class="action-label">Новая заявка</span></button></div>
     <div class="intro-metrics">
-      <p id="month-metrics" class="month-metrics" aria-label="Показатели текущего месяца" hidden></p>
-      <p id="sync-status" class="quiet" role="status"></p>
+      <details id="metrics-disclosure" class="metrics-disclosure" open>
+        <summary id="metrics-summary" aria-label="Показатели месяца">Показатели месяца</summary>
+        <p id="month-metrics" class="month-metrics" aria-label="Показатели текущего месяца" hidden></p>
+      </details>
       <button type="button" id="sync-quick" class="sync-quick" hidden aria-label="Синхронизировать заявки">↻ Обновить</button>
+      <p id="sync-status" class="quiet" role="status"></p>
     </div>
   </header>
   <div class="registry-command">
     <label class="registry-search"><svg class="command-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input id="search" type="search" aria-label="Поиск по заявкам" placeholder="Номер, компания, маршрут"></label>
     <button id="filters-open" type="button" aria-haspopup="dialog"><svg class="command-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-6 7v5l-4 2v-7z"/></svg><span>Фильтры</span><span id="filters-count" class="command-count" hidden>1</span></button>
     <div id="period-slot"><button id="period-open" type="button" aria-haspopup="dialog"><svg class="command-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="14" rx="2"/><path d="M8 4v4m8-4v4M4 10h16"/></svg><span id="period-label">Период</span></button></div>
-    <div class="actions" id="registry-actions"><button id="new" class="primary" type="button" aria-label="Новая заявка"><span aria-hidden="true">+</span> <span class="action-label">Новая заявка</span></button><button id="import" type="button"><span aria-hidden="true">↑</span> <span class="action-label">Загрузить два PDF</span></button></div>
+    <div class="actions" id="registry-actions"><button id="import" type="button"><span aria-hidden="true">↑</span> <span class="action-label">Загрузить два PDF</span></button></div>
     <details id="registry-more"><summary aria-label="Другие действия с заявками">⋯</summary><div id="registry-more-actions"></div></details>
   </div>
   <p id="active-filters" class="active-filters" hidden></p>
@@ -102,9 +116,9 @@
     </div>
     <div class="registry-toolbar">
       <div class="registry-tools">
-        <label class="view-picker"><span aria-hidden="true">▤</span> Вид <select id="layout" aria-label="Вид реестра"></select></label>
+        <label class="view-picker"><span aria-hidden="true">▤</span> <span class="control-caption">Вид</span> <select id="layout" aria-label="Вид реестра"></select></label>
         <div class="sort-tools">
-          <label>Сортировка <select id="sort" aria-label="Сортировка заявок"><option value="delivery">Выгрузка</option><option value="pickup">Загрузка</option><option value="date">Дата заявки</option><option value="number">Номер</option><option value="customer">Заказчик</option><option value="carrier">Перевозчик</option><option value="route">Маршрут</option><option value="trip">Статус рейса</option><option value="etrn">ЭТРН</option></select></label>
+          <label><span class="control-caption">Сортировка</span> <select id="sort" aria-label="Сортировка заявок"><option value="delivery">Выгрузка</option><option value="pickup">Загрузка</option><option value="date">Дата заявки</option><option value="number">Номер</option><option value="customer">Заказчик</option><option value="carrier">Перевозчик</option><option value="route">Маршрут</option><option value="trip">Статус рейса</option><option value="etrn">ЭТРН</option></select></label>
           <button type="button" id="sort-direction" aria-label="Изменить порядок сортировки" aria-pressed="false">↑</button>
         </div>
       </div>
@@ -129,7 +143,7 @@
     <header class="dialog-head"><h2 id="compare-title">Сравнение месяцев</h2><button type="button" data-close aria-label="Закрыть">×</button></header>
     <div class="fields"><label>Первый месяц<input id="compare-first" type="month"></label><label>Второй месяц<input id="compare-second" type="month"></label></div>
     <div id="compare-results" role="status"></div>
-    <p class="quiet">Сорванные заявки исключены из расчёта маржи. Неуказанные ставки не принимаются за нулевую маржу.</p>
+    <p class="quiet">Маржа по сорванным заявкам тоже учитывается, если указаны ставки или сумма вручную. Отсутствующие данные не считаются нулевой маржой.</p>
   </div>
 </dialog>
 <nav id="mobile-dock" class="mobile-dock" aria-label="Быстрая навигация" hidden>
@@ -301,7 +315,16 @@
       <section data-settings-panel="account" class="settings-panel" hidden>
         <h3>Аккаунт</h3>
         <p class="quiet" id="settings-account" hidden></p>
-        <p class="quiet">Данные аккаунтов и заявок разделены на сервере. Изменение пароля пока не доступно в этом меню.</p>
+        <p class="quiet">Данные двух аккаунтов изолированы. После смены пароля потребуется заново войти на всех устройствах.</p>
+        <form id="password-form" autocomplete="off">
+          <div class="fields">
+            <label class="wide">Текущий пароль<input name="currentPassword" type="password" autocomplete="current-password" required maxlength="256"></label>
+            <label class="wide">Новый пароль (от 12 символов)<input name="newPassword" type="password" autocomplete="new-password" required minlength="12" maxlength="256"></label>
+            <label class="wide">Повторите новый пароль<input name="confirmPassword" type="password" autocomplete="new-password" required minlength="12" maxlength="256"></label>
+          </div>
+          <button type="submit" class="primary">Изменить пароль</button>
+          <p class="quiet" id="password-status" role="status" aria-live="polite"></p>
+        </form>
       </section>
       <section data-settings-panel="updates" class="settings-panel" hidden>
         <button type="button" id="updates-open" class="updates-link">Открыть историю обновлений</button>
@@ -358,7 +381,13 @@
         <label>Ставка перевозчика, ₽<input name="carrierAmount" type="number" min="0" step="0.01"></label>
         <label>НДС перевозчика<select name="carrierTax"><option value="">Укажи НДС</option><option value="0">Без НДС</option><option value="5">5%</option><option value="22">22%</option></select></label>
       </div>
-      <div id="margin-detail" class="margin-detail"></div>
+      <div class="manual-margin-field">
+        <label for="manual-margin">Маржа вручную, ₽
+          <input id="manual-margin" name="ledgerMargin" type="number" step="0.01" inputmode="decimal" aria-describedby="manual-margin-help">
+        </label>
+        <p id="manual-margin-help" class="quiet">Необязательно. Заполни, чтобы указать свою сумму маржи вместо расчётной. Очисти поле, чтобы снова использовать автоматический расчёт. Ставки и НДС не изменятся.</p>
+      </div>
+      <div id="margin-detail" class="margin-detail" aria-live="polite"></div>
     </fieldset>
     <details open><summary>Маршрут и окна</summary><div id="points"></div><button type="button" id="add-point">Добавить точку</button></details>
     <details><summary>Контакты участников</summary><div id="contacts" class="fields"></div></details>
