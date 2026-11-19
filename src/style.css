@@ -1726,12 +1726,25 @@ dialog .check label {
 }
 #updates-dialog { width: min(720px, calc(100% - 1.5rem)); max-width: 720px; overflow-y: auto; overscroll-behavior: contain; }
 #updates-dialog .dialog-head { position: sticky; top: 0; }
-.updates-list { padding: 0; margin: .4rem 0 .2rem; list-style: none; }
-.updates-group { padding: .65rem 0; border-bottom: 1px solid var(--line); }
+/* Release notes: compact date hierarchy, feature title, and readable summary.
+   Theme-aware surfaces; no badges or developer-facing implementation details. */
+.updates-list { padding: 0; margin: .25rem 0 .35rem; list-style: none; }
+.updates-group { padding: 1rem 0 1.05rem; border-bottom: 1px solid var(--line); }
 .updates-group:last-child { border-bottom: 0; }
-.updates-group h3 { margin: 0 0 .3rem; color: var(--ink); font-size: .85rem; font-weight: 650; }
-.updates-group ul { padding-left: 1.05rem; margin: 0; }
-.updates-group li { margin: .5rem 0; line-height: 1.55; font-size: .88rem; color: var(--ink); }
+.updates-group > h3 {
+  margin: 0 0 .65rem; color: var(--muted); font-size: .79rem;
+  font-weight: 650; letter-spacing: .015em;
+}
+.updates-items { display: grid; gap: .65rem; padding: 0; margin: 0; list-style: none; }
+.updates-entry { padding: 0 0 0 .8rem; border-left: 2px solid var(--line); }
+.updates-entry h4 { margin: 0 0 .2rem; color: var(--ink); font-size: .91rem; font-weight: 680; line-height: 1.35; }
+.updates-entry p { margin: 0; color: var(--muted); font-size: .86rem; line-height: 1.58; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .updates-group { padding: .82rem 0; }
+  .updates-items { gap: .75rem; }
+  .updates-entry h4 { font-size: .94rem; }
+  .updates-entry p { font-size: .88rem; }
+}
 @media (max-width: 760px) {
   .intro { align-items: flex-start; }
   .intro-metrics { width: 100%; justify-content: flex-start; gap: .2rem .65rem; }
