@@ -4,7 +4,7 @@ import json
 from fastapi import HTTPException
 
 
-SAVED_VIEWS_SCHEMA = """CREATE TABLE saved_views (
+SAVED_VIEWS_SCHEMA = """CREATE TABLE IF NOT EXISTS saved_views (
     owner TEXT PRIMARY KEY NOT NULL REFERENCES users(email) ON DELETE CASCADE,
     revision INTEGER NOT NULL, payload TEXT NOT NULL)"""
 FIELDS = {"name", "scope", "view", "etrn", "financial", "sort", "ascending"}
@@ -52,3 +52,15 @@ def replace_saved_views(db, owner, revision, views):
         ON CONFLICT(owner) DO UPDATE SET revision=excluded.revision, payload=excluded.payload""",
                (owner, revision + 1, payload))
     return {"revision": revision + 1, "views": views}
+
+
+def verify_saved_views_schema(db):
+    """Accept the retained additive table during a tested schema-marker rollback."""
+    columns = [(row[1], row[2].upper(), row[3], row[5])
+               for row in db.execute("PRAGMA table_info(saved_views)")]
+    expected = [("owner", "TEXT", 1, 1), ("revision", "INTEGER", 1, 0),
+                ("payload", "TEXT", 1, 0)]
+    references = list(db.execute("PRAGMA foreign_key_list(saved_views)"))
+    if (columns != expected or len(references) != 1 or
+            tuple(references[0][2:7]) != ("users", "owner", "email", "NO ACTION", "CASCADE")):
+        raise RuntimeError("Unsupported saved views table schema")

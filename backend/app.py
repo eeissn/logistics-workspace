@@ -18,7 +18,7 @@ from urllib.parse import urlsplit
 from fastapi import FastAPI, HTTPException, Request, Response
 from starlette.concurrency import run_in_threadpool
 from backend.bulk_etrn import apply_bulk_etrn, CHOICES
-from backend.saved_views import SAVED_VIEWS_SCHEMA, replace_saved_views, saved_views_snapshot, validate_saved_views
+from backend.saved_views import verify_saved_views_schema, SAVED_VIEWS_SCHEMA, replace_saved_views, saved_views_snapshot, validate_saved_views
 
 COOKIE = "__Host-logistics"
 SESSION_AGE = 12 * 3600
@@ -85,6 +85,7 @@ def initialize(path):
             db.execute("INSERT INTO registry SELECT email, 0 FROM users")
         if version < 3:
             db.execute(SAVED_VIEWS_SCHEMA)
+        verify_saved_views_schema(db)
         db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
 
 

@@ -2,7 +2,8 @@
 
 ## Nginx MIME / проверка выпуска · 19.11.2026
 
-- [ ] Подготовлено явное .mjs→application/javascript и404 для отсутствующего модуля в шаблоне; реальный loopbackтест включён вCI. Локальные bashsyntax и mockhealthтесты успешны, фактический nginx на Windows отсутствует; дождатьсяCI последнегоSHA. Productionконфиг не менялся.
+- [x] Явное .mjs→application/javascript и404 закреплены в шаблоне; настоящий nginx loopback-тест успешен в CI5dd9de9/run44580041123, локальные bashsyntax/mockhealth успешны. Полный CI последующего SHA проверяется отдельно. Productionконфиг не менялся.
+- [x] Подготовлен безопасный совместимый откат маркера схемы3→2 без удаления saved_views/бизнес-данных и повторный переход3. Фактический закреплённый предыдущий API2 проверен на двух синтетических аккаунтах; 81Python(1skip),112JS/build. План deploy/SCHEMA3_RELEASE_PLAN.md; productionдействия не выполнялись. SHA — коммит backend/rehearse_previous_release.py.
 
 ## Google Sheets / домашний контроль · 19.11.2026
 
