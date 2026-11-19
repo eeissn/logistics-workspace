@@ -1136,6 +1136,37 @@ def etrn_trip_save_race(chromium, origin):
     print("chromium: ETRN/trip save race and unlocked retry passed", flush=True)
 
 
+def saved_view_storage_failure(chromium, origin):
+    """A browser storage failure must not report successful view deletion."""
+    with closing(chromium.launch()) as browser:
+        page = browser.new_page(ignore_https_errors=True)
+        page.goto(origin)
+        sign_in(page, "second")
+        page.locator(".saved-views-group > summary").click()
+        page.once("dialog", lambda dialog: dialog.accept("Synthetic saved view"))
+        page.locator("#save-view").click()
+        view = page.locator("#custom-views .custom-view-row").filter(has_text="Synthetic saved view")
+        expect(view).to_have_count(1)
+        expect(page.locator("#month-metrics")).to_have_attribute("title", re.compile("компенсации"))
+        page.evaluate("""() => {
+            window.__setItem = Storage.prototype.setItem;
+            Storage.prototype.setItem = function(key, value) {
+                if (key.includes(':custom-views:')) throw new DOMException('Synthetic quota', 'QuotaExceededError');
+                return window.__setItem.call(this, key, value);
+            };
+        }""")
+        page.once("dialog", lambda dialog: dialog.accept())
+        view.get_by_role("button", name="Удалить вид Synthetic saved view", exact=True).click()
+        expect(page.locator("#notice")).to_contain_text("Не удалось удалить вид")
+        expect(view).to_have_count(1)
+        page.evaluate("() => { Storage.prototype.setItem = window.__setItem; delete window.__setItem; }")
+        page.once("dialog", lambda dialog: dialog.accept())
+        view.get_by_role("button", name="Удалить вид Synthetic saved view", exact=True).click()
+        expect(view).to_have_count(0)
+        expect(page.locator("#notice")).to_have_text("Сохранённый вид удалён.")
+    print("chromium: saved view deletion failure and retry passed", flush=True)
+
+
 def main():
     with TemporaryDirectory() as directory:
         root = Path(directory)
@@ -1169,6 +1200,7 @@ def main():
                 bulk_etrn_numbers_ui(playwright.chromium, origin)
                 large_year_browser(playwright.chromium, origin)
                 etrn_trip_save_race(playwright.chromium, origin)
+                saved_view_storage_failure(playwright.chromium, origin)
                 password_change_browser(playwright.chromium, origin, "first")
                 password_change_browser(playwright.webkit, origin, "second", True,
                                        {**playwright.devices["iPhone 13"], "viewport": {"width": 393, "height": 852}})

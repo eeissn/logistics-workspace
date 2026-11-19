@@ -506,7 +506,7 @@ def create_app(path, origin, sheet_preview=None):
         choice, items = data.get("choice"), data.get("items")
         preview = data.get("preview", True)
         revision = data.get("revision")
-        if choice not in CHOICES or type(preview) is not bool:
+        if not isinstance(choice, str) or choice not in CHOICES or type(preview) is not bool:
             raise HTTPException(422, "Invalid ETRN status")
         if type(revision) is not int or not 0 <= revision < 2**63 - 1:
             raise HTTPException(422, "Invalid revision")

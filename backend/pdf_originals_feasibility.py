@@ -4,6 +4,7 @@ Never reads or modifies DATABASE_PATH, server files, real orders, or PDF documen
 Not a production attachment schema. Measures only SQLite write/backup/recovery.
 """
 import argparse
+from contextlib import closing
 import hashlib
 import json
 from pathlib import Path
@@ -39,7 +40,7 @@ def benchmark(orders=515, pdf_kib=64):
     with TemporaryDirectory(prefix="lw-pdf-originals-sizing-") as folder:
         root = Path(folder)
         source, restored = root / "source.sqlite3", root / "restored.sqlite3"
-        with sqlite3.connect(source) as db:
+        with closing(sqlite3.connect(source)) as db, db:
             db.execute("PRAGMA foreign_keys=ON")
             # Test-only minimal analogue of the real per-user order primary key.
             db.executescript("""
@@ -78,7 +79,7 @@ def benchmark(orders=515, pdf_kib=64):
         begin = perf_counter()
         backup(source, restored)  # Production SQLite online backup implementation.
         backup_seconds = perf_counter() - begin
-        with sqlite3.connect(restored) as db:
+        with closing(sqlite3.connect(restored)) as db:
             db.execute("PRAGMA foreign_keys=ON")
             integrity = db.execute("PRAGMA integrity_check").fetchone()[0]
             foreign_keys = db.execute("PRAGMA foreign_key_check").fetchall()

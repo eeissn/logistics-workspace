@@ -352,7 +352,7 @@ dialog details[open] summary { margin-bottom: .55rem; }
   .registry-tools { width: 100%; }
   .registry-tools label { min-width: 0; }
   .registry-tools select { min-width: 0; }
-  .view-picker, .sort-tools label { font-size: 0; }
+  .view-picker .control-caption, .sort-tools .control-caption { display: none; }
   .registry-tools select { font-size: .83rem; }
   .view-picker > span { display: none; }
   .workspace-nav button, .trip-status, .etrn-link, .row-contacts, .driver-link, .order-link { min-height: 44px; }

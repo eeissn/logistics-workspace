@@ -136,7 +136,7 @@ function updateMonthMetrics() {
     part.append(node('small', caption), node('strong', value));
     el.append(part);
   }
-  el.title = 'Маржа по действующим правилам отчёта, без сорванных заявок. Количество включает все заявки месяца.';
+  el.title = 'Маржа включает компенсации по сорванным рейсам. Заявки без известной маржи не добавляют сумму. Количество включает все заявки месяца.';
   $('metrics-summary').textContent = `${label} · Маржа ${money(total)}`;
   $('metrics-disclosure').hidden = !signedIn && !demo;
   el.hidden = !signedIn && !demo;
@@ -1526,7 +1526,11 @@ function renderCustomViews() {
     const remove=action('×',()=>{
       if(!window.confirm('Удалить сохранённый вид «'+item.name+'»?'))return;
       const views=readSavedViews(ownerViewKey()).filter(entry=>entry.name!==item.name);
-      writeSavedViews(ownerViewKey(),views);renderCustomViews();
+      if(!writeSavedViews(ownerViewKey(),views)) {
+        $('notice').textContent='Не удалось удалить вид в браузере. Проверьте доступ к хранилищу и повторите попытку.';return;
+      }
+      renderCustomViews();
+      $('notice').textContent='Сохранённый вид удалён.';
     });
     remove.setAttribute('aria-label','Удалить вид '+item.name);
     row.append(open,remove);box.append(row);
