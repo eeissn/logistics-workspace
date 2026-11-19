@@ -1,3 +1,10 @@
+# Nginx MIME regression · кандидат на проверке CI · 19.11.2026
+
+- В deploy/nginx.conf добавлен узкий location для .mjs: application/javascript и404 для отсутствующего модуля вместо SPAfallback. Живой Nginx/VPS не менялся.
+- Подготовлен test/nginx-template.sh: настоящий nginx на случайном loopback TLSпорту с временными синтетическими worker/index и ключом. CI устанавливаетnginx-light на временномrunner, проверяетсинтаксис/HTTP200/MIME/404. На домашнемПК nginx/WSL отсутствуют, поэтому фактический тест здесь не заявлен выполненным.
+- Локально bash -n, mock test/check-release.sh и test/check-vps-health.sh успешны. Предыдущий полный кандидат:112JS,77Python(1skip),Vitebuild иChromium/WebKit успешны. Требуется CI последнегоSHA до отметки этого этапа завершённым.
+- После CI обновитьROADMAP доказательствомSHA, создать draftPR в feature/two-user-sync, проверить diff на секреты. Открытые условия выпуска: схема3 требует безопасного плана отката, Googleсервернаяserviceaccount ещёнеподключена/coordinatedwritesнесогласован, физическаяприёмкаiPhone/перезагрузкаWindowsнеподтверждены. PDFоставленыбезхраненияпоответувладельца.
+
 # Windows Backup Audit · установлен и проверен · 19.11.2026
 
 - Владелец явно разрешил установку отдельного контроля архивов08:30/14:30/20:30 с обычными правами. Задача установлена в изолированный AuditTools/20261119, прямой запуск pythonw -m deploy.audit_backup. PowerShell Restricted сохранён; запуск ps1 не требуется.

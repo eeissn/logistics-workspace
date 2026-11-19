@@ -1,5 +1,9 @@
 # Logistics Workspace — состояние и план
 
+## Nginx MIME / проверка выпуска · 19.11.2026
+
+- [ ] Подготовлено явное .mjs→application/javascript и404 для отсутствующего модуля в шаблоне; реальный loopbackтест включён вCI. Локальные bashsyntax и mockhealthтесты успешны, фактический nginx на Windows отсутствует; дождатьсяCI последнегоSHA. Productionконфиг не менялся.
+
 ## Google Sheets / домашний контроль · 19.11.2026
 
 - [x] Разработан и проверен payments_v1 по фактическим A/B/C/E/I/L и J/K, со сверкой схемы, дублями, постоянными квитанциями, блокировкой после неопределённого ответа и readback. 73 Python/112 JS, сборка и Chromium/WebKit успешны. SHA блока — git log backend/payments_sheet.py.

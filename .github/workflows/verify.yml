@@ -31,6 +31,12 @@ jobs:
           python -m backend.pdf_originals_feasibility --orders 515 --pdf-kib 64
           python -m unittest backend.test_sheets backend.test_payments_sheet backend.test_sheets_auth -v
           python -m unittest deploy.test_backup_delivery deploy.test_backup_freshness deploy.test_backup_outbox deploy.test_audit_backup -v
+      - name: Test Nginx template on isolated loopback fixture
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y nginx-light
+          sudo systemctl stop nginx || true
+          bash test/nginx-template.sh
       - name: Validate release check
         run: |
           bash -n deploy/check-release.sh
