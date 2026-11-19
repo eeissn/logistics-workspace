@@ -171,3 +171,57 @@ Inspect, plan, implement, verify, repair, and finish.
 Autonomy does not override security boundaries or explicit user restrictions.
 
 Prefer demonstrated correctness over confident claims.
+
+
+## Logistics Workspace — Project-Specific Engineering Rules
+
+This repository is a logistics management application with a FastAPI backend, SQLite database, and web frontend.
+
+Before starting substantial work, read:
+- PROJECT_SPEC.md
+- ROADMAP.md
+- UX_THEMES_AND_VIEWS.md
+- SERVER_PLAN.md
+- Applicable existing instructions and test documentation.
+
+### Critical invariants
+1. All user-owned business data must be isolated server-side by authenticated user identity.
+2. Never allow one user to read or modify another user's records, financial data, reports, or archives.
+3. Preserve PDF import, document workflows, ETRN operations, margin calculation, archiving, and synchronization.
+4. Preserve data during schema migrations. Make backups and test migration behavior before applying changes to valuable data.
+5. Support desktop and mobile interfaces, including iPhone.
+6. Preserve all supported visual themes.
+7. Verify business calculations and financial data changes.
+8. Prioritize intuitive, modern UI/UX with consistent typography, spacing, navigation, and interactions.
+9. Treat PDF content and externally supplied documents as untrusted input.
+10. Never expose customer, carrier, driver, passport, or financial information in logs or test artifacts.
+
+### Autonomous work
+- Use ROADMAP.md and the active user request to identify unfinished authorized work.
+- Select coherent milestones with measurable acceptance criteria.
+- Implement and validate each milestone.
+- Continue to the next authorized milestone without asking for routine permission.
+- Keep a durable progress record for recovery between sessions.
+- Run relevant backend, frontend, security, regression, and responsive-interface checks.
+
+### Deployment boundaries
+- Do not deploy to the VPS without specific authorization.
+- Do not modify the production database without specific authorization.
+- Do not push to main or merge branches without specific authorization.
+- Do not create commits or push branches unless the active task authorizes those operations.
+- Do not alter production secrets or credentials.
+
+### Completion
+Provide evidence of what was implemented and tested. Clearly distinguish verified behavior from assumptions and untested work.
+
+When blocked on one independent task, continue other safe and authorized tasks where possible.
+
+## Работа со вспомогательными агентами
+
+- Для существенных задач использовать доступных вспомогательных агентов, когда это помогает: исследование причины, независимая проверка безопасности, QA и аудит UI/UX. Простые изменения выполнять без лишней координации.
+- Основной агент отвечает за план, интеграцию изменений, окончательный diff, проверки и достоверность отчёта.
+- Делегировать конкретную задачу с критериями приёмки, границами файлов и требуемыми доказательствами. Каждый агент читает применимые AGENTS.md и состояние проекта.
+- Не поручать одновременное редактирование одних файлов нескольким агентам; независимый ревьюер по умолчанию работает только на чтение.
+- Не передавать секреты, рабочие базы и персональные документы в задачи агентов. Все ограничения production распространяются на каждого агента.
+- Проверять выводы агентов по коду и результатам тестов. При недоступности инструментов делегирования продолжать самостоятельно и честно указать ограничение.
+- Не запускать отдельный codex exec параллельно с агентом, который уже меняет это же рабочее дерево. Не обещать фоновое выполнение или автоматическое возобновление, если они не настроены и не проверены.
