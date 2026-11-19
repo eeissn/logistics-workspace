@@ -512,7 +512,7 @@ def registry_views(page, number, order_a, mobile):
     expect(page.locator(".registry-tabs button")).to_have_count(2)
     set_trip_view(page, "not-unloaded")
     # Check the active-only view across themes
-    for appearance in ("sputnik", "violet", "sand"):
+    for appearance in ("sputnik", "violet", "graphite", "sand"):
         theme(appearance)
         filters = page.get_by_role("button", name="Фильтры", exact=True)
         filters.click()
@@ -922,7 +922,7 @@ def smoke(browser_type, origin, chromium, number, report_total, device=None):
         expect(peer.locator("#table")).not_to_contain_text(order_a)
         expect(a.locator("#workspace")).to_be_hidden()
         expect(b.locator("#table")).to_contain_text(order_b)
-    print(f"{browser_type.name}: 3 themes × 4 registry views, pickup/delivery sorting, PDF, Excel, ETRN, archive, margin and account isolation passed", flush=True)
+    print(f"{browser_type.name}: 4 themes × 4 registry views, pickup/delivery sorting, PDF, Excel, ETRN, archive, margin and account isolation passed", flush=True)
 
 
 
