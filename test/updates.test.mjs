@@ -52,7 +52,7 @@ test('журнал для пользователей описывает возм
 
 test('17 ноября: тестовая среда Excel указана в пользовательской истории', () => {
   const entry = updates.find(group => group.title === '17 ноября 2026');
-  assert.ok(entry?.items.some(item => item.description.includes('учебную среду') &&
+  assert.ok(entry?.items.some(item => item.description.includes('учебная среда') &&
     item.description.includes('разными названиями')));
 });
 
