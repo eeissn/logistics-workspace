@@ -1326,8 +1326,12 @@ function showUpdates() {
   for (const release of updates) {
     const group = node('li', null, 'updates-group');
     group.append(node('h3', release.title));
-    const items = node('ul');
-    for (const item of release.items) items.append(node('li', item));
+    const items = node('ul', null, 'updates-items');
+    for (const item of release.items) {
+      const entry = node('li', null, 'updates-entry');
+      entry.append(node('h4', item.title), node('p', item.description));
+      items.append(entry);
+    }
     group.append(items);
     list.append(group);
   }
