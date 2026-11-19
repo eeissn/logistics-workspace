@@ -94,7 +94,11 @@ export function tripStatus(order) {
 
 export function archived(order) {
   const stage = tripStatus(order);
-  return stage === 'failed' || (stage === 'unloaded' && etrnStatus(order.etrn) === 'Подписана');
+  // A delivered trip is complete when ETRN is signed, explicitly closed
+  // manually (including trips without ETRN), or not required at all.
+  // If ETRN is required but not finished, keep the delivered trip actionable.
+  return stage === 'failed' || (stage === 'unloaded' &&
+    ['Подписана', 'Закрыта вручную', 'Не требуется'].includes(etrnStatus(order.etrn)));
 }
 
 export function dateRange(schedule, reference = '') {
