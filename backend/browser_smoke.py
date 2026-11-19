@@ -397,14 +397,25 @@ def order_lifecycle(page, chromium, number, order_a, report_total, mobile):
     # Wait for the trip PUT to finish before opening the document editor:
     # otherwise the ETRN PATCH may carry an old updatedAt and return 409.
     expect(page.locator("#notice")).to_have_text("Статус рейса сохранён.")
-    expect(row.locator(".trip-status")).to_be_enabled()
-    # Manual ETRN closure is not equivalent to everyone's signature.
-    expect(page.locator("#active-count")).to_have_text(str(active_before_unload))
-    expect(row).to_be_visible()
+    # An unloaded trip explicitly closed by the operator (no ETRN) is
+    # finished and must leave Active, while still visible in History.
+    expect(page.locator("#active-count")).to_have_text(str(active_before_unload - 1))
+    expect(row).to_have_count(0)
+    click_scope(page, "history", mobile)
+    page.locator("#history-month").select_option("all")
+    row = page.locator("#table .order").filter(
+        has=page.get_by_role("button", name=f"№ {number}", exact=True))
+    expect(row.locator(".etrn-link")).to_have_text("Закрыта вручную")
     row.locator(".etrn-link").click()
     dialog.locator('[name="manualComplete"]').uncheck()
     page.locator("#etrn-save").click()
     expect(dialog).to_be_hidden()
+    # Reopening a required but still unsigned ETRN brings the unloaded
+    # trip back to Active rather than hiding a pending signature.
+    expect(page.locator("#active-count")).to_have_text(str(active_before_unload))
+    click_scope(page, "active", mobile)
+    row = page.locator("#table .order").filter(
+        has=page.get_by_role("button", name=f"№ {number}", exact=True))
     expect(row.locator(".etrn-link")).to_have_text("Заказ-заявка создана")
     row.locator(".etrn-link").click()
     dialog.locator('[name="orderForm"]').check()
