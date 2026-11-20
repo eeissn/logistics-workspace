@@ -1,5 +1,12 @@
 # Logistics Workspace — состояние и план
 
+## Исправление Git umask / восстановление API · 20.11.2026
+
+- [x] После отказа импорта обнаружен umask077→Git source0600; автооткат вернулстарыйSHA, но APIfailed. Восстановлены только права trackedbackendисходников; владелец перезапустилслужбу. Независимаяпроверка3f2ef133/active/200/401/MIMEуспешна.
+- [x] Scopedumask022толькодляGit; общий077сохранён. Linuxрегрессия test/release-file-modes.sh checkout/rollback0644+secret0600успешна, добавленавCI. Service-userimportgatesкандидатаиотката, bash-nуспешен. НовыйscriptSHA166e97fbfbc44a03fe81bce49d39eb86f67e172047caa575a0f93c7d5c18bb95.
+- [ ] Повторный согласованный запуск1de5798 и posthealth. Неотмечатьрелизготовым по восстановлению прежнейверсии.
+
+
 ## Исправление staging-прав · 20.11.2026
 
 - [x] Диагностирован PermissionError репетиционной копии: закрытый root0700 родитель releases. Сценарий использует новый stage вне него и отдельную logistics0700 папку базы; существующие права/копии сохранены. Добавлен service-user access probe до копирования, bash-n успешен. НовыйscriptSHA a7e722d2d771986105f3be005538a293f485c03f6c0dad442ce4e41534aa5ebb.

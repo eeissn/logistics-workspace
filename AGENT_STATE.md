@@ -1,3 +1,12 @@
+# Инцидент Git umask и восстановление API · 20.11.2026
+
+- Пользовательский запуск прошёл accessgate/приватнуюрепетицию/проверкуFD, остановилAPI, создалпредрелизнуюкопию и checkout1de5798. Импорт backend.app отказалPermissionDenied ДО initialize/миграции. Причина: глобальный umask077 сценария наследовался Git черезrunuseradmin, новые trackedфайлыполучали0600. Автооткатвернул3f2ef133, но тоже создалapp.py0600; API сталfailed. Это ошибка сценария, не пользователя.
+- Агент под SSHadmin восстановилТОЛЬКОtrackedbackend*.py0644(14файлов) иbackendдир0755, сguardстарогоSHA/owners/no-symlink. БД/ключи/env не менялись. sudo-nrestartотказал, владелец выполниллокальныйsudorestartи сообщилactive. НезависимыйSSHподтвердил3f2ef133, обе службыactive, HTTP200/401 иworkerMIMEapplication/javascript. Сайт восстановлен; релизещёнеуспешен.
+- Исправление: run_git теперь (umask022; runuseradmin git...), общая077сохраняется. После candidatecheckout добавлен реальныйimport backend.app/deploy.schema_compatibility отlogistics. Приrollback послеoldcheckout сначала cdrepo, затемimportoldbackendотlogistics, только послеуспехаstart.
+- Добавлен test/release-file-modes.sh иCIшаг: синтетическийLinuxGitрепозиторийвоспроизводит0600, подтверждаетcheckoutnew/old0644приscoped022 иoutersecret0600. РеальныйLinuxпрогонуспешен; это неcrossUIDrootтест, читаемостьотlogisticsпроверитgateвсценарии. Независимыйreviewподтвердилfixиуказалrollbackcwd; замечаниевнесено. bash-nуспешен.
+- Последний /home/admin/sputnik-1de5798-deploy.sh SHA256166e97fbfbc44a03fe81bce49d39eb86f67e172047caa575a0f93c7d5c18bb95, artifactпрежний4bc86fe22e71991b4436761b02496a43e3a33180b1af04d9abb2873071611a48. Target1de5798fc8a3741025cf08cda08819424d11a92e, согласованиепрежнее, Googleoff. Все прежниеfailedstage/snapshotсохранены.
+- Следующий шаг: владелец повторяет согласованнуюsudoSSHкоманду с новымсценарием. До этого не заявлятьрелизготовым. Послеуспеха проверитьSHA/health/schema/Google404/assetи записатьdeployed. Main/mergeне менять. При следующейошибке сначала восстановитьсервис, не повторятьвслепую.
+
 # Исправлены права родительского staging-каталога · 20.11.2026
 
 - Владелец повторил согласованный sudo-запуск: prehealth200/401/MIMEуспешен, затем старая backend.app.backup отказала при создании rehearsal/schema.sqlite3 (строка109). До systemctlstop/миграции ещё не дошло. SSHподтвердилproduction3f2ef133clean, службыactive.
