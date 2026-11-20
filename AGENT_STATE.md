@@ -1,3 +1,11 @@
+# RESTORE-01 завершён локально · 20.11.2026
+
+- Поручение продолжать выполнено первым самостоятельным этапом карты. НачальныйSHAe17196227b73adddb392b4c37ea64a1cb709ffde, clean; обаCI44666961410/44666967357 success. Production1de5798 не трогался.
+- Добавлен backend.restore_browser_smoke: толькоTemporaryDirectory/syntheticaccounts/testkey. Реальные publish/CMSencrypt/retrieveLocalOutbox/decrypt, SHA/schema/integrity/FK/сравнение users/registry/orders/saved_views, сессии отзываютсятолькоrestoredcopy, старыеcookies401. Серверзапускаетсяименнонаrestored.sqlite3 безповторногосозданияпользователей. Два браузерныхконтекста/A-B, sameorder/differentcustomer, личныевиды, новыеwrites/reload/relogin, логическаянеизменностьисточника+2исходныесессии подтверждены Chromium/WebKit.
+- Первые попытки выявили ошибки тестовогоseed (trip долженбытьсловарём) и ожиданияlocalhost/networkidle; исправленывалиднымtrip{}, loopback127.0.0.1/SANи domcontentloaded+явнымиUIassertions. Независимыйreview нашёлмобильныйвыходвзакрытомменю: исправленштатнымclick_workspace_action. cleanupterminate/kill+waitдобавлен. Финальныйпрогонexit0; источникнеOSreadonly, заявляетсятолькологическаянеизменность. ProductionSFTP/CMS20.11/physicalSafariнепроверялись.
+- Повторены84Python(1skip)/112JS/buildуспешно. Новыйrestorebrowserпрогон8секexit0. ЧетыреPNG в visualizations/.../restore-browser-20261120; desktop/mobileпросмотрены, толькоsynthetic@example.test/учебныеполя. CIвключаетновыйпрогонпослеосновногоbrowser_smoke; READMEописанзапуск. ROADMAP RESTORE-01[x] только в проверенномобъёме, CIновогоSHAещёнужен.
+- СледующийэтапOPS-02: владельцуотправленвопрос, можетлионсейчасувидетьтестовоеаварийноеокно. Ответпокане получен; предупреждениенезапускатьдоподтвержденияготовности. МожнонезависимоподготовитьточныйпланOPS-03безproductionдействий. ПерезагрузкуПК, новыйpatch, Nginxизменениебезотдельногосогласованияневыполнять. Googleисключён. Productionостался1de5798.
+
 # Сверка карты выполнена · 20.11.2026
 
 - Поручение владельца: привести карту к фактическому состоянию, без нового кода/production-действий. Исходный HEAD aa37c8b9d1480b406bc36da79fd187b282f5e2f8, дерево было чистым. GitHub подтвердил релиз v2026.11.20 на1de5798fc8a3741025cf08cda08819424d11a92e; PR49draft вfeature/two-user-sync. CI исходногоaa37c8b ещё выполнялся при последней сверке, успех1de/3cf не переносить на него.
