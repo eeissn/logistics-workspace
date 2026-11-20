@@ -3,9 +3,9 @@ import test from 'node:test';
 import {updates} from '../src/updates.mjs';
 
 test('обновления охватывают всю известную историю и отсортированы по датам', () => {
-  assert.equal(updates.length, 11);
+  assert.equal(updates.length, 12);
   assert.deepEqual(updates.map(group => group.title), [
-    '19 ноября 2026', '18 ноября 2026', '17 ноября 2026', '16 ноября 2026', '15 ноября 2026', '14 ноября 2026',
+    '20 ноября 2026', '19 ноября 2026', '18 ноября 2026', '17 ноября 2026', '16 ноября 2026', '15 ноября 2026', '14 ноября 2026',
     '13 ноября 2026', '12 ноября 2026', '11 ноября 2026',
     '23 сентября 2026', '16 сентября 2026 · предыстория'
   ]);
@@ -89,6 +89,7 @@ test('официальный формат обновлений: заголово
     }
   }
   const newest = updates[0];
-  assert.equal(newest.title, '19 ноября 2026');
-  assert.match(newest.items[0].description, /Закрыта вручную/);
+  assert.equal(newest.title, '20 ноября 2026');
+  assert.match(newest.items[0].description, /синхронизируются внутри вашего аккаунта/);
+  assert.match(updates.find(group=>group.title==='19 ноября 2026').items[0].description, /Закрыта вручную/);
 });
