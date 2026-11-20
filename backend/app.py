@@ -18,6 +18,7 @@ from urllib.parse import urlsplit
 from fastapi import FastAPI, HTTPException, Request, Response
 from starlette.concurrency import run_in_threadpool
 from backend.bulk_etrn import apply_bulk_etrn, CHOICES
+from backend.saved_views import verify_saved_views_schema, SAVED_VIEWS_SCHEMA, replace_saved_views, saved_views_snapshot, validate_saved_views
 
 COOKIE = "__Host-logistics"
 SESSION_AGE = 12 * 3600
@@ -37,7 +38,7 @@ OWNER_SCHEMA = (
        number TEXT NOT NULL, position INTEGER NOT NULL, payload TEXT NOT NULL,
        updated_at TEXT NOT NULL, PRIMARY KEY (owner, number))""",
 )
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def connect(path):
@@ -78,11 +79,14 @@ def initialize(path):
             db.execute("ALTER TABLE registry RENAME TO legacy_shared_registry")
             db.execute("ALTER TABLE orders RENAME TO legacy_shared_orders")
             db.execute("DELETE FROM sessions")
-        if version < SCHEMA_VERSION:
+        if version < 2:
             for statement in OWNER_SCHEMA:
                 db.execute(statement)
             db.execute("INSERT INTO registry SELECT email, 0 FROM users")
-            db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+        if version < 3:
+            db.execute(SAVED_VIEWS_SCHEMA)
+        verify_saved_views_schema(db)
+        db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
 
 
 def password_hash(password, salt):
@@ -421,6 +425,33 @@ def create_app(path, origin, sheet_preview=None):
                                samesite="strict", path="/")
         return {"ok": True}
 
+    @app.get("/api/saved-views")
+    def get_saved_views(request: Request):
+        owner = session(request, bind=True)["email"]
+        with database(path) as db:
+            return saved_views_snapshot(db, owner)
+
+    @app.put("/api/saved-views")
+    async def put_saved_views(request: Request):
+        active = session(request, mutate=True)
+        data = await read_json(request, 16384)
+        if set(data) != {"revision", "views"}:
+            raise HTTPException(422, "Invalid saved views request")
+        revision, views = data["revision"], data["views"]
+        if type(revision) is not int or not 0 <= revision < 2**63 - 1:
+            raise HTTPException(422, "Invalid saved views revision")
+
+        def save_views():
+            validate_saved_views(views)
+            with database(path, write=True) as db:
+                current = db.execute("SELECT 1 FROM sessions WHERE token=? AND email=? AND expires>?",
+                                     (active["token"], active["email"], int(time.time()))).fetchone()
+                if current is None:
+                    raise HTTPException(401, "Sign in required")
+                return replace_saved_views(db, active["email"], revision, views)
+
+        return await run_in_threadpool(save_views)
+
     @app.get("/api/records")
     def get_records(request: Request):
         owner = session(request, bind=True)["email"]
@@ -506,7 +537,7 @@ def create_app(path, origin, sheet_preview=None):
         choice, items = data.get("choice"), data.get("items")
         preview = data.get("preview", True)
         revision = data.get("revision")
-        if choice not in CHOICES or type(preview) is not bool:
+        if not isinstance(choice, str) or choice not in CHOICES or type(preview) is not bool:
             raise HTTPException(422, "Invalid ETRN status")
         if type(revision) is not int or not 0 <= revision < 2**63 - 1:
             raise HTTPException(422, "Invalid revision")
@@ -583,10 +614,20 @@ def from_env():
     writer = None
     if os.getenv("WORKSPACE_SHEETS_ENABLED") == "true":
         from backend.sheets import SheetWriter
+        from backend.sheets_auth import token_provider
         config = json.loads(Path(os.environ["WORKSPACE_SHEETS_CONFIG"]).read_text(encoding="utf-8"))
-        token_file = Path(config["token_file"])
-        writer = SheetWriter(path, config["spreadsheet"], config["tab"], config["headers"],
-                             config["actors"], lambda: token_file.read_text(encoding="utf-8").strip())
+        token = token_provider(config)
+        mode = config.get("mode", "generic_af")
+        if mode == "payments_v1":
+            from backend.payments_sheet import PaymentsSheetWriter
+            writer = PaymentsSheetWriter(path, config["spreadsheet"], config["tab"],
+                                         config["sheet_id"], config["actors"], token,
+                                         coordinated_writes=config.get("coordinated_writes", False))
+        elif mode == "generic_af":
+            writer = SheetWriter(path, config["spreadsheet"], config["tab"], config["headers"],
+                                 config["actors"], token)
+        else:
+            raise ValueError("Unknown Google Sheets layout mode")
     return create_app(path, os.environ["APP_ORIGIN"], writer)
 
 

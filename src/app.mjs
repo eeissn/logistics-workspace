@@ -6,14 +6,14 @@ import { archived, blankOrder, etrnProgress, etrnStatus, margin, mergeImport, mo
 import { importPair, phones } from './import.mjs';
 import { addLedgerOrders, previewLedgerWorkbook } from './ledger.mjs';
 import { checkImportFile, readExcelArchive } from './import-files.mjs';
-import { auth, demo, localOrders, sessionChangeKey, store } from './storage.mjs';
+import { auth, demo, localOrders, sessionChangeKey, store, viewStore } from './storage.mjs';
 import { driverMessage } from './driver.mjs';
 import { isActionable, monthGroups, scopeOrders } from './order-history.mjs';
 import { demoOrders } from './demo.mjs';
 import { attachExcelLab } from './excel-lab.mjs';
 import { mountWorkspacePanel, mountComparison } from './workspace-panels.mjs';
 import { financialFlags, flagLabels, savedViewPresets } from './workspace-insights.mjs';
-import { readSavedViews, writeSavedViews } from './saved-views.mjs';
+import { readSavedViews, writeSavedViews, mergeLocalViews } from './saved-views.mjs';
 import { mountCommandPalette } from './command-palette.mjs';
 import { columnKeys, columnTitles, safeColumnOrder, defaultAccents, displayKey, layoutLabels, matchesTripView, pendingEtrn, readDisplayPreferences, readStatusColors, readThemeLayouts, routeText, selectOrders, statusColors, themeLabels, validAccent, violetPalettes } from './registry.mjs';
 
@@ -32,6 +32,12 @@ const importDialog = $('import-dialog');
 const etrnDialog = $('etrn-dialog');
 const etrnForm = $('etrn-form');
 let orders = [];
+let personalViews;
+let viewsLoading = false;
+let viewsSaving = false;
+let viewsMessage = '';
+let viewsRequest = 0;
+let viewsFailure;
 let draft;
 let previousNumber;
 let etrnOrderNumber;
@@ -136,7 +142,7 @@ function updateMonthMetrics() {
     part.append(node('small', caption), node('strong', value));
     el.append(part);
   }
-  el.title = 'Маржа по действующим правилам отчёта, без сорванных заявок. Количество включает все заявки месяца.';
+  el.title = 'Маржа включает компенсации по сорванным рейсам. Заявки без известной маржи не добавляют сумму. Количество включает все заявки месяца.';
   $('metrics-summary').textContent = `${label} · Маржа ${money(total)}`;
   $('metrics-disclosure').hidden = !signedIn && !demo;
   el.hidden = !signedIn && !demo;
@@ -164,10 +170,10 @@ function showSyncStatus() {
   $('sync-quick').disabled = pendingWrites > 0 || refreshing !== undefined;
   if (demo || !signedIn) return;
   const status = $('sync-status');
-  const problem = saveFailure ?? refreshFailure;
-  const state = pendingWrites || refreshing !== undefined ? 'busy'
+  const problem = saveFailure ?? viewsFailure ?? refreshFailure;
+  const state = pendingWrites || viewsSaving || refreshing !== undefined ? 'busy'
     : problem?.network || problem?.status >= 500 ? 'offline'
-    : saveFailure ? 'failed' : refreshFailure ? 'unavailable'
+    : saveFailure || viewsFailure ? 'failed' : refreshFailure ? 'unavailable'
     : serverConfirmed ? 'saved' : '';
   status.dataset.state = state;
   notifySyncProblem(state);
@@ -1517,21 +1523,98 @@ function applyPersonalView(entry) {
   if (mobileNav?.matches) $('workspace-menu').open = false;
   render();
 }
+function currentPersonalViews() {
+  return demo ? readSavedViews(ownerViewKey()) : personalViews?.views ?? [];
+}
 function renderCustomViews() {
   const box=$('custom-views');
   box.replaceChildren();
-  for(const item of readSavedViews(ownerViewKey())) {
+  const busy=viewsSaving||viewsLoading;
+  $('save-view').disabled=busy||(!demo&&!personalViews);
+  $('views-status').textContent=viewsSaving?'Сохранение вида…':
+    viewsLoading&&!personalViews?'Загрузка видов…':viewsMessage;
+  const local=readSavedViews(ownerViewKey());
+  $('import-local-views').hidden=demo||!signedIn||!local.length;
+  $('import-local-views').disabled=busy||!personalViews;
+  $('import-local-views').textContent=`Перенести локальные виды (${local.length})`;
+  for(const item of currentPersonalViews()) {
     const row=node('div',null,'custom-view-row');
     const open=action(item.name,()=>applyPersonalView(item));
-    const remove=action('×',()=>{
+    const remove=action('×',async()=>{
+      if(viewsSaving||viewsLoading)return;
       if(!window.confirm('Удалить сохранённый вид «'+item.name+'»?'))return;
-      const views=readSavedViews(ownerViewKey()).filter(entry=>entry.name!==item.name);
-      writeSavedViews(ownerViewKey(),views);renderCustomViews();
+      const views=currentPersonalViews().filter(entry=>entry.name!==item.name);
+      await savePersonalViews(views,'Сохранённый вид удалён.');
     });
+    remove.disabled=busy;
     remove.setAttribute('aria-label','Удалить вид '+item.name);
     row.append(open,remove);box.append(row);
   }
 }
+async function refreshPersonalViews() {
+  if(demo||!signedIn||viewsLoading||viewsSaving)return;
+  const generation=accountGeneration;
+  const request=++viewsRequest;
+  viewsLoading=true;renderCustomViews();
+  try {
+    const snapshot=await viewStore.list();
+    if(generation!==accountGeneration||request!==viewsRequest)return;
+    personalViews=snapshot;
+    viewsFailure=undefined;
+    viewsMessage='Виды синхронизированы.';
+  } catch(error) {
+    if(generation!==accountGeneration||request!==viewsRequest)return;
+    if(error.status===401||error.status===403) {
+      signInScreen('Сеанс закончился. Войдите снова.');return;
+    }
+    viewsMessage='Не удалось загрузить виды. Нажмите «Обновить», чтобы повторить.';
+  } finally {
+    if(generation===accountGeneration&&request===viewsRequest) {
+      viewsLoading=false;renderCustomViews();
+    }
+  }
+}
+async function savePersonalViews(views,success) {
+  if(viewsSaving||viewsLoading)return false;
+  if(demo) {
+    const saved=writeSavedViews(ownerViewKey(),views);
+    $('notice').textContent=saved?success:'Не удалось сохранить изменение вида в браузере. Проверьте доступ к хранилищу и повторите попытку.';
+    renderCustomViews();return saved;
+  }
+  if(!signedIn||!personalViews)return false;
+  const generation=accountGeneration;
+  viewsSaving=true;renderCustomViews();showSyncStatus();
+  try {
+    const snapshot=await viewStore.save(views,personalViews.revision);
+    if(generation!==accountGeneration)return false;
+    personalViews=snapshot;
+    viewsFailure=undefined;
+    viewsMessage='Виды синхронизированы.';
+    $('notice').textContent=success;
+    return true;
+  } catch(error) {
+    if(generation!==accountGeneration)return false;
+    if(error.status===401||error.status===403) {
+      signInScreen('Сеанс закончился. Войдите снова.');return false;
+    }
+    viewsFailure=error;
+    viewsMessage=error.status===409?
+      'Виды изменились на другом устройстве. Нажмите «Обновить» и повторите действие.':
+      'Сервер не подтвердил сохранение вида. Нажмите «Обновить» и проверьте результат перед повтором.';
+    $('notice').textContent=viewsMessage;
+    return false;
+  } finally {
+    if(generation===accountGeneration) {viewsSaving=false;renderCustomViews();showSyncStatus();}
+  }
+}
+$('import-local-views').addEventListener('click',async()=>{
+  if(!personalViews||viewsLoading||viewsSaving)return;
+  const result=mergeLocalViews(personalViews.views,readSavedViews(ownerViewKey()));
+  if(result.overflow) {$('notice').textContent='После переноса будет больше 25 видов. Удалите ненужные виды и повторите.';return;}
+  if(!result.added) {$('notice').textContent='Все локальные названия уже есть на сервере. Существующие виды не заменены.';return;}
+  if(!window.confirm(`Перенести видов: ${result.added}. Совпадающих названий: ${result.duplicates} (не заменяются). Локальная копия сохранится на устройстве.`))return;
+  await savePersonalViews(result.views,`Виды перенесены: ${result.added}. Локальная копия сохранена.`);
+});
 $('reset-workspace-view').addEventListener('click', () => {
   registryScope = 'active';
   view = 'all';
@@ -1544,12 +1627,13 @@ $('reset-workspace-view').addEventListener('click', () => {
   render();
   $('notice').textContent = 'Показаны актуальные заявки без дополнительных фильтров.';
 });
-$('save-view').addEventListener('click',()=>{
+$('save-view').addEventListener('click',async()=>{
+  if(viewsLoading||viewsSaving||(!demo&&!personalViews))return;
   const requested=window.prompt('Название вида (до 45 символов)');
   if(!requested)return;
   const name=requested.trim().slice(0,45);
   if(!name)return;
-  const items=readSavedViews(ownerViewKey());
+  const items=[...currentPersonalViews()];
   if(items.some(item=>item.name.toLowerCase()===name.toLowerCase())) {
     $('notice').textContent='Вид с таким названием уже существует.';return;
   }
@@ -1558,10 +1642,7 @@ $('save-view').addEventListener('click',()=>{
   }
   items.push({name,scope:registryScope,view,etrn:$('filter').value,
     financial:$('financial-filter').value,sort,ascending});
-  $('notice').textContent=writeSavedViews(ownerViewKey(),items)?
-    'Вид сохранён только для этого аккаунта и браузера.':
-    'Не удалось сохранить вид в браузере.';
-  renderCustomViews();
+  await savePersonalViews(items,demo?'Вид сохранён в этом браузере.':'Вид сохранён на сервере.');
 });
 for(const button of document.querySelectorAll('[data-preset]')) {
   button.addEventListener('click',()=>{
@@ -1673,6 +1754,7 @@ function showWorkspace(visible) {
 function signInScreen(message = '') {
   signedIn = false;
   accountGeneration++;
+  personalViews=undefined;viewsLoading=viewsSaving=false;viewsFailure=undefined;viewsMessage='';viewsRequest++;
   refreshing = undefined;
   pendingWrites = 0;
   saveFailure = refreshFailure = undefined;
@@ -1749,6 +1831,7 @@ async function refresh() {
     }
     refreshFailure = undefined;
     serverConfirmed = true;
+    await refreshPersonalViews();
   } catch (error) {
     if (generation !== accountGeneration) return;
     if (signedIn && (error.status === 401 || error.status === 403)) {
@@ -1766,6 +1849,7 @@ async function refresh() {
 async function showAccount(account) {
   accountGeneration++;
   signedIn = true;
+  personalViews=undefined;viewsLoading=viewsSaving=false;viewsFailure=undefined;viewsMessage='';viewsRequest++;
   $('account-email').textContent = account.email;
   $('notify-sync-errors').checked=syncNotificationsEnabled();
   renderCustomViews();

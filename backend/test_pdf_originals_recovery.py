@@ -3,6 +3,7 @@
 This is a recovery acceptance PROTOTYPE, not proof of delivery to a home PC.
 Uses disposable files and disposable OpenSSL key/certificate only.
 """
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 import hashlib
 from pathlib import Path
@@ -42,7 +43,7 @@ class OriginalsEncryptedRecoveryTests(unittest.TestCase):
             outbox, received = root / "outbox", root / "received"
             outbox.mkdir()
             originals = {}
-            with sqlite3.connect(live) as db:
+            with closing(sqlite3.connect(live)) as db, db:
                 db.execute("""CREATE TABLE originals(
                     owner TEXT NOT NULL, number TEXT NOT NULL,
                     role TEXT NOT NULL, digest TEXT NOT NULL, content BLOB NOT NULL,
@@ -80,7 +81,7 @@ class OriginalsEncryptedRecoveryTests(unittest.TestCase):
             ], check=True, capture_output=True)
             self.assertEqual(hashlib.sha256(snapshot.read_bytes()).digest(),
                              hashlib.sha256(restored.read_bytes()).digest())
-            with sqlite3.connect(restored) as db:
+            with closing(sqlite3.connect(restored)) as db:
                 self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0], "ok")
                 rows = db.execute(
                     "SELECT owner,number,role,digest,content FROM originals"

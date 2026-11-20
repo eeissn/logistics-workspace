@@ -2,12 +2,17 @@ name: Verify Logistics Workspace
 
 on:
   push:
-    branches: ['feature/vps-one-command-release-health-20261119', 'fix/unloaded-manual-etrn-archives-20261119', 'test/pdf-originals-backup-feasibility-20261118', 'fix/etrn-trip-status-save-race-20261118', 'chore/security-audit-vite-picomatch-20261118', 'feature/p2-self-service-password-change-20261118', 'feature/p0-backup-outbox-observability-20261118', 'fix/etrn-agreement-timeline-p1-20261118', 'fix/p1-etrn-manual-close-stays-active-20261118', 'feature/p0-backup-freshness-current-release-20261118', 'fix/p0-failed-trip-margin-in-financial-reports-20261118', 'feature/manual-margin-in-order-editor-20261118', 'fix/manual-etrn-close-active-queue-20261117', 'fix/active-etrn-desktop-focus-20261117', 'fix/release-local-tls-dns-bypass', 'feature/apple-attio-polish-20261117', 'fix/post-release-ux-etrn-navigation', 'release/**', feature/two-user-sync, 'feature/two-user-sync-*', feature/ui-polish-agent-next, codex/release-candidate, codex/sputnik-workspace, codex/sputnik-mobile-review, codex/active-queue-monthly-history, codex/bulk-etrn-safe, feature/visible-rates-margin, feature/release-pdf-worker-health, feature/backup-delivery-verified-receipts, feature/schedule-year-boundary, feature/backup-acceptance-changelog, feature/backup-restored-account-isolation, feature/iso-schedule-today-filter, feature/large-year-server-regression, feature/large-year-browser-smoke, feature/chat-audit-roadmap-reconcile, feature/p1-excel-lab, feature/p1-workspace-design-system, feature/p1-feedback-etrn-ux, feature/p1-ten-ideas-workspace]
+    branches: ['codex/workspace-followup-20261119', 'feature/vps-one-command-release-health-20261119', 'fix/unloaded-manual-etrn-archives-20261119', 'test/pdf-originals-backup-feasibility-20261118', 'fix/etrn-trip-status-save-race-20261118', 'chore/security-audit-vite-picomatch-20261118', 'feature/p2-self-service-password-change-20261118', 'feature/p0-backup-outbox-observability-20261118', 'fix/etrn-agreement-timeline-p1-20261118', 'fix/p1-etrn-manual-close-stays-active-20261118', 'feature/p0-backup-freshness-current-release-20261118', 'fix/p0-failed-trip-margin-in-financial-reports-20261118', 'feature/manual-margin-in-order-editor-20261118', 'fix/manual-etrn-close-active-queue-20261117', 'fix/active-etrn-desktop-focus-20261117', 'fix/release-local-tls-dns-bypass', 'feature/apple-attio-polish-20261117', 'fix/post-release-ux-etrn-navigation', 'release/**', feature/two-user-sync, 'feature/two-user-sync-*', feature/ui-polish-agent-next, codex/release-candidate, codex/sputnik-workspace, codex/sputnik-mobile-review, codex/active-queue-monthly-history, codex/bulk-etrn-safe, feature/visible-rates-margin, feature/release-pdf-worker-health, feature/backup-delivery-verified-receipts, feature/schedule-year-boundary, feature/backup-acceptance-changelog, feature/backup-restored-account-isolation, feature/iso-schedule-today-filter, feature/large-year-server-regression, feature/large-year-browser-smoke, feature/chat-audit-roadmap-reconcile, feature/p1-excel-lab, feature/p1-workspace-design-system, feature/p1-feedback-etrn-ux, feature/p1-ten-ideas-workspace]
   pull_request:
     branches: [feature/two-user-sync]
 
 permissions:
   contents: read
+
+# Superseded commits on the same event/ref should not consume browser runners.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
@@ -17,6 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@v7
         with:
@@ -27,10 +33,19 @@ jobs:
       - name: Test API and SQLite
         run: |
           python -m pip install -r backend/requirements-test.txt
-          python -m unittest backend.test_app backend.test_bulk_etrn backend.test_password_change backend.test_pdf_originals_feasibility backend.test_pdf_originals_recovery -v
+          python -m unittest backend.test_app backend.test_bulk_etrn backend.test_password_change backend.test_saved_views backend.test_schema_compatibility backend.test_pdf_originals_feasibility backend.test_pdf_originals_recovery -v
+          python -m backend.rehearse_previous_release
           python -m backend.pdf_originals_feasibility --orders 515 --pdf-kib 64
-          python -m unittest backend.test_sheets -v
-          python -m unittest deploy.test_backup_delivery deploy.test_backup_freshness deploy.test_backup_outbox -v
+          python -m unittest backend.test_sheets backend.test_payments_sheet backend.test_sheets_auth -v
+          python -m unittest deploy.test_backup_delivery deploy.test_backup_freshness deploy.test_backup_outbox deploy.test_audit_backup deploy.test_check_sqlite_users -v
+      - name: Check release and rollback source permissions
+        run: bash test/release-file-modes.sh
+      - name: Test Nginx template on isolated loopback fixture
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y nginx-light
+          sudo systemctl stop nginx || true
+          bash test/nginx-template.sh
       - name: Validate release check
         run: |
           bash -n deploy/check-release.sh
@@ -56,6 +71,7 @@ jobs:
           python -m playwright install --with-deps chromium webkit
           mkdir -p "$WORKSPACE_SMOKE_SCREENSHOTS"
           python -m backend.browser_smoke
+          python -m backend.restore_browser_smoke
       - name: Preserve visual QA screenshots
         if: always()
         uses: actions/upload-artifact@v4

@@ -165,6 +165,30 @@ export const auth = {
   },
 };
 
+async function savedViewsRequest(method, data) {
+  if (!account || demo) throw new Error('Сеанс завершён.');
+  const csrf = account.csrf;
+  return inSession(async () => {
+    try {
+      return await request('saved-views', method, data, csrf);
+    } catch (error) {
+      if (error.status === 409) {
+        error.message = 'Сохранённые виды изменились на другом устройстве. Обновите список видов и повторите действие.';
+      }
+      throw error;
+    }
+  }, result => result);
+}
+
+export const viewStore = {
+  list() {
+    return savedViewsRequest('GET');
+  },
+  save(views, revision) {
+    return savedViewsRequest('PUT', {revision, views});
+  },
+};
+
 export const store = demo ? offlineStore : {
   async list() {
     if (!account) throw new Error('Сеанс завершён.');

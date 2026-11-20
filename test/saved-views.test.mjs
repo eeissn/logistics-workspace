@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseSavedViews,userViewsKey,readSavedViews,writeSavedViews} from '../src/saved-views.mjs';
+import {parseSavedViews,userViewsKey,readSavedViews,writeSavedViews,mergeLocalViews} from '../src/saved-views.mjs';
 
 const item={name:'Мой реестр',scope:'history',view:'all',etrn:'pending',
   financial:'low',sort:'delivery',ascending:false};
@@ -30,4 +30,18 @@ test('saved views are private to each browser account namespace',t=>{
   assert.deepEqual(readSavedViews('second@example.test'),[]);
   assert.ok(!JSON.stringify(values.get(userViewsKey('first@example.test')))
     .includes('ООО Пример'));
+});
+
+test('explicit local view migration preserves server values and reports capacity without truncation',()=>{
+  const server={...item,name:'Shared',ascending:true};
+  const local={...item,name:'SHARED',ascending:false};
+  const extra={...item,name:'Local only'};
+  const result=mergeLocalViews([server],[local,extra]);
+  assert.deepEqual(result,{views:[server,extra],added:1,duplicates:1,overflow:false});
+  assert.equal(server.ascending,true);
+  const full=Array.from({length:25},(_,index)=>({...item,name:`View ${index}`}));
+  const overflow=mergeLocalViews(full,[extra]);
+  assert.equal(overflow.overflow,true);
+  assert.equal(overflow.views.length,26); // UI must reject instead of silently dropping data.
+  assert.deepEqual(mergeLocalViews(null,[extra]).views,[extra]);
 });

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { auth, localOrders, store } from '../src/storage.mjs';
+import { auth, localOrders, store, viewStore } from '../src/storage.mjs';
 
 test('two tab instances serialize cookie changes and publish opaque notifications', async t => {
   const tabA = await import('../src/storage.mjs?tab=a');
@@ -53,6 +53,95 @@ test('two tab instances serialize cookie changes and publish opaque notification
 });
 
 const staleSession = error => error.message === 'Сеанс завершён.' && error.status === undefined;
+
+test('saved views require a session and await server confirmation with the supplied revision', async t => {
+  auth.clear();
+  const requests = [];
+  const late = Promise.withResolvers();
+  t.mock.method(globalThis, 'fetch', (url, options) => {
+    if (url === '/api/login') return Response.json({email:'a@example.test', csrf:'a-token'});
+    assert.equal(url, '/api/saved-views');
+    assert.equal(options.credentials, 'same-origin');
+    assert.equal(options.cache, 'no-store');
+    assert.equal(options.headers['X-CSRF-Token'], 'a-token');
+    requests.push(options);
+    if (options.method === 'GET') {
+      assert.equal(options.body, undefined);
+      return Response.json({revision:7, views:[{name:'Server view'}]});
+    }
+    assert.equal(options.method, 'PUT');
+    assert.equal(options.headers['Content-Type'], 'application/json');
+    return late.promise;
+  });
+  t.after(() => auth.clear());
+  await assert.rejects(viewStore.list(), staleSession);
+  await assert.rejects(viewStore.save([], 0), staleSession);
+  assert.equal(requests.length, 0);
+  await auth.login('a@example.test', 'synthetic');
+  assert.deepEqual(await viewStore.list(), {revision:7, views:[{name:'Server view'}]});
+  let confirmed = false;
+  const pending = viewStore.save([{name:'Requested view'}], 7).then(result => {
+    confirmed = true;
+    return result;
+  });
+  assert.deepEqual(JSON.parse(requests.at(-1).body), {revision:7, views:[{name:'Requested view'}]});
+  await new Promise(setImmediate);
+  assert.equal(confirmed, false);
+  late.resolve(Response.json({revision:8, views:[{name:'Confirmed view'}]}));
+  assert.deepEqual(await pending, {revision:8, views:[{name:'Confirmed view'}]});
+});
+
+test('saved-view conflicts use their own message and network failures remain failures', async t => {
+  let offline = false;
+  t.mock.method(globalThis, 'fetch', (url) => {
+    if (url === '/api/login') return Response.json({email:'a@example.test', csrf:'a-token'});
+    if (offline) throw new TypeError('offline');
+    return Response.json({}, {status:409});
+  });
+  t.after(() => auth.clear());
+  await auth.login('a@example.test', 'synthetic');
+  await assert.rejects(viewStore.save([], 2), error =>
+    error.status === 409 && /Сохранённые виды изменились/.test(error.message));
+  await assert.rejects(store.list(), error =>
+    error.status === 409 && /Заявки изменились/.test(error.message));
+  offline = true;
+  await assert.rejects(viewStore.list(), {network:true});
+  await assert.rejects(viewStore.save([], 2), {network:true});
+});
+
+for (const method of ['GET', 'PUT']) {
+  for (const status of [200, 401, 409]) {
+    test(`saved-view ${method} (${status}) discards a late result after clear and new login`, async t => {
+      const late = Promise.withResolvers();
+      const requests = [];
+      t.mock.method(globalThis, 'fetch', (url, options) => {
+        if (url === '/api/login') {
+          const {email} = JSON.parse(options.body);
+          return Response.json({email, csrf:email});
+        }
+        assert.equal(url, '/api/saved-views');
+        const token = options.headers['X-CSRF-Token'];
+        requests.push({method:options.method, token});
+        if (token === 'a@example.test') return late.promise;
+        return Response.json({revision:0, views:[{name:'Account B view'}]});
+      });
+      t.after(() => auth.clear());
+      await auth.login('a@example.test', 'synthetic');
+      const pending = method === 'GET' ? viewStore.list() : viewStore.save([{name:'Account A view'}], 0);
+      const rejected = assert.rejects(pending, staleSession);
+      auth.clear();
+      await auth.login('b@example.test', 'synthetic');
+      const ownViews = await viewStore.list();
+      late.resolve(Response.json({revision:99, views:[{name:'Account A view'}]}, {status}));
+      await rejected;
+      assert.deepEqual(ownViews, {revision:0, views:[{name:'Account B view'}]});
+      assert.deepEqual(await viewStore.list(), ownViews);
+      assert.equal(requests[0].token, 'a@example.test');
+      assert.equal(requests[0].method, method);
+      assert.ok(requests.slice(1).every(request => request.token === 'b@example.test'));
+    });
+  }
+}
 
 test('cloud storage uses the revision of the supplied snapshot and refuses offline writes', async t => {
   let revision = 1;

@@ -91,10 +91,10 @@ def updates_history(page, mobile):
     page.locator("#updates-open").click()
     dialog = page.locator("#updates-dialog")
     expect(dialog).to_be_visible()
-    expect(dialog.locator(".updates-group")).to_have_count(11)
-    expect(dialog.locator(".updates-entry h4")).to_have_count(71)
-    expect(dialog.locator(".updates-entry p")).to_have_count(71)
-    expect(dialog.locator(".updates-group").first).to_contain_text("Архивирование завершённых перевозок")
+    expect(dialog.locator(".updates-group")).to_have_count(12)
+    expect(dialog.locator(".updates-entry h4")).to_have_count(73)
+    expect(dialog.locator(".updates-entry p")).to_have_count(73)
+    expect(dialog.locator(".updates-group").first).to_contain_text("Личные виды на всех устройствах")
     expect(dialog).to_contain_text("19 ноября 2026")
     expect(dialog).to_contain_text("16 сентября 2026")
     expect(dialog).to_contain_text("16 ноября 2026")
@@ -512,7 +512,7 @@ def registry_views(page, number, order_a, mobile):
     expect(page.locator(".registry-tabs button")).to_have_count(2)
     set_trip_view(page, "not-unloaded")
     # Check the active-only view across themes
-    for appearance in ("sputnik", "violet", "sand"):
+    for appearance in ("sputnik", "violet", "graphite", "sand"):
         theme(appearance)
         filters = page.get_by_role("button", name="Фильтры", exact=True)
         filters.click()
@@ -922,7 +922,7 @@ def smoke(browser_type, origin, chromium, number, report_total, device=None):
         expect(peer.locator("#table")).not_to_contain_text(order_a)
         expect(a.locator("#workspace")).to_be_hidden()
         expect(b.locator("#table")).to_contain_text(order_b)
-    print(f"{browser_type.name}: 3 themes × 4 registry views, pickup/delivery sorting, PDF, Excel, ETRN, archive, margin and account isolation passed", flush=True)
+    print(f"{browser_type.name}: 4 themes × 4 registry views, pickup/delivery sorting, PDF, Excel, ETRN, archive, margin and account isolation passed", flush=True)
 
 
 
@@ -1136,7 +1136,100 @@ def etrn_trip_save_race(chromium, origin):
     print("chromium: ETRN/trip save race and unlocked retry passed", flush=True)
 
 
-def main():
+def saved_views_sync_browser(chromium, origin, device=None):
+    """Server-confirmed views synchronize across devices, with explicit local import."""
+    with closing(chromium.launch()) as browser:
+        a = browser.new_context(ignore_https_errors=True, **(device or {}))
+        peer = browser.new_context(ignore_https_errors=True, **(device or {}))
+        other = browser.new_context(ignore_https_errors=True, **(device or {}))
+        page, second, stranger = a.new_page(), peer.new_page(), other.new_page()
+        name = 'Synthetic synced view' + (' mobile' if device else '')
+        for tab, user in ((page, 'first'), (second, 'first'), (stranger, 'second')):
+            tab.goto(origin)
+            sign_in(tab, user)
+            if device:
+                tab.locator('#workspace-menu > summary').click()
+            tab.locator('.saved-views-group > summary').click()
+            expect(tab.locator('#save-view')).to_be_enabled()
+        page.once('dialog', lambda dialog: dialog.accept(name))
+        page.locator('#save-view').click()
+        expect(page.locator('#notice')).to_have_text('Вид сохранён на сервере.')
+        view = page.locator('#custom-views .custom-view-row').filter(has_text=name)
+        expect(view).to_have_count(1)
+        expect(page.locator('#month-metrics')).to_have_attribute('title', re.compile('компенсации'))
+        second.locator('#sync-refresh').click()
+        expect(second.locator('#custom-views')).to_contain_text(name)
+        stranger.locator('#sync-refresh').click()
+        expect(stranger.locator('#custom-views')).not_to_contain_text(name)
+        # Failed DELETE-as-PUT must retain both the UI and server copy.
+        page.route('**/api/saved-views', lambda route: route.fulfill(
+            status=503, content_type='application/json', body='{}')
+            if route.request.method == 'PUT' else route.continue_())
+        page.once('dialog', lambda dialog: dialog.accept())
+        view.get_by_role('button', name='Удалить вид '+name, exact=True).click()
+        expect(page.locator('#notice')).to_contain_text('Сервер не подтвердил')
+        expect(view).to_have_count(1)
+        expect(page.locator('#sync-status')).not_to_have_text('Сохранено')
+        page.unroute('**/api/saved-views')
+        page.locator('#sync-refresh').click()
+        expect(page.locator('#views-status')).to_have_text('Виды синхронизированы.')
+        # Another device changes the same collection; a stale revision cannot delete it.
+        second.once('dialog', lambda dialog: dialog.accept(name+' peer'))
+        second.locator('#save-view').click()
+        expect(second.locator('#notice')).to_have_text('Вид сохранён на сервере.')
+        page.once('dialog', lambda dialog: dialog.accept())
+        view.get_by_role('button', name='Удалить вид '+name, exact=True).click()
+        expect(page.locator('#notice')).to_contain_text('изменились на другом устройстве')
+        page.locator('#sync-refresh').click()
+        expect(page.locator('#custom-views')).to_contain_text(name+' peer')
+        page.once('dialog', lambda dialog: dialog.accept())
+        view = page.locator('#custom-views .custom-view-row').filter(
+            has=page.get_by_role('button', name=name, exact=True))
+        view.get_by_role('button', name='Удалить вид '+name, exact=True).click()
+        expect(page.locator('#notice')).to_have_text('Сохранённый вид удалён.')
+        expect(view).to_have_count(0)
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
+        for entry in page.locator('#custom-views .custom-view-row').all():
+            buttons=entry.locator('button')
+            left,right=buttons.nth(0).bounding_box(),buttons.nth(1).bounding_box()
+            assert left and right and right['x'] >= left['x']+left['width']-1
+        # Legacy local views require confirmation and never overwrite a server name.
+        # Use the same public key rule without any business data in browser preferences.
+        page.evaluate("""name => {
+            const prefix='logistics-workspace:display:v1:custom-views:';
+            const key=prefix+encodeURIComponent('first@example.test');
+            localStorage.setItem(key,JSON.stringify([{name,scope:'history',view:'all',etrn:'',financial:'',sort:'number',ascending:true}]));
+        }""", name+' local')
+        page.reload()
+        expect(page.locator('#account-email')).to_have_text('first@example.test')
+        if device:
+            page.locator('#workspace-menu > summary').click()
+        page.locator('.saved-views-group > summary').click()
+        expect(page.locator('#import-local-views')).to_be_visible()
+        page.once('dialog', lambda dialog: dialog.accept())
+        page.locator('#import-local-views').click()
+        expect(page.locator('#notice')).to_contain_text('Виды перенесены: 1')
+        expect(page.locator('#custom-views')).to_contain_text(name+' local')
+        second.locator('#sync-refresh').click()
+        expect(second.locator('#custom-views')).to_contain_text(name+' local')
+        screenshots = os.environ.get('WORKSPACE_SMOKE_SCREENSHOTS')
+        if screenshots:
+            folder = Path(screenshots); folder.mkdir(parents=True, exist_ok=True)
+            page.locator('#custom-views').scroll_into_view_if_needed()
+            page.screenshot(path=folder / ('saved-views-mobile.png' if device else 'saved-views-desktop.png'))
+        page.locator('#sign-out').click()
+        expect(page.locator('#custom-views .custom-view-row')).to_have_count(0)
+        sign_in(page, 'second')
+        if device:
+            page.locator('#workspace-menu > summary').click()
+        page.locator('.saved-views-group > summary').click()
+        expect(page.locator('#custom-views')).not_to_contain_text(name)
+        expect(page.locator('#import-local-views')).to_be_hidden()
+        a.close(); peer.close(); other.close()
+    print(f'saved views: cross-device, isolation, failure, conflict and migration on {"mobile" if device else "desktop"} passed', flush=True)
+
+
+def main(focus=None):
     with TemporaryDirectory() as directory:
         root = Path(directory)
         subprocess.run(
@@ -1163,12 +1256,20 @@ def main():
                         raise RuntimeError("The disposable HTTPS server did not start.")
                     sleep(0.2)
             with sync_playwright() as playwright:
+                if focus == 'saved-views':
+                    saved_views_sync_browser(playwright.chromium, origin)
+                    saved_views_sync_browser(playwright.webkit, origin,
+                        {**playwright.devices["iPhone 13"], "viewport": {"width": 393, "height": 852}})
+                    return
                 smoke(playwright.chromium, origin, playwright.chromium, 41001, r"22\s*000")
                 smoke(playwright.webkit, origin, playwright.chromium, 41002, r"44\s*000",
                       {**playwright.devices["iPhone 13"], "viewport": {"width": 393, "height": 852}})
                 bulk_etrn_numbers_ui(playwright.chromium, origin)
                 large_year_browser(playwright.chromium, origin)
                 etrn_trip_save_race(playwright.chromium, origin)
+                saved_views_sync_browser(playwright.chromium, origin)
+                saved_views_sync_browser(playwright.webkit, origin,
+                    {**playwright.devices["iPhone 13"], "viewport": {"width": 393, "height": 852}})
                 password_change_browser(playwright.chromium, origin, "first")
                 password_change_browser(playwright.webkit, origin, "second", True,
                                        {**playwright.devices["iPhone 13"], "viewport": {"width": 393, "height": 852}})
@@ -1181,4 +1282,4 @@ if __name__ == "__main__":
     if len(sys.argv) == 3:
         serve(Path(sys.argv[1]), int(sys.argv[2]))
     else:
-        main()
+        main("saved-views" if "--saved-views" in sys.argv else None)

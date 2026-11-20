@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from backend.app import add_user, create_app, database, password_hash
+from backend.app import SCHEMA_VERSION, add_user, create_app, database, password_hash
 
 ORIGIN = "https://workspace.test"
 FIRST = "first@example.test"
@@ -83,7 +83,7 @@ class PasswordRotationTests(unittest.TestCase):
             new_hash = db.execute("SELECT password FROM users WHERE email=?", (FIRST,)).fetchone()[0]
             self.assertNotEqual(new_hash, old_hash)
             self.assertEqual(db.execute("SELECT COUNT(*) FROM sessions WHERE email=?", (SECOND,)).fetchone()[0], 1)
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 2)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
 
     def test_csrf_origin_payload_and_password_policy(self):
         self.assertEqual(self.change(self.first, {}).status_code, 401)

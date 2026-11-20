@@ -1,5 +1,10 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
+from fastapi.testclient import TestClient
+
+from backend.app import add_user, create_app
 from backend.bulk_etrn import apply_bulk_etrn
 
 
@@ -68,8 +73,34 @@ class BulkEtrnTest(unittest.TestCase):
         self.assertTrue(result["etrn"]["manualComplete"])
 
     def test_invalid_status(self):
-        with self.assertRaises(ValueError):
-            apply_bulk_etrn(self.order, "fake")
+        for choice in ("fake", [], {}, None, 1, True):
+            with self.subTest(choice=choice), self.assertRaises(ValueError):
+                apply_bulk_etrn(self.order, choice)
+
+
+class BulkEtrnPayloadTests(unittest.TestCase):
+    def test_invalid_choice_type_returns_validation_error_without_changing_registry(self):
+        origin = "https://workspace.test"
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / "workspace.sqlite3"
+            app = create_app(path, origin)
+            add_user(path, "synthetic@example.test", "synthetic-password-unique")
+            with TestClient(app, base_url=origin) as client:
+                login = client.post("/api/login", headers={"Origin": origin}, json={
+                    "email": "synthetic@example.test", "password": "synthetic-password-unique",
+                })
+                self.assertEqual(login.status_code, 200)
+                headers = {"Origin": origin, "X-CSRF-Token": login.json()["csrf"]}
+                before = client.get("/api/records", headers=headers).json()
+                for choice in ([], {}, None, 1, True):
+                    for preview in (True, False):
+                        with self.subTest(choice=choice, preview=preview):
+                            response = client.post("/api/etrn/bulk", headers=headers, json={
+                                "choice": choice, "preview": preview, "revision": before["revision"],
+                                "items": [{"number": "SYNTHETIC-1", "updatedAt": "synthetic-stamp"}],
+                            })
+                            self.assertEqual(response.status_code, 422)
+                            self.assertEqual(client.get("/api/records", headers=headers).json(), before)
 
 
 if __name__ == "__main__":

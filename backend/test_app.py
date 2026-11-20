@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from backend.app import MAX_BODY, SCHEMA, add_user, backup, create_app, database, initialize
+from backend.app import MAX_BODY, SCHEMA, SCHEMA_VERSION, add_user, backup, create_app, database, initialize
 
 ORIGIN = "https://workspace.test"
 PASSWORD = "test-password-unique"
@@ -206,7 +206,7 @@ class WorkspaceTests(unittest.TestCase):
             app = create_app(path, ORIGIN)
             initialize(path)
             with database(path) as db:
-                self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 2)
+                self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
                 self.assertEqual(tuple(db.execute("SELECT * FROM legacy_shared_orders").fetchone()), legacy)
                 self.assertEqual(tuple(db.execute("SELECT * FROM legacy_shared_registry").fetchone()), (1, 7))
                 self.assertEqual(db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0], 0)
@@ -416,7 +416,7 @@ class WorkspaceTests(unittest.TestCase):
             backup(self.path, path)
             initialize(path)
             with database(path) as db:
-                self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 2)
+                self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
                 self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0], "ok")
                 self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
                 self.assertEqual(db.execute("SELECT COUNT(*) FROM orders").fetchone()[0], 2)

@@ -11,7 +11,7 @@ CHOICES = {
 
 
 def apply_bulk_etrn(order, choice, number_override=None):
-    if choice not in CHOICES:
+    if not isinstance(choice, str) or choice not in CHOICES:
         raise ValueError("Неизвестный статус ЭТРН.")
     updated = deepcopy(order)
     etrn = updated.get("etrn")

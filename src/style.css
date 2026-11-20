@@ -186,7 +186,10 @@ dialog details[open] summary { margin-bottom: .55rem; }
   .workspace-menu > summary { display: grid; place-items: center; width: 44px; height: 44px; font-size: 1.3rem; list-style: none; }
   .workspace-menu > summary::-webkit-details-marker { display: none; }
   .workspace-menu-body {
-    position: absolute; z-index: 5; right: 0; top: 100%; width: min(16rem, 90vw); height: auto;
+    position: fixed; z-index: 5; right: max(.65rem, env(safe-area-inset-right));
+    top: calc(54px + env(safe-area-inset-top)); width: min(16rem, 90vw); height: auto;
+    max-height: calc(100dvh - 134px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow-y: auto; overscroll-behavior: contain;
     padding: .45rem; border: 1px solid var(--line); border-radius: var(--panel-radius);
     background: var(--paper); box-shadow: 0 8px 22px #16172b22;
   }
@@ -352,7 +355,7 @@ dialog details[open] summary { margin-bottom: .55rem; }
   .registry-tools { width: 100%; }
   .registry-tools label { min-width: 0; }
   .registry-tools select { min-width: 0; }
-  .view-picker, .sort-tools label { font-size: 0; }
+  .view-picker .control-caption, .sort-tools .control-caption { display: none; }
   .registry-tools select { font-size: .83rem; }
   .view-picker > span { display: none; }
   .workspace-nav button, .trip-status, .etrn-link, .row-contacts, .driver-link, .order-link { min-height: 44px; }
@@ -2184,6 +2187,11 @@ dialog :is(input,select,textarea) { scroll-margin-block: 5rem; }
   border-radius: 5px; padding: .12rem .2rem; font-size: .66rem;
 }
 .workspace-nav .saved-views-group { margin-top: .3rem; border: 0; padding: 0; }
+.custom-view-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: start; gap: .15rem; }
+.workspace-nav .custom-view-row > button:last-child { text-align: center; padding-inline: 0; }
+#views-status { margin: .4rem .6rem; font-size: .76rem; line-height: 1.4; }
+#views-status:empty { display: none; }
+
 .workspace-nav .saved-views-group > summary {
   padding: .42rem .6rem; color: var(--muted); font-size: .78rem;
   font-weight: 650; border-radius: 8px;

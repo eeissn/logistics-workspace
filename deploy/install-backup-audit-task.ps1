@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $taskName = 'Logistics Workspace Backup Audit'
 $account = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-$script = Join-Path $PSScriptRoot 'check-backup-freshness.ps1'
+$script = Join-Path $PSScriptRoot 'audit_backup.py'
 foreach ($path in @($Python, $script, $Destination)) {
     if ($path -notmatch '^[A-Za-z]:\\' -or $path -match '["\r\n]' -or $path.EndsWith([IO.Path]::DirectorySeparatorChar)) {
         throw 'Use absolute local paths without a trailing backslash.'
@@ -20,10 +20,14 @@ if (!(Test-Path -LiteralPath $Destination -PathType Container)) {
     throw "Destination is not a directory: $Destination"
 }
 
-$action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument (
-    '-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -File "{0}" -Python "{1}" -Destination "{2}" -MaxAgeHours {3}' -f
-    $script, $Python, $Destination, $MaxAgeHours
-)
+# Launch Python directly without a console; no PowerShell policy changes.
+$taskPython = Join-Path (Split-Path -Parent $Python) 'pythonw.exe'
+if (!(Test-Path -LiteralPath $taskPython -PathType Leaf)) {
+    throw 'Use a Windows Python installation with pythonw.exe beside python.exe.'
+}
+$action = New-ScheduledTaskAction -Execute $taskPython -Argument (
+    '-m deploy.audit_backup "{0}" --max-age-hours {1}' -f $Destination, $MaxAgeHours
+) -WorkingDirectory (Split-Path -Parent $PSScriptRoot)
 # Half an hour after the existing delivery triggers (08:00, 14:00, 20:00).
 # StartWhenAvailable covers missed runs after the PC resumes.
 $triggers = @(
