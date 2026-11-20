@@ -37,7 +37,7 @@ jobs:
           python -m backend.rehearse_previous_release
           python -m backend.pdf_originals_feasibility --orders 515 --pdf-kib 64
           python -m unittest backend.test_sheets backend.test_payments_sheet backend.test_sheets_auth -v
-          python -m unittest deploy.test_backup_delivery deploy.test_backup_freshness deploy.test_backup_outbox deploy.test_audit_backup -v
+          python -m unittest deploy.test_backup_delivery deploy.test_backup_freshness deploy.test_backup_outbox deploy.test_audit_backup deploy.test_check_sqlite_users -v
       - name: Test Nginx template on isolated loopback fixture
         run: |
           sudo apt-get update -qq
