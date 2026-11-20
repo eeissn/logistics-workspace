@@ -6,7 +6,7 @@ const titles = new Map(tripStatuses);
 const xml = value => String(value).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]/g, '')
   .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 const text = value => `<c t="inlineStr"><is><t xml:space="preserve">${xml(value ?? '')}</t></is></c>`;
-const number = value => Number.isFinite(value) ? `<c><v>${value}</v></c>` : '<c/>';
+const number = value => Number.isFinite(value) ? `<c s="2"><v>${value}</v></c>` : '<c/>';
 const date = value => {
   const time = /^\d{4}-\d{2}-\d{2}$/.test(value ?? '') ? Date.parse(value + 'T00:00:00Z') : NaN;
   if (!Number.isFinite(time) || new Date(time).toISOString().slice(0,10) !== value || value < '1900-01-01') return '<c/>';
@@ -15,9 +15,12 @@ const date = value => {
 
 export function exportLedger(orders, {parties, money}) {
   const headings = ['Номер','Дата','Маршрут','Статус','ЭТРН'];
+  const widths = [16,13,44,19,24];
   if (parties) headings.push('Заказчик','Перевозчик');
+  if (parties) widths.push(32,32);
   if (money) headings.push('Ставка заказчика','Ставка перевозчика','Маржа');
-  const rows = [headings.map(text), ...orders.map(order => {
+  if (money) widths.push(23,23,20);
+  const rows = [headings.map(value=>text(value).replace('<c ', '<c s="3" ')), ...orders.map(order => {
     const cells = [text(order.number), date(order.date), text(routeText(order)),
       text(titles.get(tripStatus(order))), text(etrnProgress(order.etrn))];
     if (parties) cells.push(text(order.customer), text(order.carrier));
@@ -32,9 +35,9 @@ export function exportLedger(orders, {parties, money}) {
     '_rels/.rels': `<Relationships xmlns="${pkg}/relationships"><Relationship Id="rId1" Type="${rel}/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
     'xl/workbook.xml': `<workbook xmlns="${main}" xmlns:r="${rel}"><sheets><sheet name="Заявки" sheetId="1" r:id="rId1"/></sheets></workbook>`,
     'xl/_rels/workbook.xml.rels': `<Relationships xmlns="${pkg}/relationships"><Relationship Id="rId1" Type="${rel}/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="${rel}/styles" Target="styles.xml"/></Relationships>`,
-    'xl/styles.xml': `<styleSheet xmlns="${main}"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="14" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`,
-    'xl/worksheets/sheet1.xml': `<worksheet xmlns="${main}"><sheetData>${rows.map((cells, i) =>
-      `<row r="${i+1}">${cells.map((cell, col) => cell.replace('<c', `<c r="${String.fromCharCode(65+col)}${i+1}"`)).join('')}</row>`).join('')}</sheetData></worksheet>`,
+    'xl/styles.xml': `<styleSheet xmlns="${main}"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="14" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`,
+    'xl/worksheets/sheet1.xml': `<worksheet xmlns="${main}"><cols>${widths.map((width,i)=>`<col min="${i+1}" max="${i+1}" width="${width}" customWidth="1"/>`).join('')}</cols><sheetData>${rows.map((cells, i) =>
+      `<row r="${i+1}"${i===0?' ht="30" customHeight="1"':''}>${cells.map((cell, col) => cell.replace('<c', `<c r="${String.fromCharCode(65+col)}${i+1}"`)).join('')}</row>`).join('')}</sheetData></worksheet>`,
   };
   return zipSync(Object.fromEntries(Object.entries(parts).map(([name, content]) => [name, strToU8(content)])));
 }
