@@ -2,7 +2,7 @@ import './style.css';
 import { updates } from './updates.mjs';
 import { mountCalculator } from './calculator.mjs';
 import { parseSheetText } from './sheet-preview.mjs';
-import { archived, blankOrder, etrnProgress, etrnStatus, margin, mergeImport, monthReport, monthSnapshot, orderMargin, tripStatus, tripStatuses, upsert } from './domain.mjs';
+import { archived, blankOrder, etrnProgress, etrnStatus, margin, mergeImport, monthReport, monthSnapshot, orderMargin, tripStatus, tripStatuses, upsert, withoutFinancialResult } from './domain.mjs';
 import { importPair, phones } from './import.mjs';
 import { addLedgerOrders, previewLedgerWorkbook } from './ledger.mjs';
 import { checkImportFile, readExcelArchive } from './import-files.mjs';
@@ -15,7 +15,7 @@ import { mountWorkspacePanel, mountComparison } from './workspace-panels.mjs';
 import { financialFlags, flagLabels, savedViewPresets } from './workspace-insights.mjs';
 import { readSavedViews, writeSavedViews, mergeLocalViews } from './saved-views.mjs';
 import { mountCommandPalette } from './command-palette.mjs';
-import { columnKeys, columnTitles, safeColumnOrder, defaultAccents, displayKey, layoutLabels, matchesTripView, pendingEtrn, readDisplayPreferences, readStatusColors, readThemeLayouts, routeText, selectOrders, statusColors, themeLabels, validAccent, violetPalettes } from './registry.mjs';
+import { columnKeys, columnTitles, safeColumnOrder, defaultAccents, defaultRegistrySort, displayKey, layoutLabels, matchesTripView, pendingEtrn, readDisplayPreferences, readStatusColors, readThemeLayouts, routeText, selectOrders, statusColors, themeLabels, validAccent, violetPalettes } from './registry.mjs';
 
 const $ = id => document.getElementById(id);
 const currency = new Intl.NumberFormat('ru', {style:'currency', currency:'RUB', maximumFractionDigits:0});
@@ -66,8 +66,8 @@ const bulkNumbers = new Set();
 let bulkVisible = [];
 let bulkPreview = null;
 let historyMonth = 'all';
-let sort = 'delivery';
-let ascending = true;
+let sort = defaultRegistrySort.sort;
+let ascending = defaultRegistrySort.ascending;
 const display = readDisplayPreferences();
 display.statusColors = readStatusColors();
 display.themeLayouts = readThemeLayouts();
@@ -495,6 +495,9 @@ const panelFor = number => workspacePanel?.open(number);
 const financeBadges = order => {
   const flags = financialFlags(order);
   const box = node('span', null, 'finance-flags');
+  if (tripStatus(order) === 'failed' && order.ledgerMargin === 0) {
+    box.append(node('span', 'Без финансового результата', 'quiet'));
+  }
   for (const flag of flags) {
     const badge = node('span', flag === 'unknown' ? 'Нет ставок' :
       flag === 'loss' ? 'Убыток' : 'Низкая маржа', 'finance-flag');
@@ -1001,11 +1004,16 @@ function addPoint(point = {kind:'Погрузка'}) {
 }
 
 function openEditor(order, original = null, stamp = order.updatedAt) {
+  if (original && savingTrips.has(original)) {
+    $('notice').textContent = 'Дождитесь окончания сохранения этой заявки.';
+    return;
+  }
   $('sheet-open').hidden = !sheetActor;
   editorStamp = stamp;
   draft = structuredClone(order);
   if (!draft.route) draft.route = routeText(draft);
   previousNumber = original;
+  form.querySelector('[type="submit"]').disabled = false;
   form.reset();
   $('editor-error').textContent = '';
   $('editor-title').textContent = order.number ? 'Заявка № ' + order.number : 'Новая заявка';
@@ -1031,7 +1039,70 @@ function openEditor(order, original = null, stamp = order.updatedAt) {
     $('difference-list').append(box);
   }
   editorPreview();
+  mountOrderManagement(order, original, stamp);
   editor.showModal();
+}
+
+function mountOrderManagement(order, original, stamp) {
+  form.querySelector('#order-management')?.remove();
+  if (!original) return;
+  const menu = node('details', null, 'order-management');
+  menu.id = 'order-management';
+  menu.append(node('summary', 'Дополнительные действия'));
+  const buttons = node('div', null, 'actions');
+  const saveButton = form.querySelector('[type="submit"]');
+  const sameEditor = () => editor.open && previousNumber === original && editorStamp === stamp;
+  const run = async kind => {
+    if (savingTrips.has(original)) return;
+    const message = kind === 'delete'
+      ? `Удалить заявку № ${original} из вашего реестра и истории? Это действие нельзя отменить.`
+      : `Сохранить маржу 0 ₽ для сорванной заявки № ${original}? Номер, история и исходные ставки сохранятся. Расчёт можно вернуть, очистив ручную маржу.`;
+    if (!window.confirm(message + '\nНесохранённые изменения формы не будут применены.')) return;
+    const generation = accountGeneration;
+    savingTrips.add(original);
+    saveButton.disabled = true;
+    for (const button of buttons.querySelectorAll('button')) button.disabled = true;
+    $('editor-error').textContent = '';
+    try {
+      const current = await store.list();
+      if (generation !== accountGeneration) return;
+      assertUnchanged(current, original, stamp);
+      const next = kind === 'delete' ? current.filter(item => item.number !== original)
+        : upsert(current, withoutFinancialResult(current.find(item => item.number === original)), original);
+      const saved = await saveRecords(next, current);
+      if (generation !== accountGeneration) return;
+      orders = saved;
+      if (sameEditor()) editor.close();
+      if (workspacePanel?.selected() === original) workspacePanel.close();
+      $('notice').textContent = kind === 'delete' ? 'Заявка удалена.' : 'Маржа сорванной заявки сохранена: 0 ₽. Исходные ставки сохранены.';
+      render();
+    } catch (error) {
+      if (generation !== accountGeneration) return;
+      if (error.status === 401 || error.status === 403) return signInScreen(error.message);
+      if (sameEditor()) $('editor-error').textContent = error.message;
+      else $('notice').textContent = error.message;
+    } finally {
+      if (generation === accountGeneration) {
+        savingTrips.delete(original);
+        if (sameEditor()) {
+          saveButton.disabled = false;
+          for (const button of buttons.querySelectorAll('button')) button.disabled = false;
+        }
+      }
+    }
+  };
+  if (tripStatus(order) === 'failed') {
+    const zero = action('Без финансового результата — 0 ₽', () => run('zero'));
+    zero.id = 'order-zero-result';
+    zero.disabled = savingTrips.has(original);
+    buttons.append(zero);
+  }
+  const remove = action('Удалить заявку', () => run('delete'), 'order-delete');
+  remove.id = 'order-delete';
+  remove.disabled = savingTrips.has(original);
+  buttons.append(remove);
+  menu.append(buttons);
+  form.querySelector('.dialog-foot').before(menu);
 }
 
 function readDraft() {
@@ -1774,6 +1845,8 @@ function signInScreen(message = '') {
   orders = [];
   period = {};
   view = 'all';
+  sort = defaultRegistrySort.sort;
+  ascending = defaultRegistrySort.ascending;
   $('filter').value = '';
   selections.clear();
   savingTrips.clear();
@@ -2168,6 +2241,8 @@ $('bulk-form').addEventListener('submit', async event => {
 function changeRegistryScope(next) {
   if (next !== 'active' && next !== 'history') return;
   registryScope = next;
+  sort = defaultRegistrySort.sort;
+  ascending = defaultRegistrySort.ascending;
   view = 'all';
   period = {};
   if (next === 'history') historyMonth = monthGroups(orders).find(group => group.month)?.month || 'all';

@@ -99,7 +99,8 @@ test('P0: cancelled trip with custom or calculated margin affects comparison and
   assert.equal(before.total,4500);
   assert.equal(before.average,1500);
   assert.equal(before.median,0);
-  assert.equal(before.issues,3); // loss, low, unknown: nonfinancial status doesn't hide flags
+  assert.equal(before.issues,2); // Loss and unknown remain; an explicit neutral failed result is intentional.
+  assert.deepEqual(financialFlags(orders[2]),[]);
   assert.equal(after.total,1000);
   assert.equal(delta,-3500);
 });
