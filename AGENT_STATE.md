@@ -1,3 +1,11 @@
+# Выпуск 0db1a88 разрешён, ожидается локальный sudo · 21.11.2026
+
+- Владелец прямо разрешил релиз: «давай сделаем релиз». Целевой SHA 0db1a887271acd3d183954e11b04f375f6835dbb; CI44875479709 success (verify + Windows). PR50 draft, main/merge не менялись.
+- Read-only SSH подтвердил VPS1de5798fc8a3741025cf08cda08819424d11a92e, clean, logistics-workspace/nginx active. sudo -n требует пароль, поэтому сценарий ещё НЕ запускался. Владельцу отправлена одна команда ssh -t ... 'sudo bash /home/admin/sputnik-0db1a88-deploy.sh'; пароль только в локальном PowerShell. Не заявлять выпуск до фактических проверок.
+- В visualizations/.../release-0db1a88 подготовлены и доставлены /home/admin/sputnik-0db1a88.bundle (SHA256 2df576907f31c1d80976d3582fa62ae673b3108c8434d40ab7505ce1e56bae96), .tar.gz (3ba6949a2ef7317bfdc8572deb4ac5e88901ee2279167926fc94a9347c853d85), -deploy.sh (777d9d22b8b42a57e50b4a7f41b7118d3c5ad5381a18e23603c582e4f1e668a7). На VPS mode0600, sha совпали, bash-n и bundle verify OK; commit fetched в объектную базу, checkout остался1de. Production-сборка VITE_DEMO=false; её focused Chromium/WebKit повторно прошли.
+- Сценарий: закреплённый old/new и чистыйGit, unit/ExecStart/env, GoogleOFF, неизменные backendruntime/npmdeps; stage с читаемыми правами и сохранением старых fingerprinted assets; короткий stop/API/FDcheck, уникальный backup от service user, integrity/FK/schema3/equality всех прежних rows, checkout с umask022, dist, start/HTTPS200/API401/PDF-MIME/GoogleOFF. Nginx/SSH/env/schema не изменяются. При ошибке rollback возвращает oldcode/originaldist и CURRENT DB, старую базу автоматически не восстанавливает. Независимый review замечания Google-preflight/live mode=ro учтены.
+- Следующий шаг после ввода пароля: проверить удалённый SHA/clean/active, HTTP и публичные хеши JS/icon без входа в реальные аккаунты. При успехе создать GitHub release v2026.11.21 на РОВНО0db1a88 и отметить факт в карте/состоянии. Новые документирующие коммиты не считать установленным SHA. При сбое сначала read-only диагностика, старый1de deployment script повторно не запускать.
+
 # Текущий патч стабильности · 21.11.2026
 
 - Владелец просит рабочую стабильную версию, без перфекционизма и расширения объёма. Активны только NEW-01/02/03; предыдущая очередь приостановлена.
