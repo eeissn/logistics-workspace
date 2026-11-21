@@ -148,6 +148,11 @@ export function orderMargin(order) {
   return hasMargin(order) ? margin(order.customerAmount, order.customerTax, order.carrierAmount, order.carrierTax).realProfit : null;
 }
 
+export function withoutFinancialResult(order) {
+  if (tripStatus(order) !== 'failed') throw new Error('Обнуление доступно только для сорванной заявки.');
+  return {...order, ledgerMargin:0};
+}
+
 // The trip outcome does not erase earned or payable margin (including cancellation compensation).
 export function monthSnapshot(orders, month, asOf = month + '-31') {
   const elapsed = orders.filter(order => order.date?.startsWith(month + '-') && order.date <= asOf);

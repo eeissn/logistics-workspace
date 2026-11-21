@@ -4,6 +4,13 @@ import { blankOrder } from '../src/domain.mjs';
 import { columnKeys, displayKey, readDisplayPreferences, safeColumnOrder, selectOrders } from '../src/registry.mjs';
 
 const query = {query:'', filter:'', view:'all', today:'2026-11-13', sort:'date', ascending:false};
+
+test('default order is newest application date then descending numeric number, with undated records last',()=>{
+  const orders=[['9','2026-11-19'],['2','2026-11-20'],['10','2026-11-20'],['99',''],['1','2026-11-18']]
+    .map(([number,date])=>({...blankOrder(),number,date}));
+  assert.deepEqual(selectOrders(orders).map(o=>o.number),['10','2','9','1','99']);
+  assert.deepEqual(selectOrders(orders,{sort:'number',ascending:true}).map(o=>o.number),['1','2','9','10','99']);
+});
 const makeOrder = (number, date, trip, etrn = {required:true}) => ({
   ...blankOrder(), number, date, trip, etrn,
 });

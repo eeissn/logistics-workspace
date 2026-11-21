@@ -37,7 +37,7 @@ def serve(root, port):
         received.add(key)
         return {"actor": actor, "duplicate": duplicate}
 
-    app = create_app(database, f"https://localhost:{port}", sheet_preview)
+    app = create_app(database, f"https://127.0.0.1:{port}", sheet_preview)
     for user in ("first", "second"):
         add_user(database, f"{user}@example.test", PASSWORD)
     app.mount("/", StaticFiles(directory="dist", html=True))
@@ -478,6 +478,9 @@ def registry_views(page, number, order_a, mobile):
 
     expect(page.locator("html")).to_have_attribute("data-theme", "sputnik")
     expect(layout).to_have_value("table")
+    expect(sort).to_have_value("date")
+    expect(direction).to_have_text("↓")
+    sort.select_option("delivery")
     expect(sort).to_have_value("delivery")
     expect(registry.locator(".order-link").filter(has_text=fixture_numbers)).to_have_text([order, excel, undated])
     expect(page.locator('#table [data-sort="delivery"]')).to_have_attribute("aria-current", "true")
@@ -1234,14 +1237,14 @@ def main(focus=None):
         root = Path(directory)
         subprocess.run(
             ["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
-             "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost",
+             "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1",
              "-keyout", str(root / "test.key"), "-out", str(root / "test.crt")],
             check=True, capture_output=True,
         )
         with socket.socket() as sock:
             sock.bind(("127.0.0.1", 0))
             port = sock.getsockname()[1]
-        origin = f"https://localhost:{port}"
+        origin = f"https://127.0.0.1:{port}"
         server = subprocess.Popen([sys.executable, "-m", "backend.browser_smoke", str(root), str(port)])
         try:
             with httpx.Client(verify=False, timeout=1, trust_env=False) as client:
@@ -1256,6 +1259,11 @@ def main(focus=None):
                         raise RuntimeError("The disposable HTTPS server did not start.")
                     sleep(0.2)
             with sync_playwright() as playwright:
+                from backend.order_actions_browser import run as order_actions
+                if focus == "order-actions":
+                    order_actions(playwright.chromium, origin)
+                    order_actions(playwright.webkit, origin, True)
+                    return
                 if focus == 'saved-views':
                     saved_views_sync_browser(playwright.chromium, origin)
                     saved_views_sync_browser(playwright.webkit, origin,
@@ -1270,6 +1278,8 @@ def main(focus=None):
                 saved_views_sync_browser(playwright.chromium, origin)
                 saved_views_sync_browser(playwright.webkit, origin,
                     {**playwright.devices["iPhone 13"], "viewport": {"width": 393, "height": 852}})
+                order_actions(playwright.chromium, origin)
+                order_actions(playwright.webkit, origin, True)
                 password_change_browser(playwright.chromium, origin, "first")
                 password_change_browser(playwright.webkit, origin, "second", True,
                                        {**playwright.devices["iPhone 13"], "viewport": {"width": 393, "height": 852}})
@@ -1282,4 +1292,4 @@ if __name__ == "__main__":
     if len(sys.argv) == 3:
         serve(Path(sys.argv[1]), int(sys.argv[2]))
     else:
-        main("saved-views" if "--saved-views" in sys.argv else None)
+        main("order-actions" if "--order-actions" in sys.argv else "saved-views" if "--saved-views" in sys.argv else None)

@@ -124,7 +124,9 @@ export function matchesTripView(order, view, today) {
   }
 }
 
-export function selectOrders(orders, {query, filter, view, today, sort, ascending, from, to}) {
+export const defaultRegistrySort = Object.freeze({sort:'date', ascending:false});
+
+export function selectOrders(orders, {query='', filter, view='all', today, sort='date', ascending=false, from, to} = {}) {
   const search = query.trim().toLocaleLowerCase('ru');
   const scheduleKind = scheduleKinds[sort];
   const key = scheduleKind ? order => windowStart(order, scheduleKind) : sorts[sort];
