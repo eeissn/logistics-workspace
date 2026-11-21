@@ -1,3 +1,11 @@
+# Релиз v2026.11.21 установлен и независимо проверен · 21.11.2026
+
+- Владелец выполнил sudo-сценарий, Released0db1a887271acd3d183954e11b04f375f6835dbb. Копия /opt/logistics-workspace/backups/workspace-pre-0db1a88-20261121T072552Z.sqlite3: integrity/FK/schema3/everyexistingrow verified; rollback files /opt/logistics-workspace/sputnik-stage-0db1a88.5Uvi52. Старые копии не удалялись, схема3/API/SSH/Nginx/env не менялись. Предупреждение cp-n неблокирующее, сценарий завершился0.
+- Независимый read-only SSH подтвердил именно0db1a88/clean, обе службыactive, HTTPS200/API401/PDFworker200application/javascript. Публичные index.html/apple-touch-icon.png/assets/index-DkAV98zY.js совпали поSHA256 с approvedproductionbuild. Google404/off. В реальные аккаунты не входил и производственные заявки не менял; roweq проверена сценарием доstart, не выдавать это за ручную приёмку рабочих сценариев.
+- CI0db1a88 run44875479709 success. GitHub release https://github.com/eeissn/logistics-workspace/releases/tag/v2026.11.21 создан на этом точномSHA. PR50 остаётся draft, main/merge не менялись. Последующие doccommits не развёрнуты и не должны обозначаться новымproductionSHA.
+- Пользователь при копировании исказил путь -i и вошёл по SSHпаролю; данный сеанс успешно завершён. Отдельная диагностика агента прошла по правильному закреплённому SSHключу. НастройкиSSH не менять, пароль не запрашивать в чате. Правильный Windowsпуть: "$env:USERPROFILE\.ssh\logistics_vps_ed25519".
+- Три новые функции установлены; остаются физическийiPhone/HomeScreen и обычная владельческаяприёмка. Прежняя очередь OPS/Google/новыеулучшения приостановлена: не расширять объём. Повторно этот скрипт не запускать: он требует исходныйHEAD1de, который уже не актуален. При новой ошибке сначала диагностировать и выбрать узкое исправление. ROADMAP обновлён с разграничением installed/tested/owneracceptance.
+
 # Выпуск 0db1a88 разрешён, ожидается локальный sudo · 21.11.2026
 
 - Владелец прямо разрешил релиз: «давай сделаем релиз». Целевой SHA 0db1a887271acd3d183954e11b04f375f6835dbb; CI44875479709 success (verify + Windows). PR50 draft, main/merge не менялись.

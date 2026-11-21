@@ -10,7 +10,7 @@
 
 Патч в `codex/failed-orders-sort-icon-20261120`, база `3fddb06cc4a889a4f0c480ac2a59785675c7953c` (оба CI базы success). 21.11: 116 JS, 87 Python (1 Windows skip), Vite build, полный Chromium/mobile WebKit и восстановление синтетического CMS прошли. Проверены подтверждение/отмена удаления, нулевой отчёт, сохранность ставок, изоляция, ошибки 503/409 и гонка повторного открытия редактора. Снимки desktop/mobile и новая иконка просмотрены; независимый review без материальных замечаний. Код патча: `cc8c88d23b420831fb8e4599e8e7acc010acc962`, отправлен в отдельную ветку. CI нового SHA проверяется отдельно; локальный успех не переносится на GitHub автоматически.
 
-- [ ] **Выпуск нового патча:** CI точного SHA, отдельное согласование установки, проверенная копия и откат. Production остаётся `1de5798`.
+- [x] **Выпуск патча 21.11:** владелец разрешил и выполнил sudo-сценарий; установлен `0db1a887271acd3d183954e11b04f375f6835dbb`, [CI44875479709 success](https://github.com/eeissn/logistics-workspace/actions/runs/44875479709), [релиз v2026.11.21](https://github.com/eeissn/logistics-workspace/releases/tag/v2026.11.21). Новая копия: integrity/FK/schema3 и все существующие бизнес-строки проверены. Независимый SSH подтвердил clean/active, HTTPS200/API401/PDF-worker200 JavaScript; публичные HTML/JS/phone icon по SHA256 совпали с production-сборкой. Google выключен. Схема/API/Nginx/SSH не менялись; проверка новых действий на реальных заявках не выполнялась.
 - [ ] **Приёмка иконки на настоящем iPhone:** после согласованного выпуска; для ранее установленного ярлыка может понадобиться повторное добавление на экран «Домой». Эмуляция не является физической приёмкой.
 
 Это единственная текущая очередь. Сверено с контрольными точками, GitHub-релизом, PR и результатами проверок. Прежние карты сохранены без потери текста в [архиве](ROADMAP_HISTORY_20261120.md); их незакрытые отметки не являются новыми задачами.
@@ -20,8 +20,8 @@
 ### Установленная версия и доказательства
 
 - Рабочий сайт: https://logistics-sputnik.duckdns.org/.
-- Production SHA: `1de5798fc8a3741025cf08cda08819424d11a92e`, [релиз v2026.11.20](https://github.com/eeissn/logistics-workspace/releases/tag/v2026.11.20).
-- Полный CI выпущенного SHA: [44588882009](https://github.com/eeissn/logistics-workspace/actions/runs/44588882009) и [44588892510](https://github.com/eeissn/logistics-workspace/actions/runs/44588892510) — success.
+- Production SHA: `0db1a887271acd3d183954e11b04f375f6835dbb`, [релиз v2026.11.21](https://github.com/eeissn/logistics-workspace/releases/tag/v2026.11.21). Прежний `1de5798` сохранён для отката.
+- Полный CI выпущенного SHA: [44875479709](https://github.com/eeissn/logistics-workspace/actions/runs/44875479709) — success. Текущий патч: [PR50](https://github.com/eeissn/logistics-workspace/pull/50); merge/main не менялись. Документирующие последующие коммиты не являются установленным SHA.
 - Рабочая ветка `codex/workspace-followup-20261119`, [PR #49](https://github.com/eeissn/logistics-workspace/pull/49) в `feature/two-user-sync`. Ветка содержит последующие изменения, которые не установлены на VPS. Main и PR не объединялись.
 - Последняя подтверждённая локальная проверка ветки: 84 Python-теста (1 ожидаемый Windows skip), 112 JS-тестов, Vite build, полный Chromium/WebKit. Это результаты предыдущего функционального блока, а не новый прогон при редактировании этой карты.
 - CI операционных регрессий `3cf4196c503daa456a0b413e82785c7c93096509`: [44664531180](https://github.com/eeissn/logistics-workspace/actions/runs/44664531180) — success. На момент сверки CI последующего `aa37c8b9d1480b406bc36da79fd187b282f5e2f8` ещё выполнялся; перед следующим слиянием/выпуском проверять точный новый SHA.
