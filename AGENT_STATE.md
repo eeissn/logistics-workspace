@@ -1,3 +1,10 @@
+# Favicon для вкладок · 22.11.2026
+
+- По скриншоту владельца цветок плохо читается во вкладке; иконка iPhone владельцу нравится. Ветка codex/favicon-tab-legibility-20261122 от6791934 (CI success). Production остаётся0db1a88, нового разрешения на установку нет.
+- Изменены только public/favicon.svg, favicon-16.png, favicon-32.png и cache query этих файлов в index.html. Сохранён цветок: уменьшены поля (viewBox42/42/428), прозрачный фон, увеличены кольцо/улыбка/глаза для16px; SVG адаптируется к тёмной теме. PNG сгенерированы Chromium из SVG. Apple180/192/512 и manifest без изменений.
+- Визуально просмотрены comparison-light.png/comparison-dark.png в visualizations/.../favicon-tabs-20261122 (до/после16px). 116JS/npm build/diffcheck успешны. Серверные тесты не повторялись: код API/данные/поведение не менялись. Это локальная визуальная проверка, не установленный favicon настоящего браузера владельца.
+- Следующее действие: commit/push/PR; согласованный отдельный выпуск и пользовательская приёмка фактической вкладки. Иконку HomeScreen не менять. Остальные задачи не расширять.
+
 # Релиз v2026.11.21 установлен и независимо проверен · 21.11.2026
 
 - Владелец выполнил sudo-сценарий, Released0db1a887271acd3d183954e11b04f375f6835dbb. Копия /opt/logistics-workspace/backups/workspace-pre-0db1a88-20261121T072552Z.sqlite3: integrity/FK/schema3/everyexistingrow verified; rollback files /opt/logistics-workspace/sputnik-stage-0db1a88.5Uvi52. Старые копии не удалялись, схема3/API/SSH/Nginx/env не менялись. Предупреждение cp-n неблокирующее, сценарий завершился0.
