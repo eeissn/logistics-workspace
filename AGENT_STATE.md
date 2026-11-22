@@ -1,3 +1,23 @@
+# Устранена инверсия favicon на серой панели · 22.11.2026
+
+- Владелец показал белый нечитаемый цветок: prefers-color-scheme браузера не совпадает с цветом панели Zen. Предыдущая визуальная проверка сопоставляла одинаковые темы и не выявила эту комбинацию. По прямому «давай исправим» удалена только SVG-инверсия; цветок всегда чёрный. Код94e5dd9, PR51. PNG/phoneicons не менялись; query tab-black-20261122.
+- Проверены побайтово одинаковые16px скриншоты при light/dark browser preference, визуально fixed-grey-panel.png при dark preference+светлосеройактивнойвкладке. 116JS/build/diffcheckOK. Не выдавать макет за настоящий Zen владельца.
+- Одобренный точечный патч установлен тем же atomicexchange: изменились толькоSVG+index4query, остальные хеши неизменны, без APIrestart/БД. Rollback /home/admin/sputnik-favicon-rollback-o_z3et6v/dist, receipt рядом. НовыйHTML SHA256 dfdba7e340381ec268e75bcd69250b7dbd0d5c8619be4493709e4a99336c20a3. Проверки VPS200/401/PDF-MIME/active успешны; публичный запрос Windows подтвердил новыйSVG/query, Appleicon неизменен. BaseGit/API0db1a88; статический overlay94e5dd9. При следующем полномрелизе включить94e5dd9, не2762 с инверсией. Настоящая вкладка послеcache ещё требует приёмки владельца.
+
+# Favicon установлен точечным статическим патчем · 22.11.2026
+
+- Владелец принял вариант и отдельно разрешил «давай быстро обновим». Установлены ровно favicon.svg/16/32 и четыре cache query в текущем dist/index.html. Исходник патча2762db5f95f187e2cdb6e5a83d4bb39da2f505f7, PR51. GitHEAD приложения намеренно остаётся0db1a88 clean: это overlay статики, не полный releasecheckout. Не заявлять2762 как backendSHA.
+- Безsudo/перезапуска/API/БД/Nginx/SSH: admin подготовил копию live dist, сравнил все хеши (изменены ровно4файла), сохранил исходныеchunks/phoneicons, выставил новые dirs755/files644 и выполнил atomic Linux renameat2 exchange. Старый dist находится в приватном /home/admin/sputnik-favicon-rollback-_3qsjg2g/dist, receipt.json рядом. Не удалять. Небезопасные прежние root dist777/files666 не перенесены в новый каталог. Скрипт /home/admin/sputnik-favicon-20261122/apply-favicon.py одноразовый, повторно не запускать.
+- Новый HTML SHA256 c03f3e555f0a649b05bdb45250aed5abd1738bf66bacfb6920aa718599c7c07b. VPS HTTPS200/API401/PDF200-JS, обе службыactive/HEADclean. Независимый публичный запрос с Windows подтвердил HTML/newquery и хеши трёхfavicon, Appleiconсовпадаетс прежним. Бизнес-данные не читались/не изменялись. Фактическое отображение вкладки владельца после кэширования ещё требует его проверки.
+- При следующем полном релизе включить favicon-исходник2762, иначе старыйsource0db перезапишет новыеicons. Вопросы старой очереди не возобновлять без нового поручения.
+
+# Favicon для вкладок · 22.11.2026
+
+- По скриншоту владельца цветок плохо читается во вкладке; иконка iPhone владельцу нравится. Ветка codex/favicon-tab-legibility-20261122 от6791934 (CI success). Production остаётся0db1a88, нового разрешения на установку нет.
+- Изменены только public/favicon.svg, favicon-16.png, favicon-32.png и cache query этих файлов в index.html. Сохранён цветок: уменьшены поля (viewBox42/42/428), прозрачный фон, увеличены кольцо/улыбка/глаза для16px; SVG адаптируется к тёмной теме. PNG сгенерированы Chromium из SVG. Apple180/192/512 и manifest без изменений.
+- Визуально просмотрены comparison-light.png/comparison-dark.png в visualizations/.../favicon-tabs-20261122 (до/после16px). 116JS/npm build/diffcheck успешны. Серверные тесты не повторялись: код API/данные/поведение не менялись. Это локальная визуальная проверка, не установленный favicon настоящего браузера владельца.
+- Следующее действие: commit/push/PR; согласованный отдельный выпуск и пользовательская приёмка фактической вкладки. Иконку HomeScreen не менять. Остальные задачи не расширять.
+
 # Релиз v2026.11.21 установлен и независимо проверен · 21.11.2026
 
 - Владелец выполнил sudo-сценарий, Released0db1a887271acd3d183954e11b04f375f6835dbb. Копия /opt/logistics-workspace/backups/workspace-pre-0db1a88-20261121T072552Z.sqlite3: integrity/FK/schema3/everyexistingrow verified; rollback files /opt/logistics-workspace/sputnik-stage-0db1a88.5Uvi52. Старые копии не удалялись, схема3/API/SSH/Nginx/env не менялись. Предупреждение cp-n неблокирующее, сценарий завершился0.

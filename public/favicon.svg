@@ -1,11 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="42 42 428 428">
   <style>
-    @media (max-width:32px) { .face-ring { stroke-width:11 } .smile { stroke-width:13 } .eye { rx:11 } }
-    @media (max-width:16px) { .face-ring { stroke-width:18 } .smile { stroke-width:20 } .eye { rx:12 } }
+    .petals { fill:#000 }
+    .face-ring,.smile { stroke:#fff }
+    .eyes { fill:#fff }
   </style>
   <title>Sputnik — улыбающийся цветок</title>
-  <rect width="512" height="512" fill="#fff"/>
-  <g fill="#000">
+  <g class="petals">
     <circle cx="256" cy="256" r="166"/>
     <circle cx="279.622" cy="106.859" r="59"/>
     <circle cx="362.773" cy="149.227" r="59"/>
@@ -18,10 +18,10 @@
     <circle cx="121.458" cy="187.447" r="59"/>
     <circle cx="187.447" cy="121.458" r="59"/>
   </g>
-  <circle class="face-ring" cx="256" cy="256" r="110" fill="none" stroke="#fff" stroke-width="6"/>
-  <g fill="#fff">
-    <ellipse class="eye" cx="224" cy="220" rx="9.5" ry="28.5"/>
-    <ellipse class="eye" cx="285" cy="220" rx="9.5" ry="28.5"/>
+  <circle class="face-ring" cx="256" cy="256" r="123" fill="none" stroke="#fff" stroke-width="18"/>
+  <g class="eyes">
+    <ellipse class="eye" cx="220" cy="215" rx="14" ry="28"/>
+    <ellipse class="eye" cx="289" cy="215" rx="14" ry="28"/>
   </g>
-  <path class="smile" d="M180 263 C194 355 314 355 332 263" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round"/>
+  <path class="smile" d="M180 263 C194 355 314 355 332 263" fill="none" stroke="#fff" stroke-width="20" stroke-linecap="round"/>
 </svg>
