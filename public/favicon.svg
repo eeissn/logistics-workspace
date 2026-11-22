@@ -3,11 +3,6 @@
     .petals { fill:#000 }
     .face-ring,.smile { stroke:#fff }
     .eyes { fill:#fff }
-    @media (prefers-color-scheme:dark) {
-      .petals { fill:#fff }
-      .face-ring,.smile { stroke:#111 }
-      .eyes { fill:#111 }
-    }
   </style>
   <title>Sputnik — улыбающийся цветок</title>
   <g class="petals">
