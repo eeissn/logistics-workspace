@@ -66,7 +66,7 @@ export function parseLogistor(text) {
   const nextPassportRow = nextRow.match(/^[ \t]*([А-ЯЁа-яё][А-ЯЁа-яё\s-]*?[ \t]+)?(\d{2}\.\d{2}\.\d{4})(?:[ \t]+к\.?[ \t]*п\.?(?:[ \t]*\d{3}[-–]\d{3})?)?[ \t]*(?:(?:[ \t]{2,}Номер тягача:)[^\n]*)?$/i);
   // A dedicated "Дата выдачи паспорта ..." field is metadata, not part of
   // the issuing authority. Its date was already captured by issueDate above.
-  const continuation = /^Дата[ \\t]+выдачи(?:[ \\t]+паспорта)?$/i.test(trim(nextPassportRow?.[1]))
+  const continuation = /^Дата\s+выдачи(?:\s+паспорта)?$/i.test(trim(nextPassportRow?.[1]))
     ? ''
     : trim(nextPassportRow?.[1]);
   const passportWithDate = normalizePassport(
