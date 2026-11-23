@@ -261,6 +261,33 @@ test('не подставляет постороннюю дату из сосе�
 });
 
 
+test('заявка 7405: паспорт, перенесённый после названия республики, содержит дату', () => {
+  // Synthetic Logistor rows model the two supplied #7405 PDFs (no PII fixture stored).
+  const withDriver = carrier
+    .replace('ФИО: Водитель Тестовый    Марка тягача: КАМАЗ',
+      'ФИО: Водитель Тестовый    Марка тягача: ГАЗ\n' +
+      'Паспорт: 8304 645071 Отделом внутренних дел Баксанского района Кабардино-Балкарской    Номер тягача: А708МТ 07\n' +
+      'республики 10.08.2004 к.п. 072-010')
+    .replace('Номер прицепа:', 'Номер прицепа:');
+  const order = importPair(client, withDriver);
+  assert.equal(order.passport,
+    '8304 645071 Отделом внутренних дел Баксанского района Кабардино-Балкарской республики от 10.08.2004');
+  assert.match(driverMessage(order), /республики от 10\.08\.2004/);
+  assert.doesNotMatch(driverMessage(order), /к\.п\.|072-010/);
+  assert.match(driverMessage(order), /Транспорт: ГАЗ А708МТ 07/);
+  assert.doesNotMatch(driverMessage(order), /Прицеп:/);
+  assert.deepEqual(importPair(withDriver, client), order);
+});
+
+test('перенос паспорта без даты не захватывает строку телефона и дату рейса', () => {
+  const changed = carrier.replace('ФИО: Водитель Тестовый    Марка тягача: КАМАЗ',
+    'ФИО: Водитель Тестовый    Марка тягача: ГАЗ\n' +
+    'Паспорт: 8304 645071 Отделом внутренних дел Баксанского района    Номер тягача: А708МТ 07');
+  const order = importPair(client, changed);
+  assert.equal(order.passport, '8304 645071 Отделом внутренних дел Баксанского района');
+  assert.doesNotMatch(driverMessage(order), /от 09\.11\.2026/);
+});
+
 test('окна рейса: год из конечной даты, Новый год и невозможные даты', () => {
   assert.deepEqual(dateRange('13.11–14.11.2027', '2026-11-01'), ['2027-11-13', '2027-11-14']);
   assert.deepEqual(dateRange('31.12–01.01.2027', '2026-12-01'), ['2026-12-31', '2027-01-01']);

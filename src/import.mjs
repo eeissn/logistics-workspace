@@ -57,8 +57,22 @@ export function parseLogistor(text) {
   // Only accept a standalone date (with an optional subdivision code) adjacent
   // to the passport line; never take loading, unloading or application dates.
   const passportLine = clean.match(/^[ \t]*Паспорт:[ \t]*[^\n]*/mi);
-  const followingLine = passportLine ? clean.slice(passportLine.index + passportLine[0].length).match(/^\n[ \t]*(\d{2}\.\d{2}\.\d{4})(?:[ \t]+к\.?\s*п\.?(?:[ \t]*\d{3}[-–]\d{3})?)?[ \t]*(?:\n|$)/i) : null;
-  const passportWithDate = normalizePassport(passport, issueDate || followingLine?.[1] || '');
+  // The passport cell may wrap mid-name, e.g. "Кабардино-Балкарской" /
+  // "республики 10.08.2004 к.п. 072-010". Examine only the immediately next
+  // physical PDF row. Do not consume the adjacent vehicle column or contact row.
+  const nextRow = passportLine
+    ? clean.slice(passportLine.index + passportLine[0].length).match(/^\n([^\n]*)/)?.[1] || ''
+    : '';
+  const nextPassportRow = nextRow.match(/^[ \t]*([А-ЯЁа-яё][А-ЯЁа-яё\s-]*?[ \t]+)?(\d{2}\.\d{2}\.\d{4})(?:[ \t]+к\.?[ \t]*п\.?(?:[ \t]*\d{3}[-–]\d{3})?)?[ \t]*(?:(?:[ \t]{2,}Номер тягача:)[^\n]*)?$/i);
+  // A dedicated "Дата выдачи паспорта ..." field is metadata, not part of
+  // the issuing authority. Its date was already captured by issueDate above.
+  const continuation = /^Дата\s+выдачи(?:\s+паспорта)?$/i.test(trim(nextPassportRow?.[1]))
+    ? ''
+    : trim(nextPassportRow?.[1]);
+  const passportWithDate = normalizePassport(
+    [passport, continuation].filter(Boolean).join(' '),
+    issueDate || nextPassportRow?.[2] || '',
+  );
   const fields = {
     number: heading?.[1] || '', date: heading ? `${year}-${month}-${day}` : '',
     customer: party(head, 'Заказчик'), performer: party(head, 'Исполнитель'),
