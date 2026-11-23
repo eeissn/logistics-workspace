@@ -64,7 +64,11 @@ export function parseLogistor(text) {
     ? clean.slice(passportLine.index + passportLine[0].length).match(/^\n([^\n]*)/)?.[1] || ''
     : '';
   const nextPassportRow = nextRow.match(/^[ \t]*([А-ЯЁа-яё][А-ЯЁа-яё\s-]*?[ \t]+)?(\d{2}\.\d{2}\.\d{4})(?:[ \t]+к\.?[ \t]*п\.?(?:[ \t]*\d{3}[-–]\d{3})?)?[ \t]*(?:(?:[ \t]{2,}Номер тягача:)[^\n]*)?$/i);
-  const continuation = trim(nextPassportRow?.[1]);
+  // A dedicated "Дата выдачи паспорта ..." field is metadata, not part of
+  // the issuing authority. Its date was already captured by issueDate above.
+  const continuation = /^Дата[ \\t]+выдачи(?:[ \\t]+паспорта)?$/i.test(trim(nextPassportRow?.[1]))
+    ? ''
+    : trim(nextPassportRow?.[1]);
   const passportWithDate = normalizePassport(
     [passport, continuation].filter(Boolean).join(' '),
     issueDate || nextPassportRow?.[2] || '',
